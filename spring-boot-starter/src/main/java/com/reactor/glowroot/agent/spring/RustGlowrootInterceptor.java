@@ -72,7 +72,9 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
 
         RequestState state = requestState.get();
         boolean sampled = state.next(sampleMask);
-        state.begin(sampled, slowTraceEnabled);
+        if (sampled || slowTraceEnabled) {
+            state.begin(sampled ? sampleRate : RequestState.SLOW_ONLY);
+        }
         return true;
     }
 
@@ -82,13 +84,13 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             HttpServletResponse response,
             Object handler) {
         RequestState state = requestState.get();
-        if (state.observing) {
+        if (state.observationWeight != RequestState.NOT_OBSERVING) {
             request.setAttribute(
                     OBSERVATION_ATTRIBUTE,
-                    new Observation(state.sampled, state.startedAtNanos)
+                    new Observation(state.observationWeight, state.startedAtNanos)
             );
+            state.clearObservation();
         }
-        state.clearObservation();
     }
 
     @Override
@@ -104,14 +106,15 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
         }
 
         RequestState state = requestState.get();
+        if (state.observationWeight == RequestState.NOT_OBSERVING) {
+            if (status >= 500) record(request, status, 0L, false);
+            return;
+        }
         try {
-            if (!state.observing) {
-                if (status >= 500) record(request, status, 0L, false);
-                return;
-            }
             long durationNanos = Math.max(0L, System.nanoTime() - state.startedAtNanos);
-            if (state.sampled || status >= 500 || durationNanos >= slowThresholdNanos) {
-                record(request, status, durationNanos, state.sampled);
+            boolean sampled = state.observationWeight > RequestState.SLOW_ONLY;
+            if (sampled || status >= 500 || durationNanos >= slowThresholdNanos) {
+                record(request, status, durationNanos, sampled);
             }
         } finally {
             state.clearObservation();
@@ -126,8 +129,9 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
         }
         request.removeAttribute(OBSERVATION_ATTRIBUTE);
         long durationNanos = Math.max(0L, System.nanoTime() - observation.startedAtNanos);
-        if (observation.sampled || status >= 500 || durationNanos >= slowThresholdNanos) {
-            record(request, status, durationNanos, observation.sampled);
+        boolean sampled = observation.observationWeight > RequestState.SLOW_ONLY;
+        if (sampled || status >= 500 || durationNanos >= slowThresholdNanos) {
+            record(request, status, durationNanos, sampled);
         }
     }
 
@@ -164,9 +168,11 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
     }
 
     private static final class RequestState {
+        private static final int NOT_OBSERVING = 0;
+        private static final int SLOW_ONLY = -1;
+
         private int remaining;
-        private boolean observing;
-        private boolean sampled;
+        private int observationWeight;
         private long startedAtNanos;
 
         private RequestState(int initialOffset) {
@@ -182,25 +188,23 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             return false;
         }
 
-        private void begin(boolean sampled, boolean slowTraceEnabled) {
-            this.sampled = sampled;
-            observing = sampled || slowTraceEnabled;
-            startedAtNanos = observing ? System.nanoTime() : 0L;
+        private void begin(int observationWeight) {
+            this.observationWeight = observationWeight;
+            startedAtNanos = System.nanoTime();
         }
 
         private void clearObservation() {
-            observing = false;
-            sampled = false;
+            observationWeight = NOT_OBSERVING;
             startedAtNanos = 0L;
         }
     }
 
     private static final class Observation {
-        private final boolean sampled;
+        private final int observationWeight;
         private final long startedAtNanos;
 
-        private Observation(boolean sampled, long startedAtNanos) {
-            this.sampled = sampled;
+        private Observation(int observationWeight, long startedAtNanos) {
+            this.observationWeight = observationWeight;
             this.startedAtNanos = startedAtNanos;
         }
     }

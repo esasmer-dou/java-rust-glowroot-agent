@@ -98,7 +98,7 @@ linux-x64.sha256=$linuxHash
 "@
 [IO.File]::WriteAllText(
         (Join-Path $resources "native-provenance.properties"),
-        $manifest,
+        ($manifest.TrimEnd() -replace "`r`n", "`n") + "`n",
         [Text.UTF8Encoding]::new($false))
 
 Write-Host "Standalone Glowroot native artifacts synchronized from $sourceRevision."

@@ -15,6 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RustGlowrootInterceptorTest {
 
+    private static final String OBSERVATION_ATTRIBUTE =
+            RustGlowrootInterceptor.class.getName() + ".observation";
+
     @Test
     void samplesSuccessesAndKeepsErrorsExactWithoutPerRequestRouteRegistration() {
         FakeRecorder recorder = new FakeRecorder();
@@ -75,6 +78,27 @@ class RustGlowrootInterceptorTest {
         assertEquals(1, recorder.registrations);
         assertEquals(1, recorder.records.size());
         assertEquals(1, recorder.records.get(0).sampleWeight());
+    }
+
+    @Test
+    void leavesUnsampledAsyncRequestsWithoutObservationAllocations() {
+        FakeRecorder recorder = new FakeRecorder();
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(4, 0, 1));
+        int observations = 0;
+
+        for (int index = 0; index < 4; index++) {
+            MockHttpServletRequest request = request("/orders/{id}");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            interceptor.preHandle(request, response, new Object());
+            interceptor.afterConcurrentHandlingStarted(request, response, new Object());
+            if (request.getAttribute(OBSERVATION_ATTRIBUTE) != null) observations++;
+            request.setDispatcherType(DispatcherType.ASYNC);
+            interceptor.afterCompletion(request, response, new Object(), null);
+        }
+
+        assertEquals(1, observations);
+        assertEquals(1, recorder.records.size());
+        assertEquals(4, recorder.records.get(0).sampleWeight());
     }
 
     private static void invoke(RustGlowrootInterceptor interceptor, int status, String route) {
