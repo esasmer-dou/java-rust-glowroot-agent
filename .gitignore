@@ -1,6 +1,7 @@
 /target/
 **/target/
 /benchmark/context/
+/benchmark/spring-context/
 /benchmark/results/
 /.idea/
 /.vscode/

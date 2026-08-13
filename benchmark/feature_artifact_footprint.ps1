@@ -133,7 +133,8 @@ function Prepare-Context {
     $fullContext = Reset-Context
     $frameworkJar = Find-SingleArtifact (Join-Path $FrameworkRoot "target") "*-core-runtime.jar"
     $codegenJar = Find-SingleArtifact (Join-Path $FrameworkRoot "target") "*-codegen.jar"
-    $agentJar = Find-SingleArtifact (Join-Path $ProjectRoot "target") "java-rust-glowroot-agent-*.jar"
+    $agentJar = Find-SingleArtifact (Join-Path $ProjectRoot "agent-bootstrap\target") `
+            "java-rust-glowroot-agent-*.jar"
     Copy-Item -LiteralPath $frameworkJar -Destination (Join-Path $fullContext "framework.jar")
     Copy-Item -LiteralPath $codegenJar -Destination (Join-Path $fullContext "codegen.jar")
     Copy-Item -LiteralPath $agentJar -Destination (Join-Path $fullContext "agent.jar")

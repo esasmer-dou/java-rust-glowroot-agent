@@ -47,16 +47,22 @@ jobs:
         run: |
           VERSION="${{ steps.release_metadata.outputs.version }}"
           for FILE in \
-            "target/java-rust-glowroot-agent-${VERSION}.jar" \
-            "target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
-            "target/java-rust-glowroot-agent-${VERSION}-javadoc.jar"; do
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar" \
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-sources.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar"; do
             test -s "$FILE"
           done
           sha256sum \
-            "target/java-rust-glowroot-agent-${VERSION}.jar" \
-            "target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
-            "target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
-            > "target/java-rust-glowroot-agent-${VERSION}.sha256"
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar" \
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-sources.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar" \
+            > "java-rust-glowroot-${VERSION}.sha256"
 
       - name: Create GitHub pre-release
         env:
@@ -69,10 +75,13 @@ jobs:
             RELEASE_FLAGS+=(--prerelease)
           fi
           gh release create "${GITHUB_REF_NAME}" \
-            "target/java-rust-glowroot-agent-${VERSION}.jar" \
-            "target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
-            "target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
-            "target/java-rust-glowroot-agent-${VERSION}.sha256" \
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar" \
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-sources.jar" \
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar" \
+            "java-rust-glowroot-${VERSION}.sha256" \
             --title "java-rust-glowroot-agent ${VERSION}" \
             --notes-file "${{ steps.release_metadata.outputs.notes }}" \
             --verify-tag \

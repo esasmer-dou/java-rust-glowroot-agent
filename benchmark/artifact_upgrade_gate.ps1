@@ -132,7 +132,7 @@ function Prepare-Context {
             -Destination (Join-Path $fullContext "framework.jar")
     Copy-Item -LiteralPath (Find-SingleArtifact (Join-Path $FrameworkBuildRoot "target") "*-codegen.jar") `
             -Destination (Join-Path $fullContext "codegen.jar")
-    Copy-Item -LiteralPath (Find-SingleArtifact (Join-Path $ProjectRoot "target") "java-rust-glowroot-agent-*.jar") `
+    Copy-Item -LiteralPath (Find-SingleArtifact (Join-Path $ProjectRoot "agent-bootstrap\target") "java-rust-glowroot-agent-*.jar") `
             -Destination (Join-Path $fullContext "agent.jar")
     # Both images compile the current minimal application source. Only the framework artifacts differ.
     Copy-Item -LiteralPath (Join-Path $FrameworkRoot "benchmark\minimal-production\src") `

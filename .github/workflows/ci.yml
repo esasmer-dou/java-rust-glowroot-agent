@@ -23,12 +23,57 @@ jobs:
           cache: maven
 
       - name: Build and test
-        run: mvn -B -ntp clean verify
+        run: mvn -B -ntp clean install
 
-      - name: Enforce the bootstrap dependency boundary
+      - name: Verify plain JVM bootstrap without Spring
         shell: bash
         run: |
           VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
-          JAR="target/java-rust-glowroot-agent-${VERSION}.jar"
-          test "$(jdeps --print-module-deps "$JAR")" = "java.base"
-          test "$(jar tf "$JAR" | grep -c '^com/.*\.class$')" = "1"
+          JAR="agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar"
+          mkdir -p target/plain-smoke
+          cat > target/plain-smoke/PlainMain.java <<'EOF'
+          public final class PlainMain {
+              public static void main(String[] args) {
+                  System.out.println(System.getProperty("reactor.glowroot.enabled", "missing"));
+              }
+          }
+          EOF
+          javac -d target/plain-smoke target/plain-smoke/PlainMain.java
+          test "$(java -javaagent:"$JAR"=spring-enabled=false -cp target/plain-smoke PlainMain)" = "true"
+
+      - name: Enforce bounded artifact surface
+        shell: bash
+        run: |
+          VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          JAR="agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar"
+          STARTER="spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}.jar"
+          test "$(jar tf "$JAR" | grep -c '^com/reactor/glowroot/agent/.*\.class$')" = "1"
+          test "$(jar tf "$JAR" | grep -c '^native/')" = "0"
+          test "$(jar tf "$STARTER" | grep -c '^META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports$')" = "1"
+          test "$(jar tf "$STARTER" | grep -c '^native/native-provenance.properties$')" = "1"
+          test "$(jar tf "$STARTER" | grep -c '^native/windows-x64/rust_glowroot_agent.dll$')" = "1"
+          test "$(jar tf "$STARTER" | grep -c '^native/linux-x64/librust_glowroot_agent.so$')" = "1"
+
+      - name: Verify executable Spring Boot integration
+        shell: bash
+        run: |
+          VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          mvn -B -ntp -f benchmark/spring-app/pom.xml clean package
+          java \
+            -javaagent:"agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar"=collector=http://127.0.0.1:1,agent-id=ci::spring,application=ci-spring,http-sample-rate=256,trace-capacity=0 \
+            -jar benchmark/spring-app/target/spring-glowroot-benchmark-1.0.0.jar \
+            > target/spring-smoke.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:8080/health | grep -q '"status":"UP"'; then
+              exit 0
+            fi
+            if ! kill -0 "$PID" 2>/dev/null; then
+              cat target/spring-smoke.log
+              exit 1
+            fi
+            sleep 0.5
+          done
+          cat target/spring-smoke.log
+          exit 1

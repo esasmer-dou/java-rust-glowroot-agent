@@ -106,7 +106,10 @@ public final class RustGlowrootAgent {
                         PREFIX + "http.sample-rate",
                         PREFIX + "trace.capacity",
                         PREFIX + "max-routes",
-                        PREFIX + "max-export-bytes" -> key;
+                        PREFIX + "max-export-bytes",
+                        PREFIX + "spring.enabled",
+                        PREFIX + "spring.filter-order",
+                        PREFIX + "native.extract-dir" -> key;
                 default -> throw new IllegalArgumentException("Unsupported agent argument: " + raw);
             };
         }
@@ -124,6 +127,9 @@ public final class RustGlowrootAgent {
             case "trace-capacity" -> PREFIX + "trace.capacity";
             case "max-routes" -> PREFIX + "max-routes";
             case "max-export-bytes" -> PREFIX + "max-export-bytes";
+            case "spring-enabled" -> PREFIX + "spring.enabled";
+            case "spring-filter-order" -> PREFIX + "spring.filter-order";
+            case "native-extract-dir" -> PREFIX + "native.extract-dir";
             default -> throw new IllegalArgumentException("Unsupported agent argument: " + raw);
         };
     }

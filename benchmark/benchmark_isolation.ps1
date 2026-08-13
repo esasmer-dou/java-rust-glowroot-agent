@@ -54,13 +54,16 @@ function Assert-ReactorBenchmarkCpuIsolation {
         [string] $SlotCCpuSet = "",
         [string] $RunnerCpuSet,
         [string] $CollectorCpuSet,
-        [switch] $AllowRunnerCollectorSiblingSharing
+        [switch] $AllowRunnerCollectorSiblingSharing,
+        [switch] $AllowSharedApplicationSlots
     )
 
     $topology = Get-ReactorCpuSiblingGroups -RunnerImage $RunnerImage
     $roles = [ordered]@{
         "application-slot-a" = $SlotACpuSet
-        "application-slot-b" = $SlotBCpuSet
+    }
+    if (-not ($AllowSharedApplicationSlots -and $SlotACpuSet -eq $SlotBCpuSet)) {
+        $roles["application-slot-b"] = $SlotBCpuSet
     }
     if (-not [string]::IsNullOrWhiteSpace($SlotCCpuSet)) {
         $roles["application-slot-c"] = $SlotCCpuSet
@@ -79,7 +82,12 @@ function Assert-ReactorBenchmarkCpuIsolation {
                 throw "CPU $cpu from $($entry.Key) is not available to Docker."
             }
             if ($logicalCpuOwners.ContainsKey($cpu) -and $logicalCpuOwners[$cpu] -ne $entry.Key) {
-                throw "CPU isolation is invalid: $($entry.Key) and $($logicalCpuOwners[$cpu]) use logical CPU $cpu."
+                $existingRole = $logicalCpuOwners[$cpu]
+                $runnerCollectorPair = @($entry.Key, $existingRole) -contains "load-runner" `
+                        -and @($entry.Key, $existingRole) -contains "collector"
+                if (-not ($AllowRunnerCollectorSiblingSharing -and $runnerCollectorPair)) {
+                    throw "CPU isolation is invalid: $($entry.Key) and $existingRole use logical CPU $cpu."
+                }
             }
             $logicalCpuOwners[$cpu] = $entry.Key
             $physicalCore = "$($topology[$cpu])"
@@ -98,7 +106,12 @@ function Assert-ReactorBenchmarkCpuIsolation {
     }
     $slotCMessage = if ([string]::IsNullOrWhiteSpace($SlotCCpuSet)) { "" } else { " C=$SlotCCpuSet" }
     $sharedMessage = if ($AllowRunnerCollectorSiblingSharing) { " runner/collector-SMT-sharing=allowed" } else { "" }
-    Write-Host "CPU isolation verified: A=$SlotACpuSet B=$SlotBCpuSet$slotCMessage runner=$RunnerCpuSet collector=$CollectorCpuSet$sharedMessage"
+    $applicationMessage = if ($AllowSharedApplicationSlots -and $SlotACpuSet -eq $SlotBCpuSet) {
+        " sequential-application-slot=$SlotACpuSet"
+    } else {
+        " A=$SlotACpuSet B=$SlotBCpuSet"
+    }
+    Write-Host "CPU isolation verified:$applicationMessage$slotCMessage runner=$RunnerCpuSet collector=$CollectorCpuSet$sharedMessage"
 }
 
 function Get-ReactorContainerNetworkIp {

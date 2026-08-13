@@ -5,12 +5,17 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.reactor</groupId>
-  <artifactId>java-rust-glowroot-agent</artifactId>
-  <version>0.1.0-rc1</version>
-  <packaging>jar</packaging>
+  <artifactId>java-rust-glowroot-parent</artifactId>
+  <version>0.2.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
 
-  <name>java-rust-glowroot-agent</name>
-  <description>Bounded Rust-first application agent for sending Rust-Java telemetry to an existing Glowroot collector.</description>
+  <modules>
+    <module>agent-bootstrap</module>
+    <module>spring-boot-starter</module>
+  </modules>
+
+  <name>java-rust-glowroot-parent</name>
+  <description>Coordinated build for the Java bootstrap and Spring Boot adapter.</description>
   <url>https://github.com/esasmer-dou/java-rust-glowroot-agent</url>
 
   <scm>
@@ -32,8 +37,11 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <junit.version>5.11.4</junit.version>
+    <jakarta.servlet.version>6.1.0</jakarta.servlet.version>
     <maven.javadoc.plugin.version>3.11.2</maven.javadoc.plugin.version>
     <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
+    <spring.boot.version>3.5.5</spring.boot.version>
+    <spring.framework.version>6.2.7</spring.framework.version>
   </properties>
 
   <distributionManagement>
@@ -44,17 +52,9 @@
     </repository>
   </distributionManagement>
 
-  <dependencies>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>${junit.version}</version>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
-
   <build>
-    <plugins>
+    <pluginManagement>
+      <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -67,16 +67,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
         <version>3.4.2</version>
-        <configuration>
-          <archive>
-            <manifestEntries>
-              <Premain-Class>com.reactor.glowroot.agent.RustGlowrootAgent</Premain-Class>
-              <Can-Redefine-Classes>false</Can-Redefine-Classes>
-              <Can-Retransform-Classes>false</Can-Retransform-Classes>
-              <Implementation-Version>${project.version}</Implementation-Version>
-            </manifestEntries>
-          </archive>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -87,28 +77,13 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
         <version>${maven.source.plugin.version}</version>
-        <executions>
-          <execution>
-            <id>attach-sources</id>
-            <goals>
-              <goal>jar-no-fork</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
         <version>${maven.javadoc.plugin.version}</version>
-        <executions>
-          <execution>
-            <id>attach-javadocs</id>
-            <goals>
-              <goal>jar</goal>
-            </goals>
-          </execution>
-        </executions>
       </plugin>
-    </plugins>
+      </plugins>
+    </pluginManagement>
   </build>
 </project>
