@@ -266,8 +266,8 @@ function Median([double[]] $Values) {
     return ([double]$sorted[$right - 1] + [double]$sorted[$right]) / 2.0
 }
 
-if ((Median -Values @(3.0, 1.0, 2.0)) -ne 2.0
-        -or (Median -Values @(4.0, 1.0, 3.0, 2.0)) -ne 2.5) {
+if ((Median -Values @(3.0, 1.0, 2.0)) -ne 2.0 -or
+        (Median -Values @(4.0, 1.0, 3.0, 2.0)) -ne 2.5) {
     throw "Median self-check failed."
 }
 
