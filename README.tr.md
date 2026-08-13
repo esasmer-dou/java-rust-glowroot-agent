@@ -129,9 +129,10 @@ Mevcut Spring Boot uygulamasını başlatın:
 java -jar orders-api.jar
 ```
 
-Spring auto-configuration tek bir Servlet filter ekler. Filter, Spring MVC'nin seçtiği
-`/orders/{id}` gibi endpoint kalıbını kullanır. Uygulama sınıflarını taramaz. Java worker pool
-oluşturmaz.
+Spring auto-configuration tek bir MVC interceptor ekler. Spring MVC'nin seçtiği `/orders/{id}` gibi
+normalize edilmiş endpoint kalıbını kullanır. Uygulama sınıflarını taramaz. Java worker pool
+oluşturmaz. Eşleşen MVC handler'larından dönen hataları tam sayar. Handler eşleşmeden önce oluşan
+hatalar ise servlet container veya ingress telemetrisiyle izlenmelidir.
 
 ### 2. İsteğe bağlı erken başlangıç bootstrap'ı
 
@@ -240,8 +241,8 @@ tire yerine alt çizgi kullanın. Örnek: `reactor.glowroot.max-export-bytes`,
 | `reactor.glowroot.trace.capacity` | `0` | 0-32 | Sınırlı trace kuyruğu; `0` kuyruk ayırmaz |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Bellekte tutulacak en fazla endpoint sayısı |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Tek collector mesajının en büyük boyutu |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Starter varsa Spring MVC filter'ını açar |
-| `reactor.glowroot.spring.filter-order` | `-2147483548` | integer | Servlet filter sırası |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Starter varsa Spring MVC interceptor'ını açar |
+| `reactor.glowroot.spring.interceptor-order` | `-2147483548` | integer | Spring MVC interceptor sırası |
 | `reactor.glowroot.native.extract-dir` | kullanıcı home dizini | dizin | Spring standalone native çıkarma dizini |
 
 Sınır dışındaki değerler uygulamanın başlamasını engeller. Agent bellek sınırını büyüten bir property

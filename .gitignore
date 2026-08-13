@@ -4,6 +4,8 @@
 /benchmark/spring-context/
 /benchmark/results/
 /glowroot-upstream/
+/.release-native-clean/
+/.release-staging/
 /.idea/
 /.vscode/
 /*.iml

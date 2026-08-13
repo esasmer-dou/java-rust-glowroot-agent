@@ -55,6 +55,18 @@ class RustGlowrootAgentTest {
     }
 
     @Test
+    void mapsSpringInterceptorOrderAndKeepsTheFormerShortNameAsAnAlias() {
+        RustGlowrootAgent.applyArguments("spring-interceptor-order=42");
+
+        assertEquals("42", System.getProperty("reactor.glowroot.spring.interceptor-order"));
+
+        System.clearProperty("reactor.glowroot.spring.interceptor-order");
+        RustGlowrootAgent.applyArguments("spring-filter-order=24");
+
+        assertEquals("24", System.getProperty("reactor.glowroot.spring.interceptor-order"));
+    }
+
+    @Test
     void rejectsUnknownOrMalformedArguments() {
         assertThrows(IllegalArgumentException.class,
                 () -> RustGlowrootAgent.applyArguments("unknown=value"));

@@ -129,9 +129,10 @@ Then run the existing Spring Boot application:
 java -jar orders-api.jar
 ```
 
-Spring auto-configuration registers one Servlet filter. The filter uses the route pattern selected
-by Spring MVC, such as `/orders/{id}`. It does not scan application classes and does not create a
-Java worker pool.
+Spring auto-configuration registers one MVC interceptor. It uses the normalized route pattern
+selected by Spring, such as `/orders/{id}`. It does not scan application classes and does not create
+a Java worker pool. Errors from mapped MVC handlers remain exact; failures before handler mapping
+belong to the servlet container or ingress telemetry boundary.
 
 ### 2. Optional early-start bootstrap
 
@@ -239,8 +240,8 @@ underscores. Example: `reactor.glowroot.max-export-bytes` becomes
 | `reactor.glowroot.trace.capacity` | `0` | 0-32 | Bounded trace queue; `0` allocates no trace queue |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Maximum retained HTTP route slots |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Maximum encoded collector request |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the Spring MVC filter when the starter is present |
-| `reactor.glowroot.spring.filter-order` | `-2147483548` | integer | Servlet filter order |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the Spring MVC interceptor when the starter is present |
+| `reactor.glowroot.spring.interceptor-order` | `-2147483548` | integer | Spring MVC interceptor order |
 | `reactor.glowroot.native.extract-dir` | user home | directory | Standalone Spring native extraction directory |
 
 Invalid bounds stop startup. There is no property that enlarges the agent-owned memory ceiling.

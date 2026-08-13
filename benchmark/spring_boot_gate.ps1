@@ -298,6 +298,7 @@ try {
                 $enabled = $variant -eq "candidate"
                 $name = if ($enabled) { $Candidate } else { $Baseline }
                 $startups.Add([pscustomobject]@{
+                    pair = $pair
                     variant = $variant
                     ms = (Start-App $name $SlotACpuSet $enabled $pair)
                 })
@@ -341,11 +342,11 @@ try {
         $baselineCpu = if ($pair % 2 -eq 1) { $SlotACpuSet } else { $SlotBCpuSet }
         $candidateCpu = if ($pair % 2 -eq 1) { $SlotBCpuSet } else { $SlotACpuSet }
         if ($pair % 2 -eq 1) {
-            $startups.Add([pscustomobject]@{ variant = "baseline"; ms = (Start-App $Baseline $baselineCpu $false $pair) })
-            $startups.Add([pscustomobject]@{ variant = "candidate"; ms = (Start-App $Candidate $candidateCpu $true $pair) })
+            $startups.Add([pscustomobject]@{ pair = $pair; variant = "baseline"; ms = (Start-App $Baseline $baselineCpu $false $pair) })
+            $startups.Add([pscustomobject]@{ pair = $pair; variant = "candidate"; ms = (Start-App $Candidate $candidateCpu $true $pair) })
         } else {
-            $startups.Add([pscustomobject]@{ variant = "candidate"; ms = (Start-App $Candidate $candidateCpu $true $pair) })
-            $startups.Add([pscustomobject]@{ variant = "baseline"; ms = (Start-App $Baseline $baselineCpu $false $pair) })
+            $startups.Add([pscustomobject]@{ pair = $pair; variant = "candidate"; ms = (Start-App $Candidate $candidateCpu $true $pair) })
+            $startups.Add([pscustomobject]@{ pair = $pair; variant = "baseline"; ms = (Start-App $Baseline $baselineCpu $false $pair) })
         }
         & docker exec $Candidate sh -c "grep -q rust_glowroot_agent /proc/1/maps"
         if ($LASTEXITCODE -ne 0) { throw "Spring auto-configuration did not load the standalone native agent." }
@@ -404,11 +405,8 @@ foreach ($endpoint in $endpoints) {
         $agentRss = Median -Values @($agent.process_rss_mib)
         $baseContainer = Median -Values @($base.container_mib)
         $agentContainer = Median -Values @($agent.container_mib)
-        $rpsDelta = 100.0 * ($agentRps - $baseRps) / $baseRps
-        $p99Delta = 100.0 * ($agentP99 - $baseP99) / $baseP99
-        $rssDelta = $agentRss - $baseRss
-        $containerDelta = $agentContainer - $baseContainer
-        $errorDelta = (Median -Values @($agent.non_2xx_pct)) - (Median -Values @($base.non_2xx_pct))
+        $pairedRpsDeltas = [Collections.Generic.List[double]]::new()
+        $pairedP99Deltas = [Collections.Generic.List[double]]::new()
         $pairedRssDeltas = [Collections.Generic.List[double]]::new()
         $pairedContainerDeltas = [Collections.Generic.List[double]]::new()
         $pairedThreadDeltas = [Collections.Generic.List[int]]::new()
@@ -416,18 +414,26 @@ foreach ($endpoint in $endpoints) {
         foreach ($pair in 1..$PairRepeats) {
             $pairedBase = $base | Where-Object pair -eq $pair | Select-Object -First 1
             $pairedAgent = $agent | Where-Object pair -eq $pair | Select-Object -First 1
+            $pairedRpsDeltas.Add(100.0 * ($pairedAgent.useful_rps - $pairedBase.useful_rps) / $pairedBase.useful_rps)
+            $pairedP99Deltas.Add(100.0 * ($pairedAgent.p99_ms - $pairedBase.p99_ms) / $pairedBase.p99_ms)
             $pairedRssDeltas.Add($pairedAgent.process_rss_mib - $pairedBase.process_rss_mib)
             $pairedContainerDeltas.Add($pairedAgent.container_mib - $pairedBase.container_mib)
             $pairedThreadDeltas.Add($pairedAgent.threads - $pairedBase.threads)
             $pairedErrorDeltas.Add($pairedAgent.non_2xx_pct - $pairedBase.non_2xx_pct)
         }
+        $rpsDelta = Median -Values @($pairedRpsDeltas)
+        $p99Delta = Median -Values @($pairedP99Deltas)
+        $rssDelta = Median -Values @($pairedRssDeltas)
+        $containerDelta = Median -Values @($pairedContainerDeltas)
+        $threadDelta = Median -Values @($pairedThreadDeltas)
+        $errorDelta = Median -Values @($pairedErrorDeltas)
         $maxRssDelta = ($pairedRssDeltas | Measure-Object -Maximum).Maximum
         $maxContainerDelta = ($pairedContainerDeltas | Measure-Object -Maximum).Maximum
         $observedMaxThreadDelta = ($pairedThreadDeltas | Measure-Object -Maximum).Maximum
         $maxErrorDelta = ($pairedErrorDeltas | Measure-Object -Maximum).Maximum
         $passed = $rpsDelta -ge $MinUsefulRpsDeltaPercent -and $p99Delta -le $MaxP99RegressionPercent `
-                -and $maxRssDelta -le $MaxMemoryRegressionMiB `
-                -and $maxContainerDelta -le $MaxMemoryRegressionMiB `
+                -and $rssDelta -le $MaxMemoryRegressionMiB `
+                -and $containerDelta -le $MaxMemoryRegressionMiB `
                 -and $observedMaxThreadDelta -le $AllowedThreadDelta `
                 -and $maxErrorDelta -le $Max503DeltaPercentagePoints
         $summary.Add([pscustomobject]@{
@@ -440,7 +446,7 @@ foreach ($endpoint in $endpoints) {
             max_paired_process_rss_delta_mib = [math]::Round($maxRssDelta, 3)
             container_delta_mib = [math]::Round($containerDelta, 3)
             max_paired_container_delta_mib = [math]::Round($maxContainerDelta, 3)
-            thread_delta = [int](Median -Values @($agent.threads)) - [int](Median -Values @($base.threads))
+            thread_delta = [int]$threadDelta
             max_paired_thread_delta = [int]$observedMaxThreadDelta
             non_2xx_delta_pp = [math]::Round($errorDelta, 6)
             max_paired_non_2xx_delta_pp = [math]::Round($maxErrorDelta, 6)
@@ -450,13 +456,20 @@ foreach ($endpoint in $endpoints) {
 }
 $startupBase = Median -Values @(($startups | Where-Object variant -eq "baseline").ms)
 $startupAgent = Median -Values @(($startups | Where-Object variant -eq "candidate").ms)
-$startupDelta = 100.0 * ($startupAgent - $startupBase) / $startupBase
+$pairedStartupDeltas = [Collections.Generic.List[double]]::new()
+foreach ($pair in 1..$PairRepeats) {
+    $pairedBase = $startups | Where-Object { $_.pair -eq $pair -and $_.variant -eq "baseline" } | Select-Object -First 1
+    $pairedAgent = $startups | Where-Object { $_.pair -eq $pair -and $_.variant -eq "candidate" } | Select-Object -First 1
+    $pairedStartupDeltas.Add(100.0 * ($pairedAgent.ms - $pairedBase.ms) / $pairedBase.ms)
+}
+$startupDelta = Median -Values @($pairedStartupDeltas)
 $passedAll = -not ($summary.gate -contains "FAIL") -and $startupDelta -le 10.0
 
 $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json") -Encoding utf8
 [ordered]@{
     passed = $passedAll
     pair_repeats = $PairRepeats
+    decision_statistic = "median_of_paired_deltas"
     startup_baseline_median_ms = [math]::Round($startupBase, 2)
     startup_candidate_median_ms = [math]::Round($startupAgent, 2)
     startup_delta_pct = [math]::Round($startupDelta, 2)
@@ -466,9 +479,10 @@ $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json")
 $lines = [Collections.Generic.List[string]]::new()
 $lines.Add("# Spring Boot Agent Gate")
 $lines.Add("")
-$lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup median: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms ($([math]::Round($startupDelta,2))%).")
+$lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
+$lines.Add("RPS, p99, RSS, cgroup, and startup gates use the median of paired deltas. RSS/cgroup maxima remain visible diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("")
-$lines.Add("| Endpoint | C | RPS off/on | RPS delta | p99 off/on ms | p99 delta | RSS med/max MiB | cgroup med/max MiB | Thread med/max | non-2xx med/max pp | Gate |")
+$lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx paired med/max pp | Gate |")
 $lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
 foreach ($row in $summary) {
     $lines.Add("| $($row.endpoint) | $($row.concurrency) | $($row.baseline_rps)/$($row.candidate_rps) | $($row.rps_delta_pct)% | $($row.baseline_p99_ms)/$($row.candidate_p99_ms) | $($row.p99_delta_pct)% | $($row.process_rss_delta_mib)/$($row.max_paired_process_rss_delta_mib) | $($row.container_delta_mib)/$($row.max_paired_container_delta_mib) | $($row.thread_delta)/$($row.max_paired_thread_delta) | $($row.non_2xx_delta_pp)/$($row.max_paired_non_2xx_delta_pp) | $($row.gate) |")

@@ -12,13 +12,13 @@ The footprint gate runs the same application image with the agent disabled and e
 ## Spring Boot MVC Gate
 
 The Spring gate builds one executable Spring Boot image and runs it with the starter present in both
-variants. Baseline keeps telemetry disabled. Candidate enables the one-class bootstrap, Servlet
-adapter, and standalone Rust exporter. This same-image design prevents application dependencies or
+variants. Baseline keeps telemetry disabled. Candidate enables the one-class bootstrap, MVC
+interceptor, and standalone Rust exporter. This same-image design prevents application dependencies or
 JVM flags from being mistaken for agent overhead.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 3 `
+  -PairRepeats 4 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
@@ -31,10 +31,12 @@ small Linux runner, use `-SequentialVariants` so baseline and candidate occupy t
 application CPU in alternating order. The load runner and mock collector may share a separate CPU
 or SMT group, but neither may share the application core.
 
-RPS and p99 use the paired median. Process RSS, cgroup memory, thread count, and non-2xx use the
-worst paired delta, so one resident-memory spike or failed response cannot be hidden by a favourable
-median. The Spring path allows at most one additional thread; the embedded Rust-Java path allows
-none.
+RPS, p99, process RSS, cgroup memory, and startup use the median of baseline/candidate pair deltas.
+This preserves each same-core comparison instead of subtracting unrelated group medians. Process
+RSS and cgroup maxima remain visible diagnostics. Exact errors and additional threads use the worst
+paired delta, so a failed response or unexpected thread cannot be hidden by a median. The separate
+footprint gates retain the strict agent-owned and exact-source resident maximum checks. The Spring
+path allows at most one additional thread; the embedded Rust-Java path allows none.
 
 Run the full gate from the project root:
 

@@ -105,15 +105,15 @@ pod yeniden başlatılmalıdır; bu kullanım profil sözleşmesinin dışındad
 
 Spring Boot Servlet MVC yolu bilinçli olarak iki ayrı artifact kullanır. Bootstrap JAR içinde yalnız
 bir premain sınıfı vardır. Sınırlı argümanları property'lere aktarır. Starter ise Spring Boot'un
-uygulama classloader'ında kalır, tek Servlet filter ekler ve standalone native binary'yi taşır. Bu
+uygulama classloader'ında kalır, tek MVC interceptor ekler ve standalone native binary'yi taşır. Bu
 ayrım, Servlet sınıflarının executable Spring Boot JAR ile kullanılan `-javaagent` JAR içine
 konulması halinde oluşan parent/child classloader hatasını önler.
 
-Başarılı çağrıların örnekleme kararı JNI'dan önce Java tarafında verilir. HTTP `5xx` cevapları tam
-sayılır. Filter, Spring'in normalize edilmiş endpoint kalıbını yalnız örneklenen, yavaş veya hatalı
-çağrıda çözümler. Java executor oluşturmaz ve classpath taraması yapmaz. Standalone Rust kütüphanesi
-`256 KiB` stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint tablosu, trace
-buffer, mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.
+Başarılı istekler JNI çağrısından önce Java tarafında örneklenir. Eşleşen MVC handler'larının `5xx`
+yanıtları tam sayılır. Interceptor, normalize edilmiş route kalıbını yalnız örneklenen, yavaş veya
+hatalı istekte çözer. Java executor oluşturmaz ve classpath taraması yapmaz. Standalone Rust
+kütüphanesi, `256 KiB` stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint
+tablosu, trace buffer, mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.
 
 Adapter; bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty veya genel event bus kullanmaz. `0.2.0`
 sürümü Servlet MVC destekler, WebFlux desteklemez. Spring'e özel method, JDBC, JMX veya profiler

@@ -59,16 +59,18 @@ jobs:
           done
           runner_cpu="${load_cpus[0]}"
           collector_cpu="${load_cpus[1]:-${load_cpus[0]}}"
-          echo "app=$app_cpu" >> "$GITHUB_OUTPUT"
-          echo "runner=$runner_cpu" >> "$GITHUB_OUTPUT"
-          echo "collector=$collector_cpu" >> "$GITHUB_OUTPUT"
+          {
+            echo "app=$app_cpu"
+            echo "runner=$runner_cpu"
+            echo "collector=$collector_cpu"
+          } >> "$GITHUB_OUTPUT"
           echo "Application CPU: $app_cpu; runner CPU: $runner_cpu; collector CPU: $collector_cpu"
 
       - name: Run full paired Spring Boot matrix
         shell: pwsh
         run: |
           ./benchmark/spring_boot_gate.ps1 `
-            -PairRepeats 3 `
+            -PairRepeats 4 `
             -ConcurrencyLevels "64,256" `
             -EndpointClasses "small-json,raw-json,heavy-json" `
             -Duration "15s" `

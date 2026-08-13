@@ -4,6 +4,17 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 0.2.0"
+        required: true
+        type: string
+      repair_partial_package:
+        description: "Delete and republish incomplete GitHub Packages versions"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -12,9 +23,29 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Check out source
         uses: actions/checkout@v5
+
+      - name: Resolve release version
+        id: requested_version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the requested release tag
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          git fetch --force --tags
+          git checkout --detach "v${{ steps.requested_version.outputs.version }}"
 
       - name: Set up Semeru OpenJ9 21 and Maven publishing
         uses: actions/setup-java@v5
@@ -31,16 +62,71 @@ jobs:
         shell: bash
         run: |
           VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
-          test "v${VERSION}" = "${GITHUB_REF_NAME}"
+          test "${VERSION}" = "${{ steps.requested_version.outputs.version }}"
           NOTES="docs/releases/${VERSION}.md"
           test -f "$NOTES"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
 
+      - name: Remove incomplete Maven package versions
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_partial_package }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.release_metadata.outputs.version }}"
+          PACKAGES=(
+            "com.reactor.java-rust-glowroot-parent"
+            "com.reactor.java-rust-glowroot-agent"
+            "com.reactor.java-rust-glowroot-spring-boot-starter"
+          )
+          for package in "${PACKAGES[@]}"; do
+            API_PATH="/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${package}/versions"
+            VERSION_ID="$(gh api --paginate "${API_PATH}?per_page=100" --jq ".[] | select(.name == \"${VERSION}\") | .id" 2>/dev/null | head -n 1 || true)"
+            if [[ -n "${VERSION_ID}" ]]; then
+              gh api --method DELETE "${API_PATH}/${VERSION_ID}"
+            fi
+          done
+          for _ in $(seq 1 12); do
+            remaining=0
+            for package in "${PACKAGES[@]}"; do
+              API_PATH="/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${package}/versions"
+              if gh api --paginate "${API_PATH}?per_page=100" --jq ".[] | select(.name == \"${VERSION}\") | .id" | grep -q .; then
+                remaining=1
+              fi
+            done
+            if [[ "$remaining" == "0" ]]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "One or more package versions were not deleted in time" >&2
+          exit 1
+
       - name: Test and publish Maven package
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: mvn -B -ntp clean deploy
+        run: >-
+          mvn -B -ntp clean deploy
+          -DretryFailedDeploymentCount=5
+          -Daether.connector.basic.threads=1
+          -Dmaven.wagon.http.retryHandler.count=5
+
+      - name: Verify published Maven package versions
+        shell: bash
+        run: |
+          VERSION="${{ steps.release_metadata.outputs.version }}"
+          for package in \
+            "com.reactor.java-rust-glowroot-parent" \
+            "com.reactor.java-rust-glowroot-agent" \
+            "com.reactor.java-rust-glowroot-spring-boot-starter"; do
+            API_PATH="/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${package}/versions"
+            found=0
+            for _ in $(seq 1 12); do
+              if gh api --paginate "${API_PATH}?per_page=100" --jq ".[] | select(.name == \"${VERSION}\") | .name" | grep -qx "$VERSION"; then
+                found=1
+                break
+              fi
+              sleep 5
+            done
+            test "$found" = "1"
+          done
 
       - name: Verify published artifacts and checksums
         shell: bash
@@ -64,25 +150,33 @@ jobs:
             "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar" \
             > "java-rust-glowroot-${VERSION}.sha256"
 
-      - name: Create GitHub pre-release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create or update GitHub release
         shell: bash
         run: |
           VERSION="${{ steps.release_metadata.outputs.version }}"
+          TAG="v${VERSION}"
+          ASSETS=(
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar"
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-sources.jar"
+            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-javadoc.jar"
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}.jar"
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-sources.jar"
+            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar"
+            "java-rust-glowroot-${VERSION}.sha256"
+          )
           RELEASE_FLAGS=()
           if [[ "$VERSION" == *-* ]]; then
             RELEASE_FLAGS+=(--prerelease)
           fi
-          gh release create "${GITHUB_REF_NAME}" \
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar" \
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}.jar" \
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-sources.jar" \
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar" \
-            "java-rust-glowroot-${VERSION}.sha256" \
-            --title "java-rust-glowroot-agent ${VERSION}" \
-            --notes-file "${{ steps.release_metadata.outputs.notes }}" \
-            --verify-tag \
-            "${RELEASE_FLAGS[@]}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --title "java-rust-glowroot-agent ${VERSION}" \
+              --notes-file "${{ steps.release_metadata.outputs.notes }}"
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            gh release create "$TAG" "${ASSETS[@]}" \
+              --title "java-rust-glowroot-agent ${VERSION}" \
+              --notes-file "${{ steps.release_metadata.outputs.notes }}" \
+              --verify-tag \
+              "${RELEASE_FLAGS[@]}"
+          fi
