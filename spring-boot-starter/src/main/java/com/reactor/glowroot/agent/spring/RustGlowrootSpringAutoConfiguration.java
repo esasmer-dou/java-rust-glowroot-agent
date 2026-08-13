@@ -2,21 +2,24 @@ package com.reactor.glowroot.agent.spring;
 
 import com.reactor.glowroot.agent.runtime.NativeTelemetry;
 import com.reactor.glowroot.agent.runtime.TelemetryConfig;
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.Filter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 import org.springframework.web.servlet.DispatcherServlet;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.util.EnumSet;
 
 /** Opt-in Spring MVC integration. No transformer, scanner, or extra executor is installed. */
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnClass({DispatcherServlet.class, WebMvcConfigurer.class})
+@ConditionalOnClass({Filter.class, DispatcherServlet.class})
 @ConditionalOnProperty(prefix = "reactor.glowroot", name = "enabled", havingValue = "true")
 public class RustGlowrootSpringAutoConfiguration {
 
@@ -24,7 +27,7 @@ public class RustGlowrootSpringAutoConfiguration {
     public RustGlowrootSpringAutoConfiguration() {}
 
     @Bean(destroyMethod = "close")
-    @ConditionalOnMissingBean
+    @ConditionalOnMissingBean(name = "rustGlowrootFilterRegistration")
     NativeTelemetry rustGlowrootNativeTelemetry(Environment environment) {
         return NativeTelemetry.start(TelemetryConfig.from(environment::getProperty));
     }
@@ -36,33 +39,29 @@ public class RustGlowrootSpringAutoConfiguration {
             name = "enabled",
             havingValue = "true",
             matchIfMissing = true)
-    RustGlowrootInterceptor rustGlowrootInterceptor(
+    FilterRegistrationBean<RustGlowrootFilter> rustGlowrootFilterRegistration(
             NativeTelemetry telemetry,
             Environment environment) {
         TelemetryConfig config = TelemetryConfig.from(environment::getProperty);
-        return new RustGlowrootInterceptor(telemetry, config);
+        FilterRegistrationBean<RustGlowrootFilter> registration = new FilterRegistrationBean<>();
+        registration.setName("rustGlowrootFilter");
+        registration.setFilter(new RustGlowrootFilter(telemetry, config));
+        registration.setDispatcherTypes(EnumSet.of(DispatcherType.REQUEST));
+        registration.setAsyncSupported(true);
+        registration.addUrlPatterns("/*");
+        int order = resolveFilterOrder(environment);
+        registration.setOrder(order);
+        return registration;
     }
 
-    @Bean(name = "rustGlowrootMvcConfigurer")
-    @ConditionalOnMissingBean(name = "rustGlowrootMvcConfigurer")
-    WebMvcConfigurer rustGlowrootMvcConfigurer(
-            RustGlowrootInterceptor interceptor,
-            Environment environment) {
-        int order = environment.getProperty(
-                "reactor.glowroot.spring.interceptor-order",
-                Integer.class,
-                Integer.MIN_VALUE + 100
-        );
-        return new OrderedInterceptorConfigurer(interceptor, order);
-    }
-
-    private record OrderedInterceptorConfigurer(
-            RustGlowrootInterceptor interceptor,
-            int order) implements WebMvcConfigurer {
-
-        @Override
-        public void addInterceptors(InterceptorRegistry registry) {
-            registry.addInterceptor(interceptor).order(order);
+    private static int resolveFilterOrder(Environment environment) {
+        Integer order = environment.getProperty("reactor.glowroot.spring.order", Integer.class);
+        if (order == null) {
+            order = environment.getProperty("reactor.glowroot.spring.interceptor-order", Integer.class);
         }
+        if (order == null) {
+            order = environment.getProperty("reactor.glowroot.spring.filter-order", Integer.class);
+        }
+        return order == null ? Integer.MIN_VALUE + 100 : order;
     }
 }

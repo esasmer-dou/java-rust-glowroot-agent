@@ -12,6 +12,7 @@ param(
     [string] $RunnerCpuSet = "4-5",
     [string] $CollectorCpuSet = "6",
     [switch] $SequentialVariants,
+    [switch] $AutoSelectCpuRoles,
     [switch] $UseJavaAgentBootstrap,
     [switch] $AllowRunnerCollectorSiblingSharing,
     [double] $MinUsefulRpsDeltaPercent = -2.0,
@@ -21,6 +22,7 @@ param(
     [double] $Max503DeltaPercentagePoints = 0.0,
     [double] $MaxHostCpuAveragePercent = 15.0,
     [double] $MaxHostCpuPeakPercent = 40.0,
+    [int] $HostStabilizationSeconds = 10,
     [switch] $SkipHostPreflight,
     [switch] $SkipBuild,
     [switch] $FailOnGate
@@ -55,12 +57,6 @@ $concurrency = @($ConcurrencyLevels -split "[,\s]+" | Where-Object { $_ } | ForE
 $endpoints = @($EndpointClasses -split "[,\s]+" | Where-Object { $_ })
 foreach ($endpoint in $endpoints) {
     if (-not $EndpointMap.ContainsKey($endpoint)) { throw "Unknown endpoint class: $endpoint" }
-}
-if (-not $SkipHostPreflight) {
-    Assert-ReactorHostBenchmarkReadiness `
-            -MaxAverageCpuPercent $MaxHostCpuAveragePercent `
-            -MaxPeakCpuPercent $MaxHostCpuPeakPercent `
-            -MinFreeVirtualMiB 3072
 }
 
 function Invoke-Checked([string] $File, [string[]] $Arguments, [string] $WorkingDirectory) {
@@ -287,6 +283,29 @@ if ((Median -Values @(3.0, 1.0, 2.0)) -ne 2.0 -or
 Prepare-Build
 Ensure-Network
 New-Item -ItemType Directory -Force -Path $Results | Out-Null
+$selectedRoles = $null
+if ($AutoSelectCpuRoles) {
+    $selectedRoles = Select-ReactorBenchmarkCpuRoles
+    $SlotACpuSet = $selectedRoles.application
+    $SlotBCpuSet = $selectedRoles.application
+    $RunnerCpuSet = $selectedRoles.runner
+    $CollectorCpuSet = $selectedRoles.collector
+    $SequentialVariants = $true
+}
+Set-ReactorCurrentProcessCpuAffinity -CpuSet $RunnerCpuSet
+if (-not $SkipHostPreflight) {
+    if ($HostStabilizationSeconds -gt 0) {
+        Write-Host "Waiting $HostStabilizationSeconds seconds after build before host preflight."
+        Start-Sleep -Seconds $HostStabilizationSeconds
+    }
+    $hostReadiness = Assert-ReactorHostBenchmarkReadiness `
+            -MaxAverageCpuPercent $MaxHostCpuAveragePercent `
+            -MaxPeakCpuPercent $MaxHostCpuPeakPercent `
+            -MinFreeVirtualMiB 3072 `
+            -CpuSet $SlotACpuSet
+} else {
+    $hostReadiness = $null
+}
 Assert-ReactorBenchmarkCpuIsolation -RunnerImage $RunnerImage `
         -SlotACpuSet $SlotACpuSet `
         -SlotBCpuSet $(if ($SequentialVariants) { $SlotACpuSet } else { $SlotBCpuSet }) `
@@ -484,6 +503,13 @@ $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json")
     pair_repeats = $PairRepeats
     decision_statistic = "median_of_paired_deltas"
     activation_mode = if ($UseJavaAgentBootstrap) { "javaagent_plus_starter" } else { "starter_properties" }
+    cpu_roles = [ordered]@{
+        application = $SlotACpuSet
+        runner = $RunnerCpuSet
+        collector = $CollectorCpuSet
+        auto_selected = [bool] $AutoSelectCpuRoles
+    }
+    host_preflight = $hostReadiness
     startup_baseline_median_ms = [math]::Round($startupBase, 2)
     startup_candidate_median_ms = [math]::Round($startupAgent, 2)
     startup_delta_pct = [math]::Round($startupDelta, 2)
@@ -494,6 +520,7 @@ $lines = [Collections.Generic.List[string]]::new()
 $lines.Add("# Spring Boot Agent Gate")
 $lines.Add("")
 $lines.Add("Activation: **$(if ($UseJavaAgentBootstrap) { 'optional -javaagent bootstrap + starter' } else { 'recommended starter + properties' })**.")
+$lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("RPS, p99, RSS, cgroup, and startup gates use the median of paired deltas. RSS/cgroup maxima remain visible diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("")

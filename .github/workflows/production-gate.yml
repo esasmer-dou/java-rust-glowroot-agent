@@ -28,58 +28,16 @@ jobs:
           java-version: "21"
           cache: maven
 
-      - name: Select isolated CPU roles
-        id: cpu
-        shell: bash
-        run: |
-          declare -A seen=()
-          groups=()
-          representatives=()
-          for path in /sys/devices/system/cpu/cpu[0-9]*; do
-            cpu="${path##*cpu}"
-            group="$(cat "$path/topology/thread_siblings_list")"
-            if [[ -z "${seen[$group]+x}" ]]; then
-              seen[$group]=1
-              groups+=("$group")
-              representatives+=("$cpu")
-            fi
-          done
-          if (( ${#groups[@]} < 2 )); then
-            echo "At least two physical CPU groups are required." >&2
-            exit 1
-          fi
-          app_cpu="${representatives[0]}"
-          load_group="${groups[1]}"
-          load_cpus=()
-          for path in /sys/devices/system/cpu/cpu[0-9]*; do
-            cpu="${path##*cpu}"
-            if [[ "$(cat "$path/topology/thread_siblings_list")" == "$load_group" ]]; then
-              load_cpus+=("$cpu")
-            fi
-          done
-          runner_cpu="${load_cpus[0]}"
-          collector_cpu="${load_cpus[1]:-${load_cpus[0]}}"
-          {
-            echo "app=$app_cpu"
-            echo "runner=$runner_cpu"
-            echo "collector=$collector_cpu"
-          } >> "$GITHUB_OUTPUT"
-          echo "Application CPU: $app_cpu; runner CPU: $runner_cpu; collector CPU: $collector_cpu"
-
       - name: Run full paired Spring Boot matrix
         shell: pwsh
         run: |
           ./benchmark/spring_boot_gate.ps1 `
-            -PairRepeats 4 `
+            -PairRepeats 6 `
             -ConcurrencyLevels "64,256" `
             -EndpointClasses "small-json,raw-json,heavy-json" `
             -Duration "15s" `
             -Warmup "8s" `
-            -SlotACpuSet "${{ steps.cpu.outputs.app }}" `
-            -SlotBCpuSet "${{ steps.cpu.outputs.app }}" `
-            -RunnerCpuSet "${{ steps.cpu.outputs.runner }}" `
-            -CollectorCpuSet "${{ steps.cpu.outputs.collector }}" `
-            -SequentialVariants `
+            -AutoSelectCpuRoles `
             -AllowRunnerCollectorSiblingSharing `
             -FailOnGate
 

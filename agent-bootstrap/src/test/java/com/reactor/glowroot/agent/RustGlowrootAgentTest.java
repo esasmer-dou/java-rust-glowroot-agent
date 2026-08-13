@@ -55,15 +55,20 @@ class RustGlowrootAgentTest {
     }
 
     @Test
-    void mapsSpringInterceptorOrderAndKeepsTheFormerShortNameAsAnAlias() {
+    void mapsSpringOrderAndKeepsTheFormerNamesAsAliases() {
         RustGlowrootAgent.applyArguments("spring-interceptor-order=42");
 
-        assertEquals("42", System.getProperty("reactor.glowroot.spring.interceptor-order"));
+        assertEquals("42", System.getProperty("reactor.glowroot.spring.order"));
 
-        System.clearProperty("reactor.glowroot.spring.interceptor-order");
+        System.clearProperty("reactor.glowroot.spring.order");
         RustGlowrootAgent.applyArguments("spring-filter-order=24");
 
-        assertEquals("24", System.getProperty("reactor.glowroot.spring.interceptor-order"));
+        assertEquals("24", System.getProperty("reactor.glowroot.spring.order"));
+
+        System.clearProperty("reactor.glowroot.spring.order");
+        RustGlowrootAgent.applyArguments("spring-order=12");
+
+        assertEquals("12", System.getProperty("reactor.glowroot.spring.order"));
     }
 
     @Test

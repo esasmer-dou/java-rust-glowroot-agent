@@ -17,6 +17,7 @@ on:
         type: boolean
 
 permissions:
+  actions: read
   contents: write
   packages: write
 
@@ -67,6 +68,24 @@ jobs:
           test -f "$NOTES"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the exact release commit passed the production gate
+        shell: bash
+        run: |
+          SHA="$(git rev-parse HEAD)"
+          RUN_ID="$(gh run list \
+            --workflow production-gate.yml \
+            --commit "$SHA" \
+            --status success \
+            --limit 1 \
+            --json databaseId,headSha,conclusion \
+            --jq ".[] | select(.headSha == \"${SHA}\" and .conclusion == \"success\") | .databaseId" \
+            | head -n 1)"
+          if [[ -z "$RUN_ID" ]]; then
+            echo "No successful Production Gate exists for release commit $SHA" >&2
+            exit 1
+          fi
+          echo "Production Gate run $RUN_ID passed for $SHA"
 
       - name: Remove incomplete Maven package versions
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_partial_package }}
