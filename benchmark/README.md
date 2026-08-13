@@ -12,18 +12,20 @@ The footprint gate runs the same application image with the agent disabled and e
 ## Spring Boot MVC Gate
 
 The Spring gate builds one executable Spring Boot image and runs it with the starter present in both
-variants. Baseline keeps telemetry disabled. Candidate enables the MVC interceptor and standalone
+variants. Baseline keeps telemetry disabled. Candidate enables the MVC Servlet filter and standalone
 Rust exporter through system properties. This is the recommended strict-memory production path.
 The same-image design prevents application dependencies or JVM flags from being mistaken for agent
 overhead.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 4 `
+  -PairRepeats 6 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
 
@@ -32,10 +34,11 @@ starts OpenJ9's instrumentation subsystem and is reported separately; it does no
 starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
 executable-JAR startup path.
 
-Each configured endpoint receives its own warmup. Cells and variant order are randomized. On a
-small Linux runner, use `-SequentialVariants` so baseline and candidate occupy the same isolated
-application CPU in alternating order. The load runner and mock collector may share a separate CPU
-or SMT group, but neither may share the application core.
+Each configured endpoint receives its own warmup. Cells and variant order are randomized. On Linux,
+`-AutoSelectCpuRoles` samples physical CPU groups after the build, chooses the quietest group for the
+application, and pins the load runner and collector to another group. Baseline and candidate then
+occupy the same application CPU in alternating order. A post-build host preflight rejects a noisy
+application core or excessive steal time instead of publishing misleading evidence.
 
 RPS, p99, process RSS, cgroup memory, and startup use the median of baseline/candidate pair deltas.
 This preserves each same-core comparison instead of subtracting unrelated group medians. Process

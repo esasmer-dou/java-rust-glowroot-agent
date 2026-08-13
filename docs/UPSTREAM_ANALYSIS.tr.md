@@ -16,7 +16,7 @@ Hedefimiz tam Glowroot agent'tan daha dardır:
 
 - Java handler ve iş mantığı değişmeyecek;
 - HTTP, native Dubbo, native Redis, RSS, thread ve exporter sağlık verileri Glowroot'ta görülecek;
-- Rust-Java REST'e Java request interceptor eklenmeyecek; Spring'de yalnız bir sınırlı MVC interceptor kullanılacak;
+- Rust-Java REST'e Java request filter eklenmeyecek; Spring MVC'de yalnız bir sınırlı Servlet filter kullanılacak;
 - state, queue, payload ve reconnect davranışının tamamı sınırlı olacak;
 - agent-owned state ve feature sayfaları `1 MiB` altında kalacak; embedded yol yalnız eşleştirilmiş
   Linux resident-memory farklarının tamamı `+3,00 MiB` altında ve ek thread sayısı `0` ise kabul edilecek.

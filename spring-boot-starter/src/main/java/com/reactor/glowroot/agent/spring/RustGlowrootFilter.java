@@ -81,33 +81,51 @@ public final class RustGlowrootFilter implements Filter {
         }
 
         boolean sampled = sampleCursor.get().next(sampleMask);
-        boolean observing = sampled || slowTraceEnabled;
-        long startedAtNanos = observing ? System.nanoTime() : 0L;
-        Throwable failure = null;
+        if (!sampled && !slowTraceEnabled) {
+            doUnobserved(httpRequest, httpResponse, chain);
+            return;
+        }
+
+        doObserved(httpRequest, httpResponse, chain, sampled);
+    }
+
+    private void doUnobserved(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain chain) throws IOException, ServletException {
         try {
             chain.doFilter(request, response);
         } catch (IOException | ServletException | RuntimeException | Error error) {
-            failure = error;
+            recordStatus(request, 500, 0L, false);
             throw error;
-        } finally {
-            if (failure == null && httpRequest.isAsyncStarted()) {
-                registerAsyncCompletion(
-                        httpRequest,
-                        httpResponse,
-                        sampled,
-                        observing,
-                        startedAtNanos
-                );
-            } else {
-                record(
-                        httpRequest,
-                        httpResponse,
-                        sampled,
-                        elapsedNanos(observing, startedAtNanos),
-                        failure == null ? 0 : 500
-                );
-            }
         }
+        if (request.isAsyncStarted()) {
+            registerAsyncCompletion(request, response, false, false, 0L);
+            return;
+        }
+        int status = response.getStatus();
+        if (status >= 500) {
+            recordStatus(request, status, 0L, false);
+        }
+    }
+
+    private void doObserved(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain chain,
+            boolean sampled) throws IOException, ServletException {
+        long startedAtNanos = System.nanoTime();
+        try {
+            chain.doFilter(request, response);
+        } catch (IOException | ServletException | RuntimeException | Error error) {
+            recordStatus(request, 500, elapsedNanos(true, startedAtNanos), sampled);
+            throw error;
+        }
+        if (request.isAsyncStarted()) {
+            registerAsyncCompletion(request, response, sampled, true, startedAtNanos);
+            return;
+        }
+        record(request, response, sampled, elapsedNanos(true, startedAtNanos), 0);
     }
 
     private void registerAsyncCompletion(
@@ -145,6 +163,14 @@ public final class RustGlowrootFilter implements Filter {
         int status = forcedStatus == 0 ? response.getStatus() : forcedStatus;
         if (!sampled && status < 500 && durationNanos < slowThresholdNanos) return;
 
+        recordStatus(request, status, durationNanos, sampled);
+    }
+
+    private void recordStatus(
+            HttpServletRequest request,
+            int status,
+            long durationNanos,
+            boolean sampled) {
         String method = request.getMethod();
         Object matched = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
         String route = matched == null ? UNMATCHED_ROUTE : matched.toString();

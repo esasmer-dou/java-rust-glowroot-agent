@@ -16,7 +16,7 @@ The target is narrower than the full Glowroot agent:
 
 - keep Java handlers and business logic unchanged;
 - expose HTTP, native Dubbo, native Redis, RSS, thread, and exporter-health telemetry in Glowroot;
-- add no Java request interceptor to Rust-Java REST and only one bounded MVC interceptor to Spring;
+- add no Java request filter to Rust-Java REST and only one bounded Servlet filter to Spring MVC;
 - keep all state, queues, payloads, and reconnect behavior bounded;
 - keep agent-owned state and feature pages below `1 MiB`, and accept the embedded path only when
   every paired Linux resident-memory delta stays at or below `+3.00 MiB` with no new thread.

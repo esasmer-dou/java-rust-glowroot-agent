@@ -106,13 +106,15 @@ profile's contract.
 
 Spring Boot Servlet MVC uses two deliberately separate artifacts. The bootstrap JAR contains one
 premain class and only maps bounded arguments to properties. The starter stays in Spring Boot's
-application classloader, registers one MVC interceptor, and owns the standalone native binary. This
+application classloader, registers one MVC Servlet filter, and owns the standalone native binary. This
 split avoids the parent/child classloader failure caused by putting Servlet classes in a
 `-javaagent` JAR used with an executable Spring Boot archive.
 
 Successful requests are sampled in Java before JNI. Mapped MVC handler `5xx` responses remain exact.
-The interceptor resolves Spring's normalized route pattern only for a sampled, slow, or failed
-request. It creates no Java executor and performs no classpath scan. The standalone Rust library runs one current-thread
+The filter resolves Spring's normalized route pattern after dispatch only for a sampled, slow, or
+failed request. Synchronous timing state stays on the request thread's stack; only actual async
+requests allocate a bounded completion listener. It creates no Java executor and performs no
+classpath scan. The standalone Rust library runs one current-thread
 Tokio exporter on a `256 KiB` stack. Every queue, route table, trace buffer, message, and DNS address
 set is bounded by the same native engine contract.
 

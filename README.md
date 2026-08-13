@@ -129,10 +129,11 @@ Then run the existing Spring Boot application:
 java -jar orders-api.jar
 ```
 
-Spring auto-configuration registers one MVC interceptor. It uses the normalized route pattern
-selected by Spring, such as `/orders/{id}`. It does not scan application classes and does not create
-a Java worker pool. Errors from mapped MVC handlers remain exact; failures before handler mapping
-belong to the servlet container or ingress telemetry boundary.
+Spring auto-configuration registers one Servlet filter around MVC dispatch. The filter reads the
+normalized route pattern selected by Spring, such as `/orders/{id}`, after the handler completes.
+It does not scan application classes and does not create a Java worker pool. Synchronous requests
+use stack-local timing state; only an actual async request gets a bounded completion listener.
+Mapped status codes and unhandled failures remain exact.
 
 ### 2. Optional early-start bootstrap
 
@@ -240,8 +241,8 @@ underscores. Example: `reactor.glowroot.max-export-bytes` becomes
 | `reactor.glowroot.trace.capacity` | `0` | 0-32 | Bounded trace queue; `0` allocates no trace queue |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Maximum retained HTTP route slots |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Maximum encoded collector request |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the Spring MVC interceptor when the starter is present |
-| `reactor.glowroot.spring.interceptor-order` | `-2147483548` | integer | Spring MVC interceptor order |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the Spring MVC Servlet filter when the starter is present |
+| `reactor.glowroot.spring.order` | `-2147483548` | integer | Servlet filter order; former `interceptor-order` and `filter-order` names remain aliases |
 | `reactor.glowroot.native.extract-dir` | user home | directory | Standalone Spring native extraction directory |
 
 Invalid bounds stop startup. There is no property that enlarges the agent-owned memory ceiling.
@@ -303,7 +304,7 @@ endpoint/concurrency cell must keep:
 - additional threads at `0` for embedded Rust-Java and at most `1` for standalone Spring.
 
 The full Spring matrix covers small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and
-c256 with four balanced paired runs. RPS, p99, RSS, cgroup, and startup use each pair's delta before
+c256 with six balanced paired runs. RPS, p99, RSS, cgroup, and startup use each pair's delta before
 the median is calculated. RSS maxima stay visible in the report. The separate exact-source footprint
 gate, not independent OpenJ9 process noise, enforces the hard resident-memory maximum.
 
@@ -343,7 +344,7 @@ do not publish a local dirty native build.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 4 `
+  -PairRepeats 6 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `

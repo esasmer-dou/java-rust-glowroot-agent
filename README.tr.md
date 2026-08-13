@@ -129,10 +129,11 @@ Mevcut Spring Boot uygulamasını başlatın:
 java -jar orders-api.jar
 ```
 
-Spring auto-configuration tek bir MVC interceptor ekler. Spring MVC'nin seçtiği `/orders/{id}` gibi
-normalize edilmiş endpoint kalıbını kullanır. Uygulama sınıflarını taramaz. Java worker pool
-oluşturmaz. Eşleşen MVC handler'larından dönen hataları tam sayar. Handler eşleşmeden önce oluşan
-hatalar ise servlet container veya ingress telemetrisiyle izlenmelidir.
+Spring auto-configuration, MVC çağrısını çevreleyen tek bir Servlet filter ekler. Filter, Spring'in
+seçtiği `/orders/{id}` gibi normalize edilmiş endpoint kalıbını handler tamamlandıktan sonra okur.
+Uygulama sınıflarını taramaz ve Java worker pool oluşturmaz. Senkron isteklerde süre bilgisi yalnız
+metot stack'inde tutulur. Sadece gerçekten async olan isteğe sınırlı bir completion listener eklenir.
+Handler'ın ürettiği durum kodları ve yakalanmamış hatalar tam sayılır.
 
 ### 2. İsteğe bağlı erken başlangıç bootstrap'ı
 
@@ -241,8 +242,8 @@ tire yerine alt çizgi kullanın. Örnek: `reactor.glowroot.max-export-bytes`,
 | `reactor.glowroot.trace.capacity` | `0` | 0-32 | Sınırlı trace kuyruğu; `0` kuyruk ayırmaz |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Bellekte tutulacak en fazla endpoint sayısı |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Tek collector mesajının en büyük boyutu |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Starter varsa Spring MVC interceptor'ını açar |
-| `reactor.glowroot.spring.interceptor-order` | `-2147483548` | integer | Spring MVC interceptor sırası |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Starter varsa Spring MVC Servlet filter'ını açar |
+| `reactor.glowroot.spring.order` | `-2147483548` | integer | Servlet filter sırası; eski `interceptor-order` ve `filter-order` adları da çalışır |
 | `reactor.glowroot.native.extract-dir` | kullanıcı home dizini | dizin | Spring standalone native çıkarma dizini |
 
 Sınır dışındaki değerler uygulamanın başlamasını engeller. Agent bellek sınırını büyüten bir property
@@ -346,7 +347,7 @@ native build yayınlamayın.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 4 `
+  -PairRepeats 6 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
