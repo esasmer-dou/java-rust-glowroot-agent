@@ -1,149 +1,173 @@
-# Java-Rust Glowroot Micro Agent
+# Java-Rust Glowroot Agent
 
 [English](README.md) | [Turkish](README.tr.md)
 
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent?include_prereleases)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
+[![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-`java-rust-glowroot-agent` sends bounded telemetry from a Rust-Java REST application to a Glowroot
-Central collector. Java handlers, services, validation, database access, and business logic do not
-change. The existing Rust native runtime records and exports the telemetry.
+Bounded, Rust-first telemetry for Rust-Java REST applications and Spring Boot MVC services. It sends
+HTTP aggregates, errors, optional bounded traces, process gauges, and native Dubbo/Redis timings to
+an existing Glowroot Central collector.
 
-## Release Status
+Your controllers, handlers, services, validation, and database code do not change. The agent does
+not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a Java executor.
 
-`0.1.0-rc1` is the first release candidate for the optional bootstrap JAR. It requires the
-coordinated Rust-Java REST development runtime with native ABI `28`. The published Rust-Java REST
-`4.3.0` runtime uses ABI `26` and cannot enable this telemetry path.
+## Contents
 
-The JAR is not the telemetry engine. It only translates `-javaagent` arguments into framework
-properties. For the smallest resident footprint, do not add the JAR. Configure the compatible
-native runtime directly with properties or environment variables.
+- [Choose Your Runtime](#choose-your-runtime)
+- [What You Get](#what-you-get)
+- [Rust-Java REST Setup](#rust-java-rest-setup)
+- [Spring Boot MVC Setup](#spring-boot-mvc-setup)
+- [Kubernetes](#kubernetes)
+- [Configuration](#configuration)
+- [Tuning Recipes](#tuning-recipes)
+- [Failure Behavior](#failure-behavior)
+- [Diagnostics](#diagnostics)
+- [Performance Contract](#performance-contract)
+- [Compatibility](#compatibility)
+- [Build](#build)
 
-## Deployment Boundary
+## Choose Your Runtime
 
-The existing Glowroot Central/collector stays unchanged. This project does not provide or deploy a
-new collector, database, or UI. The only production change is on each Rust-Java application:
+| Application | Add to the application | Native runtime | Extra telemetry thread |
+| --- | --- | --- | ---: |
+| Rust-Java REST `4.4.0` | No starter is required | Reuses the framework's `rust_hyper` library | `0` |
+| Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.2.0` | Loads the small standalone agent library | `1` |
+| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.2.0` bootstrap | Same runtime as the row above | No additional thread |
 
-| Runtime part | What changes? |
+The bootstrap JAR only maps `-javaagent:key=value` arguments to properties. It contains one class,
+no native binary, no transformer, and no runtime dependency. The Spring starter is a separate JAR
+so Spring classes never cross the executable-JAR classloader boundary.
+
+The existing Glowroot collector, UI, and database stay unchanged.
+
+## What You Get
+
+| Signal | Behavior |
 | --- | --- |
-| Existing Glowroot Central/collector | Nothing; keep the current deployment and storage |
-| Rust-Java application | Enable telemetry with framework properties or environment variables |
-| Rust-Java native runtime | Use the coordinated framework binary containing the `glowroot` capability |
-| Optional convenience JAR | Translates `-javaagent` arguments; it is not part of the hard-budget production path |
-| Java handlers and services | Nothing |
-| Benchmark mock collector | Test-only; never deploy it to production |
+| HTTP count and duration | Bounded weighted sampling by normalized route pattern |
+| HTTP `5xx` | Counted exactly, even when successful requests are sampled |
+| Slow/error trace | Optional bounded queue; disabled by default |
+| Rust-native Dubbo | Aggregate count, duration, and errors |
+| Rust-native Redis | Separate read/write count, duration, and errors |
+| Process gauges | RSS and thread count once per export interval |
+| Export health | Connect, reconnect, failure, drop, and last-error counters |
 
-The hard-budget production path starts telemetry directly in the Rust engine already loaded by the
-Rust-Java framework. No Java instrumentation agent is required. The optional JAR only translates
-`-javaagent` arguments into the same framework properties. The Rust engine aggregates and exports
-telemetry using the existing Glowroot collector wire contract.
+Request bodies, query values, headers, SQL text, and personal data are not copied into telemetry.
 
-This project is intentionally not a smaller copy of the full Glowroot Java agent. It is a
-framework-specific micro agent for services where request latency and RSS are strict constraints.
-See [Architecture And Production Boundary](docs/ARCHITECTURE.md) for the upstream analysis,
-failure contract, memory budget, and deliberately unsupported surfaces.
-For the file-by-file upstream review and rejected alternatives, read
-[Upstream Glowroot Analysis And Design Decision](docs/UPSTREAM_ANALYSIS.md).
-For reproducible footprint, protocol, and performance-gate evidence, read
-[Validation Evidence](docs/VALIDATION.md).
+This is intentionally not a replacement for every full Glowroot feature. Use the full Glowroot
+agent when you need arbitrary Java method tracing, JDBC SQL capture, JMX, profiling, heap dumps, or
+remote configuration. Spring WebFlux is not supported by `0.2.0`; the adapter targets Servlet MVC.
 
-## Start Here
+## Rust-Java REST Setup
 
-| You need | Use |
-| --- | --- |
-| Route latency, throughput, error rate, RSS, and thread count with very low overhead | This micro agent |
-| Native Dubbo and native Redis aggregate timings | This micro agent |
-| Arbitrary method tracing, JDBC SQL capture, JMX, profiling, or bytecode weaving | Full Glowroot agent |
-| TLS or mTLS from the pod to the collector | Service-mesh or localhost TLS sidecar in front of this agent |
+Use the coordinated `4.4.0` framework line. It contains Glowroot native ABI `1` and validates the
+native provenance before the HTTP server starts.
 
-## Runtime Shape
-
-```mermaid
-flowchart LR
-    C["HTTP client"] --> H["Rust Hyper"]
-    H --> J["Java handler and business logic"]
-    H --> M["Bounded Rust metrics"]
-    D["Native Dubbo"] --> M
-    R["Native Redis"] --> M
-    M --> E["Rust h2 and protobuf exporter"]
-    E --> G["Glowroot Central collector"]
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>rust-java-rest</artifactId>
+  <version>4.4.0</version>
+</dependency>
 ```
 
-The production path does not install a Java agent or class transformer. The optional convenience
-JAR contains one bootstrap class and no runtime dependencies. Protobuf encoding, HTTP/2, sampling,
-trace buffering, reconnect, and export run in the existing Rust native runtime.
-
-## Supported Telemetry
-
-| Telemetry | Behavior |
-| --- | --- |
-| HTTP route count and duration | Weighted bounded sampling; route names come from the build-time route table |
-| HTTP `5xx` count | Exact; errors are never hidden by sampling |
-| Slow and failed HTTP traces | Bounded queue; no request body, headers, query values, or personal data is copied |
-| Native Dubbo calls | Aggregate count, duration, and errors |
-| Native Redis reads and writes | Separate aggregate count, duration, and errors |
-| Process RSS and thread count | Collected once per export interval |
-| Exporter health | Connection, reconnect, failure, dropped interval, transaction, trace, and route counters |
-
-The micro agent does not capture arbitrary Java methods, SQL text, stack traces, log events, JMX
-attributes, thread profiles, heap dumps, or remote configuration. Adding those surfaces would
-require instrumentation, class loading, queues, and retained state that conflict with the memory
-budget.
-
-## Five-Minute Setup
-
-Use the coordinated Rust-Java REST runtime that contains the `glowroot` native capability. Release
-candidate `0.1.0-rc1` uses REST native ABI `28`; do not combine it with the published `4.3.0` ABI
-`26` binary.
-
-```powershell
-java `
-  -Dreactor.glowroot.enabled=true `
-  -Dreactor.glowroot.collector.address=http://127.0.0.1:8181 `
-  -Dreactor.glowroot.agent.id=catalog::local `
-  -Dreactor.glowroot.application.name=catalog-api `
-  -jar your-application.jar
-```
-
-The same values can be stored in `rust-spring.properties`:
+Add these values to `rust-spring.properties`:
 
 ```properties
+reactor.application.name=catalog-api
 reactor.glowroot.enabled=true
 reactor.glowroot.profile=micro
-reactor.glowroot.collector.address=http://127.0.0.1:8181
+reactor.glowroot.collector.address=http://glowroot-collector:8181
 reactor.glowroot.agent.id=catalog::local
 reactor.glowroot.application.name=catalog-api
 reactor.glowroot.http.sample-rate=256
-reactor.glowroot.trace.slow-threshold-ms=500
 reactor.glowroot.trace.capacity=0
-reactor.glowroot.max-routes=64
-reactor.glowroot.max-export-bytes=65536
 ```
 
-Configuration precedence is:
+Start the application normally. No agent JAR is required:
 
-1. JVM `-Dreactor.glowroot...` system properties.
-2. Optional `-javaagent:...=key=value` arguments, when the convenience JAR is used.
-3. Environment variables such as `REACTOR_GLOWROOT_AGENT_ID`.
-4. External `rust-spring.properties` overlays.
-5. Classpath defaults.
+```bash
+java -jar catalog-api.jar
+```
 
-Invalid configuration fails application startup. A valid configuration with an unavailable
-collector does not stop HTTP traffic.
+If your platform requires `-javaagent` syntax, use the optional bootstrap JAR. It changes only how
+configuration reaches the same embedded Rust engine:
 
-## Optional Maven Package
+```bash
+java \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.0.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
+  -jar catalog-api.jar
+```
 
-Skip this section when you use the recommended properties/environment path. The package is useful
-only when your deployment standard requires `-javaagent` syntax.
+## Spring Boot MVC Setup
 
-GitHub Packages requires authentication even though this repository is public. Create a GitHub
-token with `read:packages`, then add it to `~/.m2/settings.xml`:
+### 1. Add the starter
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
+  <version>0.2.0</version>
+</dependency>
+```
+
+The starter is opt-in. Add these values to `application.properties`:
+
+```properties
+reactor.glowroot.enabled=true
+reactor.glowroot.collector.address=http://127.0.0.1:8181
+reactor.glowroot.agent.id=orders::local
+reactor.glowroot.application.name=orders-api
+reactor.glowroot.http.sample-rate=256
+reactor.glowroot.trace.capacity=0
+```
+
+Then run the existing Spring Boot application:
+
+```bash
+java -jar orders-api.jar
+```
+
+Spring auto-configuration registers one Servlet filter. The filter uses the route pattern selected
+by Spring MVC, such as `/orders/{id}`. It does not scan application classes and does not create a
+Java worker pool.
+
+### 2. Optional early-start bootstrap
+
+Use the bootstrap when your deployment standard expects `-javaagent`, or when you want process
+start metadata captured before Spring starts.
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-glowroot-agent</artifactId>
+  <version>0.2.0</version>
+  <scope>runtime</scope>
+</dependency>
+```
+
+Keep the bootstrap JAR outside the executable Spring Boot JAR and pass its file path to the JVM:
+
+```bash
+java \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.0.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
+  -jar orders-api.jar
+```
+
+Do not place Spring classes in the bootstrap JAR. Spring Boot loads nested dependencies with a child
+classloader; the split artifact design is required for executable-JAR compatibility.
+
+## GitHub Packages
+
+GitHub Packages requires authentication for Maven downloads, including packages from public
+repositories. Create a token with `read:packages`, then add this server to `~/.m2/settings.xml`:
 
 ```xml
 <settings>
   <servers>
     <server>
-      <id>github</id>
+      <id>github-glowroot</id>
       <username>YOUR_GITHUB_USERNAME</username>
       <password>YOUR_GITHUB_PACKAGES_TOKEN</password>
     </server>
@@ -151,247 +175,175 @@ token with `read:packages`, then add it to `~/.m2/settings.xml`:
 </settings>
 ```
 
-Add the GitHub Packages repository and the runtime-scoped bootstrap dependency to your POM:
+Add the package repository to the application POM:
 
 ```xml
 <repositories>
   <repository>
-    <id>github</id>
+    <id>github-glowroot</id>
     <url>https://maven.pkg.github.com/esasmer-dou/java-rust-glowroot-agent</url>
   </repository>
 </repositories>
-
-<dependencies>
-  <dependency>
-    <groupId>com.reactor</groupId>
-    <artifactId>java-rust-glowroot-agent</artifactId>
-    <version>0.1.0-rc1</version>
-    <scope>runtime</scope>
-  </dependency>
-</dependencies>
 ```
 
-Run with the resolved JAR only when you want the convenience bootstrap:
+## Kubernetes
 
-```bash
-java \
-  -javaagent:$HOME/.m2/repository/com/reactor/java-rust-glowroot-agent/0.1.0-rc1/java-rust-glowroot-agent-0.1.0-rc1.jar=collector=glowroot-collector:8181,agent-id=catalog::pod-1 \
-  -jar your-application.jar
-```
-
-An existing `-Dreactor.glowroot.*` property wins over the matching `-javaagent` argument. You can
-therefore keep environment-specific values outside the image.
-
-## Kubernetes Example
-
-Use one stable agent id per pod. The pod name is a practical leaf id. A prefix ending with `::`
-creates a Glowroot rollup hierarchy.
-
-No agent JAR is required for the hard-budget path. Keep the existing application image layout and
-configure the coordinated native runtime. Do not change the collector image or deployment:
+Use the pod name as the leaf agent id. A prefix ending with `::` creates a Glowroot rollup group.
 
 ```yaml
-spec:
-  template:
-    spec:
-      containers:
-        - name: catalog-api
-          image: registry.example/catalog-api:1.0.0
-          env:
-            - name: REACTOR_GLOWROOT_ENABLED
-              value: "true"
-            - name: REACTOR_GLOWROOT_COLLECTOR_ADDRESS
-              value: "http://glowroot-collector.observability.svc.cluster.local:8181"
-            - name: REACTOR_GLOWROOT_AGENT_ID
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
-            - name: REACTOR_GLOWROOT_APPLICATION_NAME
-              value: "catalog-api"
-            - name: REACTOR_GLOWROOT_HTTP_SAMPLE_RATE
-              value: "256"
-            - name: REACTOR_GLOWROOT_TRACE_CAPACITY
-              value: "0"
+env:
+  - name: REACTOR_GLOWROOT_ENABLED
+    value: "true"
+  - name: REACTOR_GLOWROOT_COLLECTOR_ADDRESS
+    value: "http://glowroot-collector.observability.svc.cluster.local:8181"
+  - name: REACTOR_GLOWROOT_AGENT_ID
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: REACTOR_GLOWROOT_APPLICATION_NAME
+    value: "catalog-api"
+  - name: REACTOR_GLOWROOT_HTTP_SAMPLE_RATE
+    value: "256"
+  - name: REACTOR_GLOWROOT_TRACE_CAPACITY
+    value: "0"
 ```
 
-The native micro transport is plaintext HTTP/2. Keep it on a trusted cluster network. When
-encryption or client identity is required, send to a localhost sidecar and let the sidecar provide
-TLS or mTLS. Do not expose the plaintext collector port publicly.
+For a hierarchy such as `catalog::pod-name`, pass the prefix in the container command or create the
+complete value in your deployment tooling. Agent ids must be unique per live pod.
 
-The hard-memory profile resolves the collector name once during startup and retains at most four
-unique IP addresses. Use a normal Kubernetes `ClusterIP` Service, or a localhost sidecar address.
-Do not point this profile at a headless Service whose endpoint IPs are expected to change while the
-pod is running. Restart the pod after changing collector DNS. Startup fails when DNS returns no
-address or more than four unique addresses; this prevents a dynamic resolver thread and unbounded
-address storage from entering the application.
+Use a stable `ClusterIP` Service or a localhost sidecar for the collector. DNS is resolved at
+startup and at most four addresses are retained. Restart the pod when the collector DNS target
+changes. Do not expose the plain collector port to the internet. Use a service mesh or localhost
+TLS sidecar when encryption or mTLS is required.
 
-## Choose A Sampling Recipe
+## Configuration
 
-`reactor.glowroot.http.sample-rate=N` records roughly one successful request out of `N` and reports
-it with weight `N`. It accepts powers of two from `1` to `1024`. HTTP errors remain exact.
-
-| Workload | Start with | Trace capacity | Why |
-| --- | ---: | ---: | --- |
-| Low traffic, exact aggregate detail matters | `1` or `8` | `0` | More exact latency distribution without retaining traces |
-| Normal or high API traffic | `256` | `0` | Current micro default; keeps aggregate, error, RSS, thread, Dubbo, and Redis telemetry bounded |
-| More detailed staging latency distribution | `64` or `128` | `0` | More successful requests update route histograms; verify p99 before production use |
-| Incident investigation for one staging pod | `8` | `16` or `32` | Adds bounded slow/error traces; enable only after an A/B p99 and RSS check |
-
-Do not use a large sample rate for a route that receives only a few calls per minute if exact
-minute-by-minute counts are required. Use `1` for that service or use application business metrics.
-The default is deliberately aggregate-first. Setting `trace.capacity` above `0` allocates bounded
-trace state and changes the footprint contract, so treat it as an explicit operational choice.
-
-## Configuration Reference
-
-| Property | Default | Bound | Purpose |
-| --- | ---: | ---: | --- |
-| `reactor.glowroot.enabled` | `false` | boolean | Enables the native telemetry engine |
-| `reactor.glowroot.profile` | `micro` | `micro` only | Selects the bounded feature set |
-| `reactor.glowroot.collector.address` | `http://127.0.0.1:8181` | max 512 bytes; max 4 startup-resolved IPs | Plaintext h2 collector endpoint; use stable `ClusterIP` or localhost |
-| `reactor.glowroot.agent.id` | empty | 1-256 bytes | Required Glowroot agent/rollup id |
-| `reactor.glowroot.application.name` | `reactor.application.name` | 1-128 bytes | Display name sent in read-only agent config |
-| `reactor.glowroot.hostname` | `HOSTNAME` | max 255 bytes | Host/pod identity |
-| `reactor.glowroot.export.interval-ms` | `60000` | 60000-3600000, multiple of 60000 | Aggregate and gauge interval |
-| `reactor.glowroot.connect-timeout-ms` | `1000` | 100-30000 | TCP/h2 connection timeout |
-| `reactor.glowroot.request-timeout-ms` | `2000` | 100-30000 | Whole gRPC request lifecycle timeout |
-| `reactor.glowroot.trace.slow-threshold-ms` | `500` | 1-3600000 | Slow request trace threshold |
-| `reactor.glowroot.http.sample-rate` | `256` | power of two, 1-1024 | Successful HTTP aggregate sampling; HTTP `5xx` remains exact |
-| `reactor.glowroot.trace.capacity` | `0` | 0-32 | Bounded slow/error trace queue; `0` allocates no trace queue |
-| `reactor.glowroot.max-routes` | `64` | 1-64 | Maximum HTTP route metric slots in the 1 MiB profile |
-| `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Hard limit per encoded collector request in the 1 MiB profile |
-
-Every property also has an environment form. Replace dots and hyphens with underscores and use
-uppercase. Example: `reactor.glowroot.max-export-bytes` becomes
+Priority is: JVM `-D` property, `-javaagent` argument, environment variable, application property,
+then default. An environment key is the uppercase property with dots and dashes replaced by
+underscores. Example: `reactor.glowroot.max-export-bytes` becomes
 `REACTOR_GLOWROOT_MAX_EXPORT_BYTES`.
 
-## Failure And Overload Behavior
+| Property | Default | Allowed value | Purpose |
+| --- | ---: | --- | --- |
+| `reactor.glowroot.enabled` | `false` | boolean | Enables the bounded telemetry runtime |
+| `reactor.glowroot.profile` | `micro` | `micro` | Selects the hard-bounded feature set |
+| `reactor.glowroot.collector.address` | `http://127.0.0.1:8181` | h2 HTTP URL | Glowroot Central endpoint |
+| `reactor.glowroot.agent.id` | empty | 1-256 bytes | Required unique agent/rollup id |
+| `reactor.glowroot.application.name` | application name | 1-128 bytes | Name shown in Glowroot |
+| `reactor.glowroot.hostname` | `HOSTNAME` | up to 255 bytes | Host or pod label |
+| `reactor.glowroot.export.interval-ms` | `60000` | 60000-3600000; 60000 multiple | Aggregate export interval |
+| `reactor.glowroot.connect-timeout-ms` | `1000` | 100-30000 | TCP/h2 connection timeout |
+| `reactor.glowroot.request-timeout-ms` | `2000` | 100-30000 | Complete collector request timeout |
+| `reactor.glowroot.trace.slow-threshold-ms` | `500` | 1-3600000 | Slow trace threshold when traces are enabled |
+| `reactor.glowroot.http.sample-rate` | `256` | power of two, 1-1024 | Samples successful HTTP requests; `5xx` stays exact |
+| `reactor.glowroot.trace.capacity` | `0` | 0-32 | Bounded trace queue; `0` allocates no trace queue |
+| `reactor.glowroot.max-routes` | `64` | 1-64 | Maximum retained HTTP route slots |
+| `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Maximum encoded collector request |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the Spring MVC filter when the starter is present |
+| `reactor.glowroot.spring.filter-order` | `-2147483548` | integer | Servlet filter order |
+| `reactor.glowroot.native.extract-dir` | user home | directory | Standalone Spring native extraction directory |
 
-- Collector connection and gRPC calls have timeouts.
-- Reconnect uses bounded exponential backoff from 250 ms to 30 seconds.
-- The HTTP path never waits for the collector.
-- Trace queues and route tables have hard caps.
-- An interval that cannot be exported is dropped at its rollup boundary. It is not retained
-  indefinitely and is visible in diagnostics.
-- Oversized collector messages are rejected locally instead of growing memory.
-- Agent configuration sent to Glowroot is read-only; remote collector configuration is ignored.
+Invalid bounds stop startup. There is no property that enlarges the agent-owned memory ceiling.
 
-Inspect health without looking at application logs:
+## Tuning Recipes
+
+| Scenario | `sample-rate` | `trace.capacity` | Recommendation |
+| --- | ---: | ---: | --- |
+| High-traffic production API | `256` | `0` | Lowest steady overhead; keep exact `5xx` |
+| Low-traffic API, exact aggregate trend | `1` or `8` | `0` | More samples are needed because traffic is sparse |
+| Staging latency investigation | `64` | `0` | More histogram updates; run p99 A/B first |
+| Short incident investigation on one pod | `8` | `16` | Bounded traces; revert after the incident |
+
+Do not solve missing business metrics by setting the sample rate to `1` on every high-traffic pod.
+Use explicit business metrics for orders, payments, or domain failures.
+
+## Failure Behavior
+
+- Invalid local configuration fails startup.
+- A collector outage does not block HTTP, Dubbo, Redis, or business logic.
+- Connect and request timeouts are bounded.
+- Reconnect uses bounded exponential backoff.
+- Failed intervals are dropped at the rollup boundary; they are not queued forever.
+- Route, trace, message, DNS-address, and export sizes have hard limits.
+- An old or mismatched native ABI fails early with an actionable error.
+
+## Diagnostics
+
+Rust-Java REST exposes built-in diagnostics:
 
 ```bash
 curl -s http://localhost:8080/diagnostics/glowroot
 curl -s http://localhost:8080/metrics | grep reactor_glowroot
 ```
 
-Important fields are `connected`, `collector_dns_mode`, `resolved_collector_addresses`,
-`export_failure`, `dropped_intervals`, `dropped_transactions`, `dropped_traces`, `dropped_routes`,
-and `last_error_code`.
+For Spring Boot, inject `NativeTelemetry` into an existing secured diagnostics controller only when
+you need it, then return `diagnosticsJson()`. The starter does not open a management endpoint by
+itself.
 
-## Performance Gate
+Watch `connected`, `export_failure`, `dropped_intervals`, `dropped_transactions`, `dropped_traces`,
+`dropped_routes`, `reconnects`, and `last_error_code`.
 
-The enforceable agent-attributed boundary is a hard `1 MiB`. The Rust startup gate admits at most
-`384 KiB` of calculated state and transport reserves, leaving `640 KiB` for native feature pages
-and allocator residency. Configuration above this boundary fails startup. No property can raise it.
+## Performance Contract
 
-This source gate is necessary, but it is not sufficient to certify total container memory.
-Container `memory.current` also includes OpenJ9 JIT, GC, page cache, kernel socket memory, and
-allocator residency. The release gate therefore checks every observed maximum, not only medians.
-A favourable median cannot be presented as a deterministic maximum.
-Use the same image with telemetry disabled and enabled. Compare Linux process `VmRSS`, cgroup
-working set, useful HTTP 200 RPS, p99, and `503` rate. Every endpoint/concurrency cell must pass;
-favourable aggregate medians cannot hide an unstable cell.
+The embedded Rust-Java path enforces a deterministic `1 MiB` ceiling for agent-attributed state and
+native feature pages and adds no thread. The standalone Spring path is gated separately because it
+loads a small native library and one current-thread Tokio exporter with a `256 KiB` stack.
+
+Release gates compare telemetry off/on in the same image with randomized paired runs. Every
+endpoint/concurrency cell must keep:
+
+- useful HTTP 200 RPS loss at or above `-2%`;
+- p99 regression at or below `+10%`;
+- every paired process RSS and cgroup delta at or below `+3 MiB`;
+- non-2xx regression at `0` percentage points;
+- additional threads at `0` for embedded Rust-Java and at most `1` for standalone Spring.
+
+The full Spring matrix covers small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and
+c256 with at least three paired runs. A favourable total median cannot hide a failed cell or a
+resident-memory maximum.
+
+See [Validation Evidence](docs/VALIDATION.md),
+[Architecture And Production Boundary](docs/ARCHITECTURE.md), and
+[Benchmark Guide](benchmark/README.md).
+
+## Compatibility
+
+| Component | Release | Contract |
+| --- | ---: | --- |
+| Java | `21` | Semeru OpenJ9 is the primary tested JVM |
+| Rust-Java REST | `4.4.0` | REST ABI `28`, Glowroot ABI `1` |
+| Agent bootstrap | `0.2.0` | One class; works with either supported runtime |
+| Spring Boot starter | `0.2.0` | Spring Boot `3.x`, Servlet MVC |
+| Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
+| Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
+
+Do not copy DLL/SO files between versions. The framework, cache, Dubbo, and agent libraries validate
+their coordinated native ABI at startup.
+
+## Build
 
 ```powershell
-.\benchmark\glowroot_gate.ps1 `
-  -PairRepeats 4 `
+$env:JAVA_HOME = "D:\Dropbox\java64\Semeru\jdk-21.0.2.13-openj9"
+mvn -B -ntp clean verify
+```
+
+The Maven reactor builds:
+
+- `agent-bootstrap/target/java-rust-glowroot-agent-0.2.0.jar`
+- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.2.0.jar`
+
+The native DLL/SO are built only from the clean `rust-spring` commit recorded in
+`native-provenance.properties`. Run `scripts/sync-native-artifacts.ps1` with verified CI artifacts;
+do not publish a local dirty native build.
+
+```powershell
+.\benchmark\spring_boot_gate.ps1 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -EndpointClasses "small-json-direct,direct-json-writer,raw-json" `
-  -Duration "20s" `
+  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -Duration "15s" `
   -Warmup "8s" `
   -FailOnGate
 ```
 
-The embedded production boundary is at most `+3.00 MiB` for every observed process `VmRSS`, smaps
-RSS, and cgroup-current paired delta, with no additional thread. This conservative artifact gate is
-separate from the stricter `1 MiB` agent-owned source budget. Performance cells allow at most `2%`
-useful HTTP 200 RPS regression and at most `10%` p99 regression. High coefficient of variation
-produces `INCONCLUSIVE`, not a pass.
-
-Release-grade scripts also require a quiet Windows host before starting load: average CPU at most
-`15%`, peak CPU at most `40%`, and free virtual memory at least `3072 MiB`. If preflight fails, wait
-or use a dedicated runner. Do not bypass it for release evidence.
-
-The current exact-source attribution run used three balanced CPU-slot phases and exactly `4,096`
-requests per endpoint and variant. The script fingerprinted the native source tree before building
-the feature-disabled SO and rejected stale build output. The embedded-native configuration has
-`358,531` bytes of bounded state and reserves. Adding measured native feature pages produces an
-attributed ceiling of `0.694 MiB`, with `0` additional threads.
-
-The deterministic agent-owned budget and the independent-process resident gate are both **PASS**.
-Observed embedded-native medians were `VmRSS +1.676 MiB`, smaps RSS `+1.711 MiB`, and cgroup current
-`+0.461 MiB`. The largest paired deltas were `VmRSS +1.742 MiB`, smaps RSS `+1.817 MiB`, and cgroup
-current `+1.754 MiB`; thread delta remained `0`. These process values include JVM and allocator
-noise, so they are evidence for the `3 MiB` resident boundary, not a replacement for the source-owned
-allocation contract.
-
-Tracked release evidence is available under
-[`docs/evidence/0.1.0-rc1`](docs/evidence/0.1.0-rc1/README.md). Generated benchmark workspaces remain
-ignored so raw logs and temporary containers do not enter the runtime repository.
-
-The optional convenience JAR is not certified for the hard-budget production path. Its observed
-maximum reached about `3.055 MiB` for process/smaps RSS even though its source-attributed ceiling was
-`0.741 MiB`. Use native properties or environment variables when the resident-memory boundary is
-strict.
-
-With the current default sample rate `256`, the focused c256 small-direct gate passed: useful HTTP
-200 RPS changed by `-0.17%`, p99 by `+6.28%`, and the `503` delta remained zero. The full
-c64/c256 endpoint matrix is intentionally still open because the workstation host-noise preflight
-rejected the latest run. Do not convert an `INCONCLUSIVE` run into a pass.
-
-```powershell
-.\benchmark\feature_artifact_footprint.ps1 `
-  -RepeatCount 3 `
-  -Concurrency 256 `
-  -RequestsPerEndpoint 4096 `
-  -FailOnGate
-```
-
-Protocol compatibility, collector-down fail-open behavior, the source-enforced `1 MiB` budget, and
-the embedded-native `3 MiB` resident gate passed. The focused c256 performance cell also passed.
-Run the full endpoint matrix on the target Kubernetes node class before publishing a broad
-performance claim. A hard cap can be enforced for agent-owned state; it cannot cap unrelated OpenJ9,
-application, page-cache, or kernel memory changes inside the container.
-
-This same-image gate measures the cost of activating telemetry. Before a release, also compare the
-last published framework image with the new framework plus enabled agent. That second gate includes
-new native code pages and prevents feature code already present in both same-image variants from
-being hidden in the baseline.
-
-The mock collector is test-only. It compiles the exact protobuf schema from the read-only upstream
-Glowroot checkout and validates init, aggregate, HdrHistogram, gauge, and trace messages. Its gRPC,
-protobuf, Netty, and HdrHistogram dependencies are never packaged in the agent JAR or application.
-It is not a production component and does not replace the existing Glowroot collector.
-
-## Build And Verify
-
-```powershell
-mvn clean package
-```
-
-The runtime JAR should contain only the thin bootstrap classes and metadata:
-
-```powershell
-jar tf target/java-rust-glowroot-agent-0.1.0-rc1.jar
-```
-
-Native changes are built in `rust-spring`, synchronized into `rust-java-rest`, and verified by the
-coordinated ABI/provenance tests. Windows DLL and Linux SO must come from the same source revision.
-The current development runtime uses native ABI `28`; the agent is not compatible with the
-published ABI `26` runtime.
-
-## Compatibility Boundary
-
-The protocol implementation was validated against the upstream Glowroot wire contract at commit
-`622dc6f800228cccc6fa37b0ed9e779446d7c41e` (`0.14.8-beta.5-SNAPSHOT`). The old unary aggregate and
-trace methods are still accepted by that Central version. Re-run the protocol gate before changing
-the Central version. Do not assume future wire compatibility without the gate.
+The mock collector is test-only. Never deploy it in place of Glowroot Central.

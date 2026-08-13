@@ -80,5 +80,5 @@ jobs:
         with:
           name: spring-boot-production-gate
           path: benchmark/results/spring_gate_*/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30

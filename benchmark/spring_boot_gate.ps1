@@ -92,8 +92,16 @@ function Find-AgentJar {
 
 function Prepare-Build {
     if (-not $SkipBuild) {
-        $env:JAVA_HOME = "D:\Dropbox\java64\Semeru\jdk-21.0.2.13-openj9"
-        $env:Path = "$env:JAVA_HOME\bin;$env:Path"
+        $windowsSemeru = "D:\Dropbox\java64\Semeru\jdk-21.0.2.13-openj9"
+        if ($IsWindows -and (Test-Path -LiteralPath $windowsSemeru -PathType Container)) {
+            $env:JAVA_HOME = $windowsSemeru
+        }
+        if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME)
+                -or -not (Test-Path -LiteralPath $env:JAVA_HOME -PathType Container)) {
+            throw "JAVA_HOME must point to an existing Java 21 installation."
+        }
+        $javaBin = Join-Path $env:JAVA_HOME "bin"
+        $env:Path = "$javaBin$([IO.Path]::PathSeparator)$env:Path"
         Invoke-Checked mvn @("-B", "-ntp", "clean", "install") $ProjectRoot | Out-Null
         Invoke-Checked mvn @("-B", "-ntp", "clean", "package") $SpringRoot | Out-Null
         Invoke-Checked mvn @("-B", "-ntp", "clean", "package") (Join-Path $ScriptDir "mock-collector") | Out-Null
