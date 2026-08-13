@@ -119,6 +119,11 @@ Adapter; bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty veya genel event bus 
 sürümü Servlet MVC destekler, WebFlux desteklemez. Spring'e özel method, JDBC, JMX veya profiler
 instrumentation gerekiyorsa tam Glowroot agent kullanın.
 
+Sertifikalı düşük bellekli Spring yolu, starter'ı property veya ortam değişkeniyle açar. Tek sınıflı
+isteğe bağlı `-javaagent` bootstrap, erken startup bilgisi ve operasyon standardı için desteklenir.
+Ancak transformer kurmasa bile OpenJ9 instrumentation sistemini başlattığı için bellek sonucu ayrı
+ölçülür ve raporlanır.
+
 ## Uyumluluk
 
 Test collector, protobuf şemasını read-only upstream Glowroot checkout'tan doğrudan derler. Rust

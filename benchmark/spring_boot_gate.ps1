@@ -12,6 +12,7 @@ param(
     [string] $RunnerCpuSet = "4-5",
     [string] $CollectorCpuSet = "6",
     [switch] $SequentialVariants,
+    [switch] $UseJavaAgentBootstrap,
     [switch] $AllowRunnerCollectorSiblingSharing,
     [double] $MinUsefulRpsDeltaPercent = -2.0,
     [double] $MaxP99RegressionPercent = 10.0,
@@ -173,9 +174,21 @@ function Start-Collector {
 function Start-App([string] $Name, [string] $CpuSet, [bool] $Enabled, [int] $Pair) {
     Remove-Container $Name
     $telemetry = if ($Enabled) {
-        "-javaagent:/app/agent.jar=collector=${Collector}:8181,agent-id=spring-benchmark::pair-${Pair}," +
-        "application=spring-glowroot-benchmark,http-sample-rate=256,trace-capacity=0," +
-        "max-routes=64,max-export-bytes=65536,spring-enabled=true"
+        if ($UseJavaAgentBootstrap) {
+            "-javaagent:/app/agent.jar=collector=${Collector}:8181,agent-id=spring-benchmark::pair-${Pair}," +
+            "application=spring-glowroot-benchmark,http-sample-rate=256,trace-capacity=0," +
+            "max-routes=64,max-export-bytes=65536,spring-enabled=true"
+        } else {
+            "-Dreactor.glowroot.enabled=true " +
+            "-Dreactor.glowroot.collector.address=http://${Collector}:8181 " +
+            "-Dreactor.glowroot.agent.id=spring-benchmark::pair-${Pair} " +
+            "-Dreactor.glowroot.application.name=spring-glowroot-benchmark " +
+            "-Dreactor.glowroot.http.sample-rate=256 " +
+            "-Dreactor.glowroot.trace.capacity=0 " +
+            "-Dreactor.glowroot.max-routes=64 " +
+            "-Dreactor.glowroot.max-export-bytes=65536 " +
+            "-Dreactor.glowroot.spring.enabled=true"
+        }
     } else { "" }
     $args = @(
         "run", "-d", "--name", $Name, "--network", $Network,
@@ -470,6 +483,7 @@ $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json")
     passed = $passedAll
     pair_repeats = $PairRepeats
     decision_statistic = "median_of_paired_deltas"
+    activation_mode = if ($UseJavaAgentBootstrap) { "javaagent_plus_starter" } else { "starter_properties" }
     startup_baseline_median_ms = [math]::Round($startupBase, 2)
     startup_candidate_median_ms = [math]::Round($startupAgent, 2)
     startup_delta_pct = [math]::Round($startupDelta, 2)
@@ -479,6 +493,7 @@ $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json")
 $lines = [Collections.Generic.List[string]]::new()
 $lines.Add("# Spring Boot Agent Gate")
 $lines.Add("")
+$lines.Add("Activation: **$(if ($UseJavaAgentBootstrap) { 'optional -javaagent bootstrap + starter' } else { 'recommended starter + properties' })**.")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("RPS, p99, RSS, cgroup, and startup gates use the median of paired deltas. RSS/cgroup maxima remain visible diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("")

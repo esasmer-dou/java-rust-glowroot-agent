@@ -108,6 +108,22 @@ jobs:
           -Daether.connector.basic.threads=1
           -Dmaven.wagon.http.retryHandler.count=5
 
+      - name: Verify clean native provenance
+        shell: bash
+        run: |
+          MANIFEST="spring-boot-starter/src/main/resources/native/native-provenance.properties"
+          grep -qx 'schema=1' "$MANIFEST"
+          grep -qx 'glowroot.abi=1' "$MANIFEST"
+          grep -Eq '^source.revision=[0-9a-f]{40}$' "$MANIFEST"
+          if grep -q -- '-dirty$' "$MANIFEST"; then
+            echo "Dirty native provenance cannot be released" >&2
+            exit 1
+          fi
+          WINDOWS_EXPECTED="$(sed -n 's/^windows-x64.sha256=//p' "$MANIFEST")"
+          LINUX_EXPECTED="$(sed -n 's/^linux-x64.sha256=//p' "$MANIFEST")"
+          test "$(sha256sum spring-boot-starter/src/main/resources/native/windows-x64/rust_glowroot_agent.dll | awk '{print $1}')" = "$WINDOWS_EXPECTED"
+          test "$(sha256sum spring-boot-starter/src/main/resources/native/linux-x64/librust_glowroot_agent.so | awk '{print $1}')" = "$LINUX_EXPECTED"
+
       - name: Verify published Maven package versions
         shell: bash
         run: |
@@ -128,10 +144,11 @@ jobs:
             test "$found" = "1"
           done
 
-      - name: Verify published artifacts and checksums
+      - name: Prepare and verify release assets
         shell: bash
         run: |
           VERSION="${{ steps.release_metadata.outputs.version }}"
+          mkdir -p release-assets
           for FILE in \
             "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar" \
             "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
@@ -140,30 +157,20 @@ jobs:
             "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-sources.jar" \
             "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar"; do
             test -s "$FILE"
+            cp "$FILE" release-assets/
           done
-          sha256sum \
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar" \
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}.jar" \
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-sources.jar" \
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar" \
-            > "java-rust-glowroot-${VERSION}.sha256"
+          cp spring-boot-starter/src/main/resources/native/windows-x64/rust_glowroot_agent.dll \
+            release-assets/rust_glowroot_agent-windows-x64.dll
+          cp spring-boot-starter/src/main/resources/native/linux-x64/librust_glowroot_agent.so \
+            release-assets/librust_glowroot_agent-linux-x64.so
+          (cd release-assets && sha256sum ./* > SHA256SUMS)
 
       - name: Create or update GitHub release
         shell: bash
         run: |
           VERSION="${{ steps.release_metadata.outputs.version }}"
           TAG="v${VERSION}"
-          ASSETS=(
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}.jar"
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-sources.jar"
-            "agent-bootstrap/target/java-rust-glowroot-agent-${VERSION}-javadoc.jar"
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}.jar"
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-sources.jar"
-            "spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-${VERSION}-javadoc.jar"
-            "java-rust-glowroot-${VERSION}.sha256"
-          )
+          ASSETS=(./release-assets/*)
           RELEASE_FLAGS=()
           if [[ "$VERSION" == *-* ]]; then
             RELEASE_FLAGS+=(--prerelease)

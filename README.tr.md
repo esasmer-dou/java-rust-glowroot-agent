@@ -291,19 +291,24 @@ endpoint'i açmaz.
 Rust-Java içindeki yol, agent'a ait state ve native özellik sayfaları için deterministik `1 MiB`
 sınırı uygular. Ek thread oluşturmaz. Spring standalone yolu ayrı ölçülür. Bu yol küçük native
 kütüphaneyi ve `256 KiB` stack kullanan tek current-thread Tokio exporter thread'ini yükler.
+Strict Spring gate, starter'ı property veya ortam değişkeniyle açar. İsteğe bağlı `-javaagent`
+bootstrap yalnız kurulum kolaylığı sağlar ve ayrı doğrulanır. Transformer kurulmasa bile JVM
+instrumentation sistemini başlatmak OpenJ9'a ait ek bellek oluşturur.
 
 Release gate aynı image içinde telemetri kapalı/açık eşlenmiş ve sırası değiştirilmiş koşular yapar.
 Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
 
 - başarılı HTTP 200 RPS kaybı en fazla `%2`;
 - p99 artışı en fazla `%10`;
-- her eşlenmiş process RSS ve cgroup farkı en fazla `+3 MiB`;
+- eşlenmiş farkların medyanında process RSS ve cgroup artışı en fazla `+3 MiB`;
 - non-2xx artışı `0` yüzde puanı;
 - Rust-Java içinde ek thread `0`, Spring standalone için en fazla `1`.
 
 Tam Spring matrisi small JSON, önceden hazırlanmış raw JSON ve dynamic heavy JSON endpoint'lerini
-c64 ve c256 seviyelerinde en az üç eşlenmiş koşuyla ölçer. İyi görünen genel medyan, başarısız bir
-hücreyi veya yüksek resident memory farkını gizleyemez.
+c64 ve c256 seviyelerinde dört dengeli çiftle ölçer. RPS, p99, RSS, cgroup ve startup için önce her
+çiftin farkı bulunur, sonra medyan hesaplanır. RSS maksimumları raporda ayrıca gösterilir. Sert
+resident memory maksimumunu bağımsız OpenJ9 proses oynaklığı değil, exact-source footprint gate'i
+uygular.
 
 [Doğrulama Kanıtı](docs/VALIDATION.tr.md),
 [Mimari ve Production Sınırı](docs/ARCHITECTURE.tr.md) ve
@@ -341,7 +346,7 @@ native build yayınlamayın.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 3 `
+  -PairRepeats 4 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `

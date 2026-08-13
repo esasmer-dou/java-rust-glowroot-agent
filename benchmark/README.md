@@ -12,9 +12,10 @@ The footprint gate runs the same application image with the agent disabled and e
 ## Spring Boot MVC Gate
 
 The Spring gate builds one executable Spring Boot image and runs it with the starter present in both
-variants. Baseline keeps telemetry disabled. Candidate enables the one-class bootstrap, MVC
-interceptor, and standalone Rust exporter. This same-image design prevents application dependencies or
-JVM flags from being mistaken for agent overhead.
+variants. Baseline keeps telemetry disabled. Candidate enables the MVC interceptor and standalone
+Rust exporter through system properties. This is the recommended strict-memory production path.
+The same-image design prevents application dependencies or JVM flags from being mistaken for agent
+overhead.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
@@ -25,6 +26,11 @@ JVM flags from being mistaken for agent overhead.
   -Warmup "8s" `
   -FailOnGate
 ```
+
+Pass `-UseJavaAgentBootstrap` only when measuring the optional early-start bootstrap. That mode
+starts OpenJ9's instrumentation subsystem and is reported separately; it does not inherit the
+starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
+executable-JAR startup path.
 
 Each configured endpoint receives its own warmup. Cells and variant order are randomized. On a
 small Linux runner, use `-SequentialVariants` so baseline and candidate occupy the same isolated

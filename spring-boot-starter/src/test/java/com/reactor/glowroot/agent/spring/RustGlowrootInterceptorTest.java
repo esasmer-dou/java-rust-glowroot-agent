@@ -6,6 +6,8 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.HandlerMapping;
 
+import jakarta.servlet.DispatcherType;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,6 +57,24 @@ class RustGlowrootInterceptorTest {
         assertEquals(1, recorder.records.size());
         assertEquals(500, recorder.records.get(0).status());
         assertEquals(0, recorder.records.get(0).sampleWeight());
+    }
+
+    @Test
+    void transfersOnlySampledStateAcrossAnAsyncDispatch() {
+        FakeRecorder recorder = new FakeRecorder();
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
+        MockHttpServletRequest request = request("/orders/{id}");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        interceptor.preHandle(request, response, new Object());
+        interceptor.afterConcurrentHandlingStarted(request, response, new Object());
+        request.setDispatcherType(DispatcherType.ASYNC);
+        interceptor.preHandle(request, response, new Object());
+        interceptor.afterCompletion(request, response, new Object(), null);
+
+        assertEquals(1, recorder.registrations);
+        assertEquals(1, recorder.records.size());
+        assertEquals(1, recorder.records.get(0).sampleWeight());
     }
 
     private static void invoke(RustGlowrootInterceptor interceptor, int status, String route) {

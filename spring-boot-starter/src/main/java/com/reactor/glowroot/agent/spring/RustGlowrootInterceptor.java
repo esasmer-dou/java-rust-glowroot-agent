@@ -25,7 +25,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
     private final boolean slowTraceEnabled;
     private final long slowThresholdNanos;
     private final int maxRoutes;
-    private final ThreadLocal<SampleCursor> sampleCursor;
+    private final ThreadLocal<RequestState> requestState;
     private final Map<String, Integer> routeSlots;
 
     /**
@@ -47,8 +47,8 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
                 ? Long.MAX_VALUE
                 : config.slowThresholdMs() * 1_000_000L;
         this.maxRoutes = config.maxRoutes();
-        this.sampleCursor = ThreadLocal.withInitial(() ->
-                new SampleCursor(initialSampleOffset(Thread.currentThread().threadId(), sampleMask)));
+        this.requestState = ThreadLocal.withInitial(() ->
+                new RequestState(initialSampleOffset(Thread.currentThread().threadId(), sampleMask)));
         this.routeSlots = new HashMap<>(Math.min(16, maxRoutes));
     }
 
@@ -70,14 +70,25 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
         // already owns the timing state, so a second sample would double-count the same request.
         if (request.getDispatcherType() == DispatcherType.ASYNC) return true;
 
-        boolean sampled = sampleCursor.get().next(sampleMask);
-        if (sampled || slowTraceEnabled) {
+        RequestState state = requestState.get();
+        boolean sampled = state.next(sampleMask);
+        state.begin(sampled, slowTraceEnabled);
+        return true;
+    }
+
+    @Override
+    public void afterConcurrentHandlingStarted(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Object handler) {
+        RequestState state = requestState.get();
+        if (state.observing) {
             request.setAttribute(
                     OBSERVATION_ATTRIBUTE,
-                    new Observation(sampled, System.nanoTime())
+                    new Observation(state.sampled, state.startedAtNanos)
             );
         }
-        return true;
+        state.clearObservation();
     }
 
     @Override
@@ -86,13 +97,33 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             HttpServletResponse response,
             Object handler,
             Exception failure) {
-        Observation observation = (Observation) request.getAttribute(OBSERVATION_ATTRIBUTE);
         int status = failure == null ? response.getStatus() : 500;
+        if (request.getDispatcherType() == DispatcherType.ASYNC) {
+            completeAsync(request, status);
+            return;
+        }
+
+        RequestState state = requestState.get();
+        try {
+            if (!state.observing) {
+                if (status >= 500) record(request, status, 0L, false);
+                return;
+            }
+            long durationNanos = Math.max(0L, System.nanoTime() - state.startedAtNanos);
+            if (state.sampled || status >= 500 || durationNanos >= slowThresholdNanos) {
+                record(request, status, durationNanos, state.sampled);
+            }
+        } finally {
+            state.clearObservation();
+        }
+    }
+
+    private void completeAsync(HttpServletRequest request, int status) {
+        Observation observation = (Observation) request.getAttribute(OBSERVATION_ATTRIBUTE);
         if (observation == null) {
             if (status >= 500) record(request, status, 0L, false);
             return;
         }
-
         request.removeAttribute(OBSERVATION_ATTRIBUTE);
         long durationNanos = Math.max(0L, System.nanoTime() - observation.startedAtNanos);
         if (observation.sampled || status >= 500 || durationNanos >= slowThresholdNanos) {
@@ -132,10 +163,13 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
         return (int) mixed & mask;
     }
 
-    private static final class SampleCursor {
+    private static final class RequestState {
         private int remaining;
+        private boolean observing;
+        private boolean sampled;
+        private long startedAtNanos;
 
-        private SampleCursor(int initialOffset) {
+        private RequestState(int initialOffset) {
             this.remaining = initialOffset;
         }
 
@@ -146,6 +180,18 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             }
             remaining--;
             return false;
+        }
+
+        private void begin(boolean sampled, boolean slowTraceEnabled) {
+            this.sampled = sampled;
+            observing = sampled || slowTraceEnabled;
+            startedAtNanos = observing ? System.nanoTime() : 0L;
+        }
+
+        private void clearObservation() {
+            observing = false;
+            sampled = false;
+            startedAtNanos = 0L;
         }
     }
 

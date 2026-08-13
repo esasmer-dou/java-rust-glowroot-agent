@@ -120,6 +120,11 @@ The adapter does not use bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty, or a
 event bus. Version `0.2.0` supports Servlet MVC, not WebFlux. Use the full Glowroot agent when
 Spring-specific method, JDBC, JMX, or profiler instrumentation is required.
 
+The certified low-memory Spring path activates the starter with properties or environment
+variables. The optional one-class `-javaagent` bootstrap remains supported for early startup
+metadata and operational conventions, but its OpenJ9 instrumentation bootstrap is measured and
+reported separately even though it installs no transformer.
+
 ## Compatibility
 
 The test collector compiles the protobuf schema directly from the read-only upstream Glowroot

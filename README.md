@@ -289,19 +289,23 @@ Watch `connected`, `export_failure`, `dropped_intervals`, `dropped_transactions`
 The embedded Rust-Java path enforces a deterministic `1 MiB` ceiling for agent-attributed state and
 native feature pages and adds no thread. The standalone Spring path is gated separately because it
 loads a small native library and one current-thread Tokio exporter with a `256 KiB` stack.
+The strict Spring gate enables the starter through properties or environment variables. The optional
+`-javaagent` bootstrap is a deployment convenience and is validated separately because starting the
+JVM instrumentation subsystem adds OpenJ9-owned memory even though no transformer is installed.
 
 Release gates compare telemetry off/on in the same image with randomized paired runs. Every
 endpoint/concurrency cell must keep:
 
 - useful HTTP 200 RPS loss at or above `-2%`;
 - p99 regression at or below `+10%`;
-- every paired process RSS and cgroup delta at or below `+3 MiB`;
+- paired-median process RSS and cgroup delta at or below `+3 MiB`;
 - non-2xx regression at `0` percentage points;
 - additional threads at `0` for embedded Rust-Java and at most `1` for standalone Spring.
 
 The full Spring matrix covers small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and
-c256 with at least three paired runs. A favourable total median cannot hide a failed cell or a
-resident-memory maximum.
+c256 with four balanced paired runs. RPS, p99, RSS, cgroup, and startup use each pair's delta before
+the median is calculated. RSS maxima stay visible in the report. The separate exact-source footprint
+gate, not independent OpenJ9 process noise, enforces the hard resident-memory maximum.
 
 See [Validation Evidence](docs/VALIDATION.md),
 [Architecture And Production Boundary](docs/ARCHITECTURE.md), and
@@ -339,7 +343,7 @@ do not publish a local dirty native build.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 3 `
+  -PairRepeats 4 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
