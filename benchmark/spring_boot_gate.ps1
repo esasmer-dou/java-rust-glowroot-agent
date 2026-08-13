@@ -96,8 +96,7 @@ function Prepare-Build {
         if ($IsWindows -and (Test-Path -LiteralPath $windowsSemeru -PathType Container)) {
             $env:JAVA_HOME = $windowsSemeru
         }
-        if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME)
-                -or -not (Test-Path -LiteralPath $env:JAVA_HOME -PathType Container)) {
+        if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME) -or -not (Test-Path -LiteralPath $env:JAVA_HOME -PathType Container)) {
             throw "JAVA_HOME must point to an existing Java 21 installation."
         }
         $javaBin = Join-Path $env:JAVA_HOME "bin"

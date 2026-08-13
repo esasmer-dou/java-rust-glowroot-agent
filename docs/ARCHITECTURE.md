@@ -104,12 +104,21 @@ profile's contract.
 
 ## Spring Boot Boundary
 
-The current implementation is integrated with Rust-Java REST and shares its Tokio runtime. It does
-not yet claim Spring Boot support. A Spring adapter may not use bytecode weaving, Byte Buddy/ASM,
-Java gRPC/Netty, a general-purpose event bus, or an extra executor under this budget. It will be
-supported only after a separate Spring Boot image passes the same hard memory, RPS, p99, collector
-failure, and bounded-state gates. Until then, use the full Glowroot agent when Spring-specific
-method/JDBC instrumentation is required.
+Spring Boot Servlet MVC uses two deliberately separate artifacts. The bootstrap JAR contains one
+premain class and only maps bounded arguments to properties. The starter stays in Spring Boot's
+application classloader, registers one Servlet filter, and owns the standalone native binary. This
+split avoids the parent/child classloader failure caused by putting Servlet classes in a
+`-javaagent` JAR used with an executable Spring Boot archive.
+
+Successful requests are sampled in Java before JNI. HTTP `5xx` responses remain exact. The filter
+resolves Spring's normalized route pattern only for a sampled, slow, or failed request. It creates
+no Java executor and performs no classpath scan. The standalone Rust library runs one current-thread
+Tokio exporter on a `256 KiB` stack. Every queue, route table, trace buffer, message, and DNS address
+set is bounded by the same native engine contract.
+
+The adapter does not use bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty, or a general-purpose
+event bus. Version `0.2.0` supports Servlet MVC, not WebFlux. Use the full Glowroot agent when
+Spring-specific method, JDBC, JMX, or profiler instrumentation is required.
 
 ## Compatibility
 
