@@ -39,13 +39,19 @@ Each configured endpoint receives its own warmup. Cells and variant order are ra
 application, and pins the load runner and collector to another group. Baseline and candidate then
 occupy the same application CPU in alternating order. A post-build host preflight rejects a noisy
 application core or excessive steal time instead of publishing misleading evidence.
+Every load cell also measures the otherwise-idle SMT sibling and application-core steal time. The
+release gate requires the paired sibling-activity median to remain within `10%` and every steal-time
+window to remain within `1%`; the observed sibling maximum remains visible. These are host-quality
+failures, not product regressions; rerun them on a quiet node.
 
-RPS, p99, process RSS, cgroup memory, and startup use the median of baseline/candidate pair deltas.
-This preserves each same-core comparison instead of subtracting unrelated group medians. Process
-RSS and cgroup maxima remain visible diagnostics. Exact errors and additional threads use the worst
-paired delta, so a failed response or unexpected thread cannot be hidden by a median. The separate
-footprint gates retain the strict agent-owned and exact-source resident maximum checks. The Spring
-path allows at most one additional thread; the embedded Rust-Java path allows none.
+RPS, p99, and startup use the median of baseline/candidate pair deltas. This preserves each same-core
+comparison instead of subtracting unrelated group medians. Per-cell process RSS and cgroup maxima
+remain diagnostics because independent OpenJ9 JIT/GC residency is noisy. After the full workload,
+each variant enters the same idle phase and receives five memory samples at equal process age. The
+paired median of this steady process RSS and cgroup memory must stay within `+3 MiB`. Exact errors
+and additional threads use the worst paired delta, so a failed response or unexpected thread cannot
+be hidden by a median. The separate footprint gates retain the stricter agent-owned and exact-source
+resident checks. The Spring path allows at most one additional thread; embedded Rust-Java allows none.
 
 Run the full gate from the project root:
 

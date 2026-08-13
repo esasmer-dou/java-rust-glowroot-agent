@@ -22,6 +22,8 @@ param(
     [double] $Max503DeltaPercentagePoints = 0.0,
     [double] $MaxHostCpuAveragePercent = 15.0,
     [double] $MaxHostCpuPeakPercent = 40.0,
+    [double] $MaxHostSiblingCpuPercent = 10.0,
+    [double] $MaxHostStealCpuPercent = 1.0,
     [int] $HostStabilizationSeconds = 10,
     [switch] $SkipHostPreflight,
     [switch] $SkipBuild,
@@ -220,9 +222,28 @@ function Get-ContainerMetrics([string] $Name) {
     }
 }
 
+function Get-StableContainerMetrics([string] $Name, [int] $SampleCount = 5) {
+    if ($SampleCount -lt 3) { throw "Stable memory measurement requires at least three samples." }
+    $samples = foreach ($sample in 1..$SampleCount) {
+        Get-ContainerMetrics $Name
+        if ($sample -lt $SampleCount) { Start-Sleep -Seconds 1 }
+    }
+    return [pscustomobject]@{
+        process_rss_mib = Median -Values @($samples.process_rss_mib)
+        container_mib = Median -Values @($samples.container_mib)
+        threads = [int](($samples.threads | Measure-Object -Maximum).Maximum)
+    }
+}
+
 function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] $Sequence) {
     $runner = "spring-glowroot-wrk-$Sequence"
     Remove-Container $runner
+    $hostBefore = if ($IsLinux) { Get-ReactorLinuxCpuSnapshot } else { $null }
+    $applicationCpus = if ($IsLinux) { @(ConvertFrom-ReactorCpuSet -CpuSet $SlotACpuSet) } else { @() }
+    $physicalCpus = if ($IsLinux) { @(Get-ReactorLinuxPhysicalCpuSet -CpuSet $SlotACpuSet) } else { @() }
+    $siblingCpus = if ($IsLinux) {
+        @($physicalCpus | Where-Object { $applicationCpus -notcontains $_ })
+    } else { @() }
     $args = @("run", "-d", "--name", $runner, "--network", $Network)
     if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
     $args += @($WrkImage, "-t2", "-c$Concurrency", "-d$Duration", "--latency", "http://${Target}:8080$Path")
@@ -237,6 +258,13 @@ function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] 
         $maxThreads = [math]::Max($maxThreads, $sample.threads)
         Start-Sleep -Milliseconds 250
     }
+    $hostAfter = if ($IsLinux) { Get-ReactorLinuxCpuSnapshot } else { $null }
+    $hostStealPercent = if ($IsLinux) {
+        (Get-ReactorLinuxCpuWindow -Before $hostBefore -After $hostAfter -Cpus $applicationCpus).steal_percent
+    } else { 0.0 }
+    $hostSiblingBusyPercent = if ($siblingCpus.Count -gt 0) {
+        (Get-ReactorLinuxCpuWindow -Before $hostBefore -After $hostAfter -Cpus $siblingCpus).busy_percent
+    } else { 0.0 }
     $output = (& docker logs $runner 2>&1) -join "`n"
     Remove-Container $runner
     if ($output -notmatch 'Requests/sec:\s+([0-9.]+)') { throw "Cannot parse wrk RPS:`n$output" }
@@ -262,6 +290,8 @@ function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] 
         process_rss_mib = $maxRss
         container_mib = $maxContainer
         threads = $maxThreads
+        host_sibling_busy_percent = [math]::Round($hostSiblingBusyPercent, 3)
+        host_steal_percent = [math]::Round($hostStealPercent, 3)
     }
 }
 
@@ -301,6 +331,7 @@ if (-not $SkipHostPreflight) {
     $hostReadiness = Assert-ReactorHostBenchmarkReadiness `
             -MaxAverageCpuPercent $MaxHostCpuAveragePercent `
             -MaxPeakCpuPercent $MaxHostCpuPeakPercent `
+            -MaxStealCpuPercent $MaxHostStealCpuPercent `
             -MinFreeVirtualMiB 3072 `
             -CpuSet $SlotACpuSet
 } else {
@@ -316,6 +347,7 @@ Assert-ReactorBenchmarkCpuIsolation -RunnerImage $RunnerImage `
 Start-Collector
 $records = [Collections.Generic.List[object]]::new()
 $startups = [Collections.Generic.List[object]]::new()
+$steadyMemory = [Collections.Generic.List[object]]::new()
 $sequence = 0
 try {
     for ($pair = 1; $pair -le $PairRepeats; $pair++) {
@@ -362,9 +394,20 @@ try {
                         process_rss_mib = $metric.process_rss_mib
                         container_mib = $metric.container_mib
                         threads = $metric.threads
+                        host_sibling_busy_percent = $metric.host_sibling_busy_percent
+                        host_steal_percent = $metric.host_steal_percent
                     })
                     Start-Sleep -Seconds 2
                 }
+                Start-Sleep -Seconds 5
+                $stable = Get-StableContainerMetrics $name
+                $steadyMemory.Add([pscustomobject]@{
+                    pair = $pair
+                    variant = $variant
+                    process_rss_mib = $stable.process_rss_mib
+                    container_mib = $stable.container_mib
+                    threads = $stable.threads
+                })
                 Remove-Container $name
                 Start-Sleep -Seconds 5
             }
@@ -412,9 +455,28 @@ try {
                     process_rss_mib = $metric.process_rss_mib
                     container_mib = $metric.container_mib
                     threads = $metric.threads
+                    host_sibling_busy_percent = $metric.host_sibling_busy_percent
+                    host_steal_percent = $metric.host_steal_percent
                 })
                 Start-Sleep -Seconds 2
             }
+        }
+        Start-Sleep -Seconds 5
+        $memoryVariants = if ($pair % 2 -eq 1) {
+            @("baseline", "candidate")
+        } else {
+            @("candidate", "baseline")
+        }
+        foreach ($variant in $memoryVariants) {
+            $target = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
+            $stable = Get-StableContainerMetrics $target
+            $steadyMemory.Add([pscustomobject]@{
+                pair = $pair
+                variant = $variant
+                process_rss_mib = $stable.process_rss_mib
+                container_mib = $stable.container_mib
+                threads = $stable.threads
+            })
         }
         Remove-Container $Baseline
         Remove-Container $Candidate
@@ -463,11 +525,24 @@ foreach ($endpoint in $endpoints) {
         $maxContainerDelta = ($pairedContainerDeltas | Measure-Object -Maximum).Maximum
         $observedMaxThreadDelta = ($pairedThreadDeltas | Measure-Object -Maximum).Maximum
         $maxErrorDelta = ($pairedErrorDeltas | Measure-Object -Maximum).Maximum
+        $pairedHostSiblingMaxima = [Collections.Generic.List[double]]::new()
+        foreach ($pair in 1..$PairRepeats) {
+            $pairedBase = $base | Where-Object pair -eq $pair | Select-Object -First 1
+            $pairedAgent = $agent | Where-Object pair -eq $pair | Select-Object -First 1
+            $pairedHostSiblingMaxima.Add([math]::Max(
+                    $pairedBase.host_sibling_busy_percent,
+                    $pairedAgent.host_sibling_busy_percent
+            ))
+        }
+        $hostSiblingBusy = Median -Values @($pairedHostSiblingMaxima)
+        $maxHostSiblingBusy = ($pairedHostSiblingMaxima | Measure-Object -Maximum).Maximum
+        $maxHostSteal = (@($base.host_steal_percent) + @($agent.host_steal_percent) |
+                Measure-Object -Maximum).Maximum
         $passed = $rpsDelta -ge $MinUsefulRpsDeltaPercent -and $p99Delta -le $MaxP99RegressionPercent `
-                -and $rssDelta -le $MaxMemoryRegressionMiB `
-                -and $containerDelta -le $MaxMemoryRegressionMiB `
                 -and $observedMaxThreadDelta -le $AllowedThreadDelta `
-                -and $maxErrorDelta -le $Max503DeltaPercentagePoints
+                -and $maxErrorDelta -le $Max503DeltaPercentagePoints `
+                -and $hostSiblingBusy -le $MaxHostSiblingCpuPercent `
+                -and $maxHostSteal -le $MaxHostStealCpuPercent
         $summary.Add([pscustomobject]@{
             endpoint = $endpoint; concurrency = $value
             baseline_rps = [math]::Round($baseRps, 2); candidate_rps = [math]::Round($agentRps, 2)
@@ -482,6 +557,9 @@ foreach ($endpoint in $endpoints) {
             max_paired_thread_delta = [int]$observedMaxThreadDelta
             non_2xx_delta_pp = [math]::Round($errorDelta, 6)
             max_paired_non_2xx_delta_pp = [math]::Round($maxErrorDelta, 6)
+            paired_host_sibling_busy_percent = [math]::Round($hostSiblingBusy, 3)
+            max_host_sibling_busy_percent = [math]::Round($maxHostSiblingBusy, 3)
+            max_host_steal_percent = [math]::Round($maxHostSteal, 3)
             gate = if ($passed) { "PASS" } else { "FAIL" }
         })
     }
@@ -495,9 +573,28 @@ foreach ($pair in 1..$PairRepeats) {
     $pairedStartupDeltas.Add(100.0 * ($pairedAgent.ms - $pairedBase.ms) / $pairedBase.ms)
 }
 $startupDelta = Median -Values @($pairedStartupDeltas)
-$passedAll = -not ($summary.gate -contains "FAIL") -and $startupDelta -le 10.0
+$pairedSteadyRssDeltas = [Collections.Generic.List[double]]::new()
+$pairedSteadyContainerDeltas = [Collections.Generic.List[double]]::new()
+$pairedSteadyThreadDeltas = [Collections.Generic.List[int]]::new()
+foreach ($pair in 1..$PairRepeats) {
+    $pairedBase = $steadyMemory | Where-Object { $_.pair -eq $pair -and $_.variant -eq "baseline" } |
+            Select-Object -First 1
+    $pairedAgent = $steadyMemory | Where-Object { $_.pair -eq $pair -and $_.variant -eq "candidate" } |
+            Select-Object -First 1
+    $pairedSteadyRssDeltas.Add($pairedAgent.process_rss_mib - $pairedBase.process_rss_mib)
+    $pairedSteadyContainerDeltas.Add($pairedAgent.container_mib - $pairedBase.container_mib)
+    $pairedSteadyThreadDeltas.Add($pairedAgent.threads - $pairedBase.threads)
+}
+$steadyRssDelta = Median -Values @($pairedSteadyRssDeltas)
+$steadyContainerDelta = Median -Values @($pairedSteadyContainerDeltas)
+$steadyThreadDelta = Median -Values @($pairedSteadyThreadDeltas)
+$steadyMemoryPassed = $steadyRssDelta -le $MaxMemoryRegressionMiB `
+        -and $steadyContainerDelta -le $MaxMemoryRegressionMiB `
+        -and $steadyThreadDelta -le $AllowedThreadDelta
+$passedAll = -not ($summary.gate -contains "FAIL") -and $startupDelta -le 10.0 -and $steadyMemoryPassed
 
 $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json") -Encoding utf8
+$steadyMemory | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "steady-memory.json") -Encoding utf8
 [ordered]@{
     passed = $passedAll
     pair_repeats = $PairRepeats
@@ -510,9 +607,20 @@ $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json")
         auto_selected = [bool] $AutoSelectCpuRoles
     }
     host_preflight = $hostReadiness
+    host_noise_limits = [ordered]@{
+        sibling_busy_percent = $MaxHostSiblingCpuPercent
+        steal_percent = $MaxHostStealCpuPercent
+    }
     startup_baseline_median_ms = [math]::Round($startupBase, 2)
     startup_candidate_median_ms = [math]::Round($startupAgent, 2)
     startup_delta_pct = [math]::Round($startupDelta, 2)
+    steady_memory = [ordered]@{
+        process_rss_delta_mib = [math]::Round($steadyRssDelta, 3)
+        container_delta_mib = [math]::Round($steadyContainerDelta, 3)
+        thread_delta = [int]$steadyThreadDelta
+        threshold_mib = $MaxMemoryRegressionMiB
+        gate = if ($steadyMemoryPassed) { "PASS" } else { "FAIL" }
+    }
     rows = $summary
 } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Results "summary.json") -Encoding utf8
 
@@ -522,12 +630,13 @@ $lines.Add("")
 $lines.Add("Activation: **$(if ($UseJavaAgentBootstrap) { 'optional -javaagent bootstrap + starter' } else { 'recommended starter + properties' })**.")
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
-$lines.Add("RPS, p99, RSS, cgroup, and startup gates use the median of paired deltas. RSS/cgroup maxima remain visible diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
+$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
+$lines.Add("Steady memory paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")
-$lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx paired med/max pp | Gate |")
-$lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
+$lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx paired med/max pp | Host sibling med/max; steal max | Gate |")
+$lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
 foreach ($row in $summary) {
-    $lines.Add("| $($row.endpoint) | $($row.concurrency) | $($row.baseline_rps)/$($row.candidate_rps) | $($row.rps_delta_pct)% | $($row.baseline_p99_ms)/$($row.candidate_p99_ms) | $($row.p99_delta_pct)% | $($row.process_rss_delta_mib)/$($row.max_paired_process_rss_delta_mib) | $($row.container_delta_mib)/$($row.max_paired_container_delta_mib) | $($row.thread_delta)/$($row.max_paired_thread_delta) | $($row.non_2xx_delta_pp)/$($row.max_paired_non_2xx_delta_pp) | $($row.gate) |")
+    $lines.Add("| $($row.endpoint) | $($row.concurrency) | $($row.baseline_rps)/$($row.candidate_rps) | $($row.rps_delta_pct)% | $($row.baseline_p99_ms)/$($row.candidate_p99_ms) | $($row.p99_delta_pct)% | $($row.process_rss_delta_mib)/$($row.max_paired_process_rss_delta_mib) | $($row.container_delta_mib)/$($row.max_paired_container_delta_mib) | $($row.thread_delta)/$($row.max_paired_thread_delta) | $($row.non_2xx_delta_pp)/$($row.max_paired_non_2xx_delta_pp) | $($row.paired_host_sibling_busy_percent)%/$($row.max_host_sibling_busy_percent)%/$($row.max_host_steal_percent)% | $($row.gate) |")
 }
 $lines.Add("")
 $lines.Add("Overall gate: **$(if ($passedAll) { 'PASS' } else { 'BLOCKED' })**")

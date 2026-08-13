@@ -301,15 +301,15 @@ Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
 
 - başarılı HTTP 200 RPS kaybı en fazla `%2`;
 - p99 artışı en fazla `%10`;
-- eşlenmiş farkların medyanında process RSS ve cgroup artışı en fazla `+3 MiB`;
 - non-2xx artışı `0` yüzde puanı;
 - Rust-Java içinde ek thread `0`, Spring standalone için en fazla `1`.
 
 Tam Spring matrisi small JSON, önceden hazırlanmış raw JSON ve dynamic heavy JSON endpoint'lerini
-c64 ve c256 seviyelerinde dört dengeli çiftle ölçer. RPS, p99, RSS, cgroup ve startup için önce her
-çiftin farkı bulunur, sonra medyan hesaplanır. RSS maksimumları raporda ayrıca gösterilir. Sert
-resident memory maksimumunu bağımsız OpenJ9 proses oynaklığı değil, exact-source footprint gate'i
-uygular.
+c64 ve c256 seviyelerinde altı dengeli çiftle ölçer. RPS, p99 ve startup için önce her çiftin farkı
+bulunur, sonra medyan hesaplanır. İki varyant aynı tam yükü bitirdikten sonra eşit process yaşında
+kontrollü bellek ölçümü yapılır. Process RSS ve cgroup eşleştirilmiş medyan farkları en fazla
+`+3 MiB` olmalıdır. Endpoint içindeki RSS maksimumları tanılama amacıyla raporda kalır. Sert native
+resident memory maksimumunu exact-source footprint gate'i uygular.
 
 [Doğrulama Kanıtı](docs/VALIDATION.tr.md),
 [Mimari ve Production Sınırı](docs/ARCHITECTURE.tr.md) ve
@@ -323,6 +323,7 @@ uygular.
 | Rust-Java REST | `4.4.0` | REST ABI `28`, Glowroot ABI `1` |
 | Agent bootstrap | `0.2.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
 | Spring Boot starter | `0.2.0` | Spring Boot `3.x`, Servlet MVC |
+| Standalone native kaynak | `rust-spring v4.4.1` | Glowroot ABI `1`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |
 
@@ -352,6 +353,8 @@ native build yayınlamayın.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
 

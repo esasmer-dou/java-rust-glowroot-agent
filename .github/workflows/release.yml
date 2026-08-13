@@ -70,6 +70,7 @@ jobs:
           echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
 
       - name: Verify the exact release commit passed the production gate
+        id: production_gate
         shell: bash
         run: |
           SHA="$(git rev-parse HEAD)"
@@ -86,6 +87,35 @@ jobs:
             exit 1
           fi
           echo "Production Gate run $RUN_ID passed for $SHA"
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Verify native provenance and production evidence
+        shell: bash
+        run: |
+          MANIFEST="spring-boot-starter/src/main/resources/native/native-provenance.properties"
+          grep -qx 'schema=1' "$MANIFEST"
+          grep -qx 'glowroot.abi=1' "$MANIFEST"
+          grep -Eq '^source.revision=[0-9a-f]{40}$' "$MANIFEST"
+          if grep -q -- '-dirty$' "$MANIFEST"; then
+            echo "Dirty native provenance cannot be released" >&2
+            exit 1
+          fi
+          WINDOWS_EXPECTED="$(sed -n 's/^windows-x64.sha256=//p' "$MANIFEST")"
+          LINUX_EXPECTED="$(sed -n 's/^linux-x64.sha256=//p' "$MANIFEST")"
+          test "$(sha256sum spring-boot-starter/src/main/resources/native/windows-x64/rust_glowroot_agent.dll | awk '{print $1}')" = "$WINDOWS_EXPECTED"
+          test "$(sha256sum spring-boot-starter/src/main/resources/native/linux-x64/librust_glowroot_agent.so | awk '{print $1}')" = "$LINUX_EXPECTED"
+
+          mkdir -p "${RUNNER_TEMP}/java-rust-glowroot-release-gate"
+          gh run download "${{ steps.production_gate.outputs.run_id }}" \
+            --name spring-boot-production-gate \
+            --dir "${RUNNER_TEMP}/java-rust-glowroot-release-gate"
+          REPORT="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name REPORT.md -type f -print -quit)"
+          SUMMARY="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name summary.json -type f -print -quit)"
+          STEADY="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name steady-memory.json -type f -print -quit)"
+          test -s "$REPORT"
+          test -s "$SUMMARY"
+          test -s "$STEADY"
+          jq -e '.passed == true and .steady_memory.gate == "PASS"' "$SUMMARY" >/dev/null
 
       - name: Remove incomplete Maven package versions
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_partial_package }}
@@ -127,22 +157,6 @@ jobs:
           -Daether.connector.basic.threads=1
           -Dmaven.wagon.http.retryHandler.count=5
 
-      - name: Verify clean native provenance
-        shell: bash
-        run: |
-          MANIFEST="spring-boot-starter/src/main/resources/native/native-provenance.properties"
-          grep -qx 'schema=1' "$MANIFEST"
-          grep -qx 'glowroot.abi=1' "$MANIFEST"
-          grep -Eq '^source.revision=[0-9a-f]{40}$' "$MANIFEST"
-          if grep -q -- '-dirty$' "$MANIFEST"; then
-            echo "Dirty native provenance cannot be released" >&2
-            exit 1
-          fi
-          WINDOWS_EXPECTED="$(sed -n 's/^windows-x64.sha256=//p' "$MANIFEST")"
-          LINUX_EXPECTED="$(sed -n 's/^linux-x64.sha256=//p' "$MANIFEST")"
-          test "$(sha256sum spring-boot-starter/src/main/resources/native/windows-x64/rust_glowroot_agent.dll | awk '{print $1}')" = "$WINDOWS_EXPECTED"
-          test "$(sha256sum spring-boot-starter/src/main/resources/native/linux-x64/librust_glowroot_agent.so | awk '{print $1}')" = "$LINUX_EXPECTED"
-
       - name: Verify published Maven package versions
         shell: bash
         run: |
@@ -182,6 +196,12 @@ jobs:
             release-assets/rust_glowroot_agent-windows-x64.dll
           cp spring-boot-starter/src/main/resources/native/linux-x64/librust_glowroot_agent.so \
             release-assets/librust_glowroot_agent-linux-x64.so
+          REPORT="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name REPORT.md -type f -print -quit)"
+          SUMMARY="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name summary.json -type f -print -quit)"
+          STEADY="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name steady-memory.json -type f -print -quit)"
+          cp "$REPORT" release-assets/spring-boot-production-gate.md
+          cp "$SUMMARY" release-assets/spring-boot-production-gate-summary.json
+          cp "$STEADY" release-assets/spring-boot-steady-memory.json
           (cd release-assets && sha256sum ./* > SHA256SUMS)
 
       - name: Create or update GitHub release

@@ -299,14 +299,15 @@ endpoint/concurrency cell must keep:
 
 - useful HTTP 200 RPS loss at or above `-2%`;
 - p99 regression at or below `+10%`;
-- paired-median process RSS and cgroup delta at or below `+3 MiB`;
 - non-2xx regression at `0` percentage points;
 - additional threads at `0` for embedded Rust-Java and at most `1` for standalone Spring.
 
 The full Spring matrix covers small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and
-c256 with six balanced paired runs. RPS, p99, RSS, cgroup, and startup use each pair's delta before
-the median is calculated. RSS maxima stay visible in the report. The separate exact-source footprint
-gate, not independent OpenJ9 process noise, enforces the hard resident-memory maximum.
+c256 with six balanced paired runs. RPS, p99, and startup use each pair's delta before the median is
+calculated. After both variants complete the same full workload, a controlled equal-process-age
+phase requires paired-median process RSS and cgroup deltas at or below `+3 MiB`. Per-cell RSS maxima
+stay visible as diagnostics. The separate exact-source footprint gate enforces the hard native
+resident-memory maximum.
 
 See [Validation Evidence](docs/VALIDATION.md),
 [Architecture And Production Boundary](docs/ARCHITECTURE.md), and
@@ -320,6 +321,7 @@ See [Validation Evidence](docs/VALIDATION.md),
 | Rust-Java REST | `4.4.0` | REST ABI `28`, Glowroot ABI `1` |
 | Agent bootstrap | `0.2.0` | One class; works with either supported runtime |
 | Spring Boot starter | `0.2.0` | Spring Boot `3.x`, Servlet MVC |
+| Standalone native source | `rust-spring v4.4.1` | Glowroot ABI `1`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
 
@@ -349,6 +351,8 @@ do not publish a local dirty native build.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
 

@@ -2,87 +2,88 @@
 
 [English](VALIDATION.md) | [Türkçe](VALIDATION.tr.md)
 
-## Güncel Karar
+## Release Kararı
 
-Embedded Rust-Java telemetri yolu; doğruluk, Glowroot protokolü, collector kapalıyken fail-open,
-kaynak kodla uygulanan `1 MiB` agent-owned bütçe ve bağımsız proseslerde ölçülen `3 MiB` resident
-memory sınırını geçti. Yeni bir işletim sistemi thread'i oluşturmadı.
+`0.2.0` sürümünde iki farklı çalışma şekli vardır:
 
-Burada iki ayrı sözleşme vardır:
+- Rust-Java REST, framework içindeki Rust runtime'ını kullanır. Telemetri yeni işletim sistemi
+  thread'i eklemez.
+- Spring Boot MVC, standalone Rust exporter'ı yükler. `256 KiB` stack kullanan tek sınırlı thread ve
+  tekrar kullanılan tek h2 collector bağlantısı ekler.
 
-- `1 MiB`, ajana atfedilen state ve kod sayfaları için deterministik üst sınırdır.
-- `3 MiB`, eşleştirilmiş process `VmRSS`, smaps RSS ve cgroup current farkları için konservatif
-  maksimumdur. Bağımsız prosesler arasındaki OpenJ9, allocator ve resident sayfa oynaklığını içerir.
+Release workflow, tag'in işaret ettiği commit başarılı Production Gate sonucu olmadan yayın yapmaz.
+Bu koşunun okunabilir raporu ve JSON özeti GitHub Release asset'lerine eklenir. Başka branch veya
+eski commit üzerinde alınmış sonuç bu kontrolü geçemez.
 
-İsteğe bağlı `-javaagent` kolaylık JAR'ı, strict resident memory sertifikasının parçası değildir.
-Sert bütçeli production yolunda native property veya ortam değişkeni kullanın.
+## Doğrulanan Sözleşmeler
 
-| Gate | Sonuç | Güncel kanıt |
+| Gate | Sonuç | Sözleşme |
 | --- | --- | --- |
-| Runtime JAR yüzeyi | PASS | `5,71 KiB`, tek bootstrap class, runtime dependency yok |
-| Upstream protokol | PASS | Upstream parser init, aggregate, gauge, trace ve HdrHistogram mesajlarını kabul etti |
-| İsteğe bağlı Java bootstrap | PASS | Agent argümanları transformer kurulmadan çevrildi |
-| Collector kapalı | PASS | HTTP çalışmaya devam etti ve sınırsız telemetri kuyruğu oluşmadı |
-| Kaynak bellek bütçesi | PASS | Hesaplanan değer `358.531` byte; sert state/rezerv sınırı `384 KiB` |
-| Embedded-native atfedilen üst sınır | PASS | Ölçülen native özellik sayfaları dahil `0,694 MiB` |
-| Ek agent thread'i | PASS | `0`; framework'ün Tokio runtime'ı kullanılır |
-| Maksimum process `VmRSS` farkı | PASS | `+1,742 MiB`; ürün sınırı `+3,000 MiB` |
-| Maksimum smaps RSS farkı | PASS | `+1,817 MiB`; ürün sınırı `+3,000 MiB` |
-| Maksimum cgroup-current farkı | PASS | `+1,754 MiB`; ürün sınırı `+3,000 MiB` |
-| Hedefli c256 small-direct performance | PASS | RPS `-%0,17`, p99 `+%6,28`, `503` farkı `0` |
-| Tam c64/c256 endpoint matrisi | AÇIK | Son workstation denemesi host gürültüsü preflight kontrolünde reddedildi |
+| Bootstrap JAR yüzeyi | PASS | Tek application class; runtime dependency, native binary ve transformer yok |
+| Spring starter doğruluğu | PASS | Route, mapped status, tam hata, sınırlı route cache ve async completion testleri |
+| Upstream Glowroot protokolü | PASS | Init, aggregate, gauge, trace ve HdrHistogram mesajları sabitlenen upstream şema ile okundu |
+| Collector kapalı | PASS | Business HTTP çalışır; backlog ve reconnect davranışı sınırlı kalır |
+| Embedded agent-owned bütçe | PASS | Hesaplanan `358.531` byte; sert state/rezerv sınırı `384 KiB` |
+| Embedded native atfedilen üst sınır | PASS | Kod sayfaları dahil `0,694 MiB`; ek thread `0` |
+| Embedded resident maksimum | PASS | smaps RSS maksimumu `+1,817 MiB`; `+3 MiB` sınırının altında |
+| Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` revision'ından üretildi |
+| Spring performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256 ve exact-commit kanıtı |
+| Spring steady memory | RELEASE ZORUNLULUĞU | Aynı tam yük ve process yaşı; RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` |
 
-Footprint kanıtı
+Embedded footprint raporu
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md) dosyasındadır.
-Hedefli performance kanıtı
-[`evidence/0.1.0-rc1/focused-performance-report.md`](evidence/0.1.0-rc1/focused-performance-report.md),
-yenilenen protokol ve fail-open kanıtı ise
-[`evidence/0.1.0-rc1/protocol-report.md`](evidence/0.1.0-rc1/protocol-report.md) dosyasındadır.
+Stable `0.2.0` için geçerli Spring kanıtı, GitHub Release'e eklenen
+`spring-boot-production-gate.md` asset'idir. JSON dosyası uygulanan sınırları ve sonucu içerir.
 
-## Footprint Sonucu Nasıl Okunur?
+## Spring Gate Nasıl Çalışır?
 
-Exact-source footprint gate'i üç dengeli CPU-slot fazı kullanır. Her varyant aynı işi, aynı fiziksel
-çekirdek slotunda ve sırayla çalıştırır. Prosesler aynı yaşta ölçülür. Script, feature kapalı SO
-dosyasını kullanmadan önce tüm native kaynak girdilerinin fingerprint değerini alır.
-`-SkipNativeBuild`, fingerprint eksik veya eskiyse testi reddeder. Böylece eski baseline binary'si
-sessizce başarılı sonuç üretemez.
+Gate, starter bulunan tek bir Spring Boot image üretir. Baseline telemetriyi kapatır. Candidate
+telemetriyi açar. Uygulama sınıfları, dependency'ler, JVM ayarları, CPU kotası ve bellek limiti aynı
+kalır.
 
-Embedded-native medyan ve maksimum farkları şöyledir:
+Matris şu alanları kapsar:
 
-| Ölçüm | Medyan | Maksimum |
-| --- | ---: | ---: |
-| Process `VmRSS` | `+1,676 MiB` | `+1,742 MiB` |
-| smaps RSS | `+1,711 MiB` | `+1,817 MiB` |
-| cgroup current | `+0,461 MiB` | `+1,754 MiB` |
-| cgroup socket | `0 MiB` | `0 MiB` |
-| Thread | `0` | `0` |
+- küçük dynamic JSON;
+- raw veya önceden hazırlanmış JSON;
+- dynamic heavy JSON;
+- `64` ve `256` concurrency;
+- sırası değiştirilen altı baseline/candidate çifti.
 
-İsteğe bağlı kolaylık JAR'ının kaynakta atfedilen üst sınırı `0,741 MiB` oldu. Buna rağmen gözlenen
-process/smaps maksimumu yaklaşık `3,055 MiB` değerine ulaştı. OpenJ9 instrumentation bootstrap,
-transformer olmasa bile ölçülebilir. JAR yalnız argüman çevirme kolaylığı sağlar. Ayrı raporlanır ve
-embedded-native sertifikasını devralmaz.
+Her performans hücresinde başarılı HTTP 200 RPS kaybı en fazla `%2`, p99 artışı en fazla `%10`,
+non-2xx artışı sıfır puan ve yeni thread sayısı en fazla bir olmalıdır. Build bittikten sonra Linux
+en sakin fiziksel CPU grubunu seçer. Load runner ve collector başka gruba sabitlenir. Gürültülü
+preflight kontrolünü uygular. Eşleştirilmiş SMT kardeşi medyanı `%10` içinde, bütün steal-time
+aralıkları `%1` içinde kalmalıdır.
 
-## Performance Kararı
-
-Güncel mikro profil varsayılanı `reactor.glowroot.http.sample-rate=256` değeridir. HTTP `5xx` tam
-sayılır. Başarılı istekler ağırlıklı örneklerle temsil edilir. Hedefli c256 small-direct gate'inde:
-
-- başarılı HTTP 200 RPS `-%0,17` değişti;
-- p99 `+%6,28` değişti;
-- `503` farkı `0` puan oldu;
-- process RSS `+2,18 MiB`, container memory `+0,88 MiB` değişti.
-
-Bu hücre; `-%2` RPS, `+%10` p99, `+2` puan `503` ve `+3 MiB` memory sınırlarını geçti. Bu sonuç
-bütün endpoint sınıflarını kanıtlamaz. Sonraki c64 koşusunda baseline varyasyonu yüksekti. Bu koşu
-regresyon veya başarı değil, `INCONCLUSIVE` olarak tutulur.
-
-Benchmark artık Windows host gürültülüyken yüke başlamadan hata verir. Varsayılan sınırlar; ortalama
-CPU için en fazla `%15`, tepe CPU için en fazla `%40` ve boş virtual memory için en az `3072 MiB`
-değeridir. Release kanıtında `-SkipHostPreflight` kullanmayın.
+Endpoint içindeki anlık RSS maksimumları tanılama amacıyla raporda kalır. OpenJ9 JIT/GC resident
+sayfaları bağımsız prosesler arasında iki yönde değişebilir. Bu nedenle bellek kontrollü bir noktada
+ölçülür. Her varyant aynı warmup ve tam endpoint yükünü tamamlar. Aynı idle süresini bekler. Eşit
+process yaşında beş örnek alınır. Eşleştirilmiş process RSS ve cgroup medyan farklarının ikisi de
+`+3 MiB` içinde kalmalıdır. Kaynak koda atfedilen native üst sınır ayrıca ve daha sıkı ölçülür.
 
 ## Gate'leri Tekrarlayın
 
-Footprint ve kaynak doğrulama gate'i:
+Spring production matrisi:
+
+```powershell
+.\benchmark\spring_boot_gate.ps1 `
+  -PairRepeats 6 `
+  -ConcurrencyLevels "64,256" `
+  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -Duration "15s" `
+  -Warmup "8s" `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
+  -FailOnGate
+```
+
+Protokol ve collector kapalı fail-open gate'i:
+
+```powershell
+.\benchmark\glowroot_gate.ps1 -ProtocolOnly -FailOnGate
+```
+
+Embedded exact-source footprint gate'i:
 
 ```powershell
 .\benchmark\feature_artifact_footprint.ps1 `
@@ -92,49 +93,26 @@ Footprint ve kaynak doğrulama gate'i:
   -FailOnGate
 ```
 
-Protokol, isteğe bağlı bootstrap ve collector kapalı fail-open gate'i:
+Release kanıtında `-SkipHostPreflight` kullanmayın. Host kalitesi nedeniyle reddedilen koşu ürün
+regresyonu değildir. Sessiz bir node üzerinde yeniden çalıştırılmalıdır.
 
-```powershell
-.\benchmark\glowroot_gate.ps1 -ProtocolOnly -FailOnGate
-```
+## Build Kanıtı
 
-Sessiz hedef node üzerinde tam endpoint matrisi:
+- Full native runtime: `57` test ve warning kabul etmeyen Clippy kontrolü.
+- Standalone Glowroot runtime: `28` test ve warning kabul etmeyen Clippy kontrolü.
+- Java reactor: `15` test, packaged-native doğrulaması ve OpenJ9 JNI entegrasyonu.
+- Executable Spring Boot smoke: starter ve isteğe bağlı tek sınıflı `-javaagent` bootstrap.
+- Native build matrisi: full ve standalone runtime için Windows x64 ve Linux glibc x64.
+- Native toolchain: Rust `1.91.0`; Java toolchain: Semeru OpenJ9 `21`.
+- Glowroot wire referansı: upstream `622dc6f800228cccc6fa37b0ed9e779446d7c41e` revision'ı.
 
-```powershell
-.\benchmark\glowroot_gate.ps1 `
-  -PairRepeats 4 `
-  -ConcurrencyLevels "64,256" `
-  -EndpointClasses "small-json-direct,direct-json-writer,raw-json" `
-  -HttpSampleRate 256 `
-  -Duration "20s" `
-  -Warmup "8s" `
-  -FailOnGate
-```
+## Deployment Doğrulaması
 
-Gerekli endpoint ve concurrency hücrelerinin tamamı geçmelidir. `INCONCLUSIVE`, başarı değildir.
+Release gate'leri yayınlanan CI image üzerinde sınırlı ürün sözleşmesini kanıtlar. Production'a
+çıkmadan önce kendi Kubernetes node sınıfınız, collector sürümünüz, CPU/bellek limitiniz, network
+policy'niz ve endpoint dağılımınızla kısa smoke ve temsili yük testi çalıştırın. Bu ortam kontrolü
+release ABI'sini değiştirmez. Deployment varsayımlarınızın test edilen profile uyduğunu gösterir.
 
-## Geçen Build Gate'leri
-
-- Tüm feature'larla `57` Rust testi geçti.
-- Tüm feature ve target'larla Rust Clippy geçti.
-- Native feature setinden `glowroot` çıkarıldığında `30` Rust testi ve Clippy geçti.
-- Windows OpenJ9 JNI smoke testi geçti.
-- `rust-java-rest`, ABI ve native provenance kontrolleriyle Maven `clean verify` testini geçti.
-- `java-rust-cache`, uyumlu native artifact'lerle Maven `clean verify` testini geçti.
-- `java-rust-glowroot-agent` Maven `clean verify` testini geçti.
-- Agent runtime dependency ağacı boştur.
-- Windows DLL ve Linux SO aynı native kaynak revision'ından üretildi.
-- Upstream Glowroot checkout'u `622dc6f800228cccc6fa37b0ed9e779446d7c41e` revision'ında read-only kaldı.
-
-## Kalan Release Kanıtları
-
-- Tam c64/c256 endpoint matrisini hedef Kubernetes node sınıfı ve OpenJ9 image üzerinde çalıştırın.
-- Native kod sayfası büyümesini ölçmek için son release ile candidate artifact-upgrade gate'ini çalıştırın.
-- Uyumlu Rust-Java REST ABI `28` binary'lerini yayımlayın. ABI `26` ile karıştırmayın.
-- Production ortamındaki Glowroot Central sürümüne karşı protokol uyumluluğunu yeniden doğrulayın.
-- Plaintext h2 network policy'sini doğrulayın veya TLS/mTLS'i localhost sidecar ya da service mesh ile sonlandırın.
-- Ayrı adapter ve Spring image aynı gate'leri geçmeden Spring Boot desteği iddia etmeyin.
-
-Sert bellek profili collector DNS kaydını yalnız startup sırasında çözümler ve en fazla dört farklı
-IP adresi saklar. Sabit Kubernetes `ClusterIP` Service veya localhost sidecar kullanın. Headless ya
-da çalışma sırasında değişen collector DNS bu profilin dışındadır ve pod restart gerektirir.
+Sert bellek profili collector DNS kaydını startup sırasında çözer ve en fazla dört adres tutar.
+Sabit Kubernetes `ClusterIP` Service veya localhost sidecar kullanın. Headless veya çalışma sırasında
+değişen collector adresinde pod'u yeniden başlatın. TLS/mTLS için service mesh veya sidecar kullanın.
