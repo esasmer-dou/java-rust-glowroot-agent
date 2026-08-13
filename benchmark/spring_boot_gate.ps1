@@ -257,10 +257,18 @@ function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] 
 }
 
 function Median([double[]] $Values) {
+    if ($Values.Count -eq 0) { throw "Median requires at least one value." }
     $sorted = @($Values | Sort-Object)
-    if ($sorted.Count % 2 -eq 1) { return [double]$sorted[[int]($sorted.Count / 2)] }
+    if ($sorted.Count % 2 -eq 1) {
+        return [double]$sorted[[int][math]::Floor($sorted.Count / 2.0)]
+    }
     $right = [int]($sorted.Count / 2)
     return ([double]$sorted[$right - 1] + [double]$sorted[$right]) / 2.0
+}
+
+if ((Median -Values @(3.0, 1.0, 2.0)) -ne 2.0
+        -or (Median -Values @(4.0, 1.0, 3.0, 2.0)) -ne 2.5) {
+    throw "Median self-check failed."
 }
 
 Prepare-Build
@@ -388,19 +396,19 @@ foreach ($endpoint in $endpoints) {
     foreach ($value in $concurrency) {
         $base = @($records | Where-Object { $_.endpoint -eq $endpoint -and $_.concurrency -eq $value -and $_.variant -eq "baseline" })
         $agent = @($records | Where-Object { $_.endpoint -eq $endpoint -and $_.concurrency -eq $value -and $_.variant -eq "candidate" })
-        $baseRps = Median @($base.useful_rps)
-        $agentRps = Median @($agent.useful_rps)
-        $baseP99 = Median @($base.p99_ms)
-        $agentP99 = Median @($agent.p99_ms)
-        $baseRss = Median @($base.process_rss_mib)
-        $agentRss = Median @($agent.process_rss_mib)
-        $baseContainer = Median @($base.container_mib)
-        $agentContainer = Median @($agent.container_mib)
+        $baseRps = Median -Values @($base.useful_rps)
+        $agentRps = Median -Values @($agent.useful_rps)
+        $baseP99 = Median -Values @($base.p99_ms)
+        $agentP99 = Median -Values @($agent.p99_ms)
+        $baseRss = Median -Values @($base.process_rss_mib)
+        $agentRss = Median -Values @($agent.process_rss_mib)
+        $baseContainer = Median -Values @($base.container_mib)
+        $agentContainer = Median -Values @($agent.container_mib)
         $rpsDelta = 100.0 * ($agentRps - $baseRps) / $baseRps
         $p99Delta = 100.0 * ($agentP99 - $baseP99) / $baseP99
         $rssDelta = $agentRss - $baseRss
         $containerDelta = $agentContainer - $baseContainer
-        $errorDelta = (Median @($agent.non_2xx_pct)) - (Median @($base.non_2xx_pct))
+        $errorDelta = (Median -Values @($agent.non_2xx_pct)) - (Median -Values @($base.non_2xx_pct))
         $pairedRssDeltas = [Collections.Generic.List[double]]::new()
         $pairedContainerDeltas = [Collections.Generic.List[double]]::new()
         $pairedThreadDeltas = [Collections.Generic.List[int]]::new()
@@ -432,7 +440,7 @@ foreach ($endpoint in $endpoints) {
             max_paired_process_rss_delta_mib = [math]::Round($maxRssDelta, 3)
             container_delta_mib = [math]::Round($containerDelta, 3)
             max_paired_container_delta_mib = [math]::Round($maxContainerDelta, 3)
-            thread_delta = [int](Median @($agent.threads)) - [int](Median @($base.threads))
+            thread_delta = [int](Median -Values @($agent.threads)) - [int](Median -Values @($base.threads))
             max_paired_thread_delta = [int]$observedMaxThreadDelta
             non_2xx_delta_pp = [math]::Round($errorDelta, 6)
             max_paired_non_2xx_delta_pp = [math]::Round($maxErrorDelta, 6)
@@ -440,8 +448,8 @@ foreach ($endpoint in $endpoints) {
         })
     }
 }
-$startupBase = Median @(($startups | Where-Object variant -eq "baseline").ms)
-$startupAgent = Median @(($startups | Where-Object variant -eq "candidate").ms)
+$startupBase = Median -Values @(($startups | Where-Object variant -eq "baseline").ms)
+$startupAgent = Median -Values @(($startups | Where-Object variant -eq "candidate").ms)
 $startupDelta = 100.0 * ($startupAgent - $startupBase) / $startupBase
 $passedAll = -not ($summary.gate -contains "FAIL") -and $startupDelta -le 10.0
 

@@ -11,17 +11,17 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class RustGlowrootFilterTest {
+class RustGlowrootInterceptorTest {
 
     @Test
-    void samplesSuccessesAndKeepsErrorsExactWithoutPerRequestRouteRegistration() throws Exception {
+    void samplesSuccessesAndKeepsErrorsExactWithoutPerRequestRouteRegistration() {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootFilter filter = new RustGlowrootFilter(recorder, config(4, 0, 4));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(4, 0, 4));
 
         for (int index = 0; index < 4; index++) {
-            invoke(filter, 200, "/orders/{id}");
+            invoke(interceptor, 200, "/orders/{id}");
         }
-        invoke(filter, 500, "/orders/{id}");
+        invoke(interceptor, 500, "/orders/{id}");
 
         assertEquals(1, recorder.registrations);
         assertEquals(2, recorder.records.size());
@@ -32,23 +32,43 @@ class RustGlowrootFilterTest {
     }
 
     @Test
-    void boundsTheJavaRouteCacheBeforeCallingNativeRegistration() throws Exception {
+    void boundsTheJavaRouteCacheBeforeCallingNativeRegistration() {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootFilter filter = new RustGlowrootFilter(recorder, config(1, 0, 1));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
 
-        invoke(filter, 200, "/orders/{id}");
-        invoke(filter, 200, "/customers/{id}");
+        invoke(interceptor, 200, "/orders/{id}");
+        invoke(interceptor, 200, "/customers/{id}");
 
         assertEquals(1, recorder.registrations);
         assertEquals(1, recorder.records.size());
     }
 
-    private static void invoke(RustGlowrootFilter filter, int status, String route) throws Exception {
+    @Test
+    void recordsThrownFailuresAsExactErrors() {
+        FakeRecorder recorder = new FakeRecorder();
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1024, 0, 1));
+        MockHttpServletRequest request = request("/orders/{id}");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        interceptor.afterCompletion(request, response, new Object(), new IllegalStateException("failed"));
+
+        assertEquals(1, recorder.records.size());
+        assertEquals(500, recorder.records.get(0).status());
+        assertEquals(0, recorder.records.get(0).sampleWeight());
+    }
+
+    private static void invoke(RustGlowrootInterceptor interceptor, int status, String route) {
+        MockHttpServletRequest request = request(route);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        interceptor.preHandle(request, response, new Object());
+        response.setStatus(status);
+        interceptor.afterCompletion(request, response, new Object(), null);
+    }
+
+    private static MockHttpServletRequest request(String route) {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/orders/42");
         request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, route);
-        MockHttpServletResponse response = new MockHttpServletResponse();
-        filter.doFilter(request, response, (req, res) ->
-                ((MockHttpServletResponse) res).setStatus(status));
+        return request;
     }
 
     private static TelemetryConfig config(int sampleRate, int traceCapacity, int maxRoutes) {
