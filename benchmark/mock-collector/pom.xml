@@ -13,6 +13,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <grpc.version>1.80.0</grpc.version>
     <protobuf.version>3.25.8</protobuf.version>
+    <glowroot.source.dir>${project.basedir}/../../../glowroot</glowroot.source.dir>
   </properties>
 
   <dependencies>
@@ -54,7 +55,7 @@
         <directory>src/main/resources</directory>
       </resource>
       <resource>
-        <directory>${project.basedir}/../../../glowroot</directory>
+        <directory>${glowroot.source.dir}</directory>
         <includes>
           <include>LICENSE</include>
         </includes>
@@ -69,7 +70,7 @@
         <configuration>
           <protocArtifact>com.google.protobuf:protoc:${protobuf.version}</protocArtifact>
           <inputDirectories>
-            <include>${project.basedir}/../../../glowroot/wire-api/src/main/protobuf</include>
+            <include>${glowroot.source.dir}/wire-api/src/main/protobuf</include>
           </inputDirectories>
           <outputTargets>
             <outputTarget>

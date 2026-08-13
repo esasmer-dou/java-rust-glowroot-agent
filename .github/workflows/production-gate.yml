@@ -14,6 +14,13 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v5
 
+      - name: Check out pinned Glowroot wire contract
+        uses: actions/checkout@v5
+        with:
+          repository: glowroot/glowroot
+          ref: 622dc6f800228cccc6fa37b0ed9e779446d7c41e
+          path: glowroot-upstream
+
       - name: Set up Semeru OpenJ9 21
         uses: actions/setup-java@v5
         with:

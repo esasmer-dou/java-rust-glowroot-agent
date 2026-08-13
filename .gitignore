@@ -3,6 +3,7 @@
 /benchmark/context/
 /benchmark/spring-context/
 /benchmark/results/
+/glowroot-upstream/
 /.idea/
 /.vscode/
 /*.iml

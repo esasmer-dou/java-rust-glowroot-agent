@@ -9,6 +9,33 @@ Central/collector.
 aggregate, gauge, and trace payloads, including transaction-count versus histogram-count equality.
 The footprint gate runs the same application image with the agent disabled and enabled.
 
+## Spring Boot MVC Gate
+
+The Spring gate builds one executable Spring Boot image and runs it with the starter present in both
+variants. Baseline keeps telemetry disabled. Candidate enables the one-class bootstrap, Servlet
+adapter, and standalone Rust exporter. This same-image design prevents application dependencies or
+JVM flags from being mistaken for agent overhead.
+
+```powershell
+.\benchmark\spring_boot_gate.ps1 `
+  -PairRepeats 3 `
+  -ConcurrencyLevels "64,256" `
+  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -Duration "15s" `
+  -Warmup "8s" `
+  -FailOnGate
+```
+
+Each configured endpoint receives its own warmup. Cells and variant order are randomized. On a
+small Linux runner, use `-SequentialVariants` so baseline and candidate occupy the same isolated
+application CPU in alternating order. The load runner and mock collector may share a separate CPU
+or SMT group, but neither may share the application core.
+
+RPS and p99 use the paired median. Process RSS, cgroup memory, thread count, and non-2xx use the
+worst paired delta, so one resident-memory spike or failed response cannot be hidden by a favourable
+median. The Spring path allows at most one additional thread; the embedded Rust-Java path allows
+none.
+
 Run the full gate from the project root:
 
 ```powershell

@@ -103,7 +103,18 @@ function Prepare-Build {
         $env:Path = "$javaBin$([IO.Path]::PathSeparator)$env:Path"
         Invoke-Checked mvn @("-B", "-ntp", "clean", "install") $ProjectRoot | Out-Null
         Invoke-Checked mvn @("-B", "-ntp", "clean", "package") $SpringRoot | Out-Null
-        Invoke-Checked mvn @("-B", "-ntp", "clean", "package") (Join-Path $ScriptDir "mock-collector") | Out-Null
+        $glowrootSource = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "..\glowroot"))
+        $workflowGlowrootSource = Join-Path $ProjectRoot "glowroot-upstream"
+        if (-not (Test-Path -LiteralPath (Join-Path $glowrootSource "wire-api\src\main\protobuf") -PathType Container)) {
+            $glowrootSource = $workflowGlowrootSource
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $glowrootSource "wire-api\src\main\protobuf") -PathType Container)) {
+            throw "Glowroot wire-api source is missing. Checkout revision 622dc6f800228cccc6fa37b0ed9e779446d7c41e."
+        }
+        Invoke-Checked mvn @(
+            "-B", "-ntp", "clean", "package",
+            "-Dglowroot.source.dir=$glowrootSource"
+        ) (Join-Path $ScriptDir "mock-collector") | Out-Null
     }
     if (Test-Path $Context) { Remove-Item -LiteralPath $Context -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $Context | Out-Null
