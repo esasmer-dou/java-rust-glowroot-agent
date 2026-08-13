@@ -17,7 +17,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 
 /** Low-allocation Spring MVC request timing adapter for the Rust telemetry runtime. */
 public final class RustGlowrootFilter implements Filter {
@@ -27,11 +26,11 @@ public final class RustGlowrootFilter implements Filter {
 
     private final HttpTelemetryRecorder telemetry;
     private final int sampleRate;
-    private final long sampleMask;
-    private final int sampleShift;
+    private final int sampleMask;
+    private final boolean slowTraceEnabled;
     private final long slowThresholdNanos;
     private final int maxRoutes;
-    private final AtomicLong requestSequence = new AtomicLong();
+    private final ThreadLocal<SampleCursor> sampleCursor;
     private final Map<String, Integer> routeSlots;
 
     /**
@@ -47,12 +46,14 @@ public final class RustGlowrootFilter implements Filter {
     RustGlowrootFilter(HttpTelemetryRecorder telemetry, TelemetryConfig config) {
         this.telemetry = telemetry;
         this.sampleRate = config.httpSampleRate();
-        this.sampleMask = sampleRate - 1L;
-        this.sampleShift = Integer.numberOfTrailingZeros(sampleRate);
-        this.slowThresholdNanos = config.traceCapacity() == 0
+        this.sampleMask = sampleRate - 1;
+        this.slowTraceEnabled = config.traceCapacity() != 0;
+        this.slowThresholdNanos = !slowTraceEnabled
                 ? Long.MAX_VALUE
                 : config.slowThresholdMs() * 1_000_000L;
         this.maxRoutes = config.maxRoutes();
+        this.sampleCursor = ThreadLocal.withInitial(() ->
+                new SampleCursor(initialSampleOffset(Thread.currentThread().threadId(), sampleMask)));
         this.routeSlots = new HashMap<>(Math.min(16, maxRoutes));
     }
 
@@ -79,9 +80,8 @@ public final class RustGlowrootFilter implements Filter {
             return;
         }
 
-        long sequence = requestSequence.getAndIncrement();
-        boolean sampled = sampled(sequence);
-        long startedAt = System.nanoTime();
+        boolean sampled = sampleCursor.get().next(sampleMask);
+        long startedAt = sampled || slowTraceEnabled ? System.nanoTime() : 0L;
         Throwable failure = null;
         try {
             chain.doFilter(request, response);
@@ -89,7 +89,7 @@ public final class RustGlowrootFilter implements Filter {
             failure = error;
             throw error;
         } finally {
-            long durationNanos = Math.max(0L, System.nanoTime() - startedAt);
+            long durationNanos = startedAt == 0L ? 0L : Math.max(0L, System.nanoTime() - startedAt);
             int failureStatus = failure == null ? 0 : 500;
             if (failure == null && httpRequest.isAsyncStarted()) {
                 recordAsync(httpRequest, httpResponse, sampled, startedAt);
@@ -99,10 +99,10 @@ public final class RustGlowrootFilter implements Filter {
         }
     }
 
-    private boolean sampled(long sequence) {
-        long block = sequence >>> sampleShift;
-        long selectedPosition = (block ^ (block >>> sampleShift)) & sampleMask;
-        return (sequence & sampleMask) == selectedPosition;
+    private static int initialSampleOffset(long threadId, int mask) {
+        long mixed = threadId * 0x9E3779B97F4A7C15L;
+        mixed ^= mixed >>> 33;
+        return (int) mixed & mask;
     }
 
     private void recordAsync(
@@ -145,6 +145,23 @@ public final class RustGlowrootFilter implements Filter {
             int slot = telemetry.registerHttpRoute(method, route);
             if (slot != DISABLED_SLOT) routeSlots.put(key, slot);
             return slot;
+        }
+    }
+
+    private static final class SampleCursor {
+        private int remaining;
+
+        private SampleCursor(int initialOffset) {
+            this.remaining = initialOffset;
+        }
+
+        private boolean next(int mask) {
+            if (remaining == 0) {
+                remaining = mask;
+                return true;
+            }
+            remaining--;
+            return false;
         }
     }
 

@@ -57,7 +57,11 @@ public final class NativeTelemetry implements AutoCloseable {
         }
     }
 
-    /** @return configured maximum route count */
+    /**
+     * Returns the configured native route-table bound.
+     *
+     * @return configured maximum route count
+     */
     public int maxRoutes() {
         return maxRoutes;
     }
