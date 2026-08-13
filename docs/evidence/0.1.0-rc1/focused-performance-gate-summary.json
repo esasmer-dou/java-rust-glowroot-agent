@@ -1,0 +1,46 @@
+{
+  "passed": true,
+  "protocol_gate": "PASS",
+  "fail_open_gate": "PASS",
+  "javaagent_bootstrap_gate": "PASS",
+  "resident_crossover_gate": "PASS",
+  "startup_gate": "PASS",
+  "endpoint_cells": [
+    {
+      "endpoint_class": "small-json-direct",
+      "endpoint": "candidates_direct_bodyless",
+      "concurrency": "256",
+      "pairs": "6",
+      "baseline_median_useful_200_rps": "19554,83",
+      "candidate_median_useful_200_rps": "19503,1",
+      "useful_200_rps_delta_pct": "-0,17",
+      "phase_ab_rps_delta_pct": "-0,34",
+      "phase_ba_rps_delta_pct": "-0,01",
+      "within_phase_rps_variation_pct": "1,79",
+      "baseline_median_p99_ms": "35,5",
+      "candidate_median_p99_ms": "37,6",
+      "p99_delta_pct": "6,28",
+      "phase_ab_p99_delta_pct": "5,54",
+      "phase_ba_p99_delta_pct": "7,02",
+      "within_phase_p99_variation_pct": "5,22",
+      "crossover_503_delta_pp": "0",
+      "baseline_median_process_rss_mib": "62,4",
+      "candidate_median_process_rss_mib": "64,72",
+      "process_rss_delta_mib": "2,18",
+      "baseline_median_container_memory_mib": "39,22",
+      "candidate_median_container_memory_mib": "40,16",
+      "container_memory_delta_mib": "0,88",
+      "gate": "PASS"
+    }
+  ],
+  "thresholds": {
+    "http_sample_rate": 256,
+    "max_process_rss_regression_mib": 3.0,
+    "max_container_memory_regression_mib": 3.0,
+    "min_useful_rps_delta_percent": -2.0,
+    "max_p99_regression_percent": 10.0,
+    "max_503_delta_percentage_points": 2.0,
+    "max_rps_pair_delta_sd_pp": 10.0,
+    "max_p99_pair_delta_sd_pp": 15.0
+  }
+}

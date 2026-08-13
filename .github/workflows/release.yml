@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Semeru OpenJ9 21 and Maven publishing
+        uses: actions/setup-java@v4
+        with:
+          distribution: semeru
+          java-version: "21"
+          cache: maven
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+
+      - name: Verify tag and release notes
+        id: release_metadata
+        shell: bash
+        run: |
+          VERSION="$(mvn -q -DforceStdout help:evaluate -Dexpression=project.version)"
+          test "v${VERSION}" = "${GITHUB_REF_NAME}"
+          NOTES="docs/releases/${VERSION}.md"
+          test -f "$NOTES"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "notes=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Test and publish Maven package
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mvn -B -ntp clean deploy
+
+      - name: Verify published artifacts and checksums
+        shell: bash
+        run: |
+          VERSION="${{ steps.release_metadata.outputs.version }}"
+          for FILE in \
+            "target/java-rust-glowroot-agent-${VERSION}.jar" \
+            "target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
+            "target/java-rust-glowroot-agent-${VERSION}-javadoc.jar"; do
+            test -s "$FILE"
+          done
+          sha256sum \
+            "target/java-rust-glowroot-agent-${VERSION}.jar" \
+            "target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
+            "target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
+            > "target/java-rust-glowroot-agent-${VERSION}.sha256"
+
+      - name: Create GitHub pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.release_metadata.outputs.version }}"
+          RELEASE_FLAGS=()
+          if [[ "$VERSION" == *-* ]]; then
+            RELEASE_FLAGS+=(--prerelease)
+          fi
+          gh release create "${GITHUB_REF_NAME}" \
+            "target/java-rust-glowroot-agent-${VERSION}.jar" \
+            "target/java-rust-glowroot-agent-${VERSION}-sources.jar" \
+            "target/java-rust-glowroot-agent-${VERSION}-javadoc.jar" \
+            "target/java-rust-glowroot-agent-${VERSION}.sha256" \
+            --title "java-rust-glowroot-agent ${VERSION}" \
+            --notes-file "${{ steps.release_metadata.outputs.notes }}" \
+            --verify-tag \
+            "${RELEASE_FLAGS[@]}"

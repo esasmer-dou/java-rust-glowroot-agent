@@ -1,0 +1,8 @@
+This benchmark-only artifact compiles the public protobuf contract from Glowroot.
+
+Glowroot source: https://github.com/glowroot/glowroot
+Reference revision: 622dc6f800228cccc6fa37b0ed9e779446d7c41e
+License: Apache License 2.0
+
+The corresponding license is packaged at META-INF/glowroot/LICENSE.
+This artifact is test infrastructure and is not part of the java-rust-glowroot-agent runtime JAR.

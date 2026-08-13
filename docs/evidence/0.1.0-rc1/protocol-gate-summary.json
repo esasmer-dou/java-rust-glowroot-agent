@@ -1,0 +1,73 @@
+{
+  "passed": true,
+  "mode": "protocol-only",
+  "protocol_gate": "PASS",
+  "fail_open_gate": "PASS",
+  "javaagent_bootstrap_gate": "PASS",
+  "protocol": {
+    "healthy": true,
+    "agent_id": "java-rust-glowroot-agent::benchmark",
+    "init_messages": 2,
+    "aggregate_messages": 1,
+    "aggregate_transactions": 4096,
+    "gauge_messages": 1,
+    "gauge_values": 10,
+    "trace_messages": 8,
+    "validation_errors": 0,
+    "last_error": "",
+    "transaction_types": [
+      "HTTP"
+    ],
+    "transaction_names": [
+      "GET /api/v1/heavy"
+    ],
+    "gauge_names": [
+      "reactor.glowroot:type=Exporter:Connected",
+      "reactor.glowroot:type=Exporter:DroppedIntervalTotal",
+      "reactor.glowroot:type=Exporter:DroppedRouteTotal",
+      "reactor.glowroot:type=Exporter:DroppedTraceTotal",
+      "reactor.glowroot:type=Exporter:DroppedTransactionTotal",
+      "reactor.glowroot:type=Exporter:FailureTotal",
+      "reactor.glowroot:type=Exporter:LastErrorCode",
+      "reactor.glowroot:type=Exporter:ReconnectTotal",
+      "reactor.runtime:type=Process:ResidentSetSize",
+      "reactor.runtime:type=Process:ThreadCount"
+    ]
+  },
+  "fail_open": {
+    "enabled": true,
+    "connected": false,
+    "collector": "127.0.0.1:65534",
+    "collector_dns_mode": "startup_bounded",
+    "resolved_collector_addresses": 1,
+    "agent_id": "java-rust-glowroot-agent::benchmark",
+    "registered_routes": 8,
+    "max_routes": 64,
+    "http_sample_rate": 256,
+    "queued_traces": 0,
+    "trace_capacity": 8,
+    "max_export_bytes": 65536,
+    "aggregate_payload_ceiling_bytes": 64128,
+    "configured_dynamic_memory_ceiling_bytes": 358756,
+    "configured_dynamic_memory_budget_bytes": 393216,
+    "java_configuration_bridge_reserve_bytes": 65536,
+    "exporter_transport_reserve_bytes": 49152,
+    "collector_socket_buffer_request_bytes": 16384,
+    "collector_kernel_socket_ceiling_bytes": 131072,
+    "artifact_allocator_reserve_bytes": 655360,
+    "hard_agent_attributed_budget_bytes": 1048576,
+    "resident_release_gate_threshold_bytes": 3145728,
+    "memory_budget_scope": "embedded_native_agent_attributed",
+    "resident_gate_scope": "independent_process_observed_max",
+    "export_success": 0,
+    "export_failure": 1,
+    "dropped_transactions": 0,
+    "dropped_traces": 0,
+    "dropped_routes": 0,
+    "dropped_intervals": 0,
+    "reconnects": 0,
+    "last_export_epoch_ms": 0,
+    "last_drop_epoch_ms": 0,
+    "last_error_code": 3
+  }
+}
