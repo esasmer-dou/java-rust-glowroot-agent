@@ -31,9 +31,9 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 | Application | Add to the application | Native runtime | Extra telemetry thread |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.4.0` | No starter is required | Reuses the framework's `rust_hyper` library | `0` |
-| Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.2.0` | Loads the small standalone agent library | `1` |
-| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.2.0` bootstrap | Same runtime as the row above | No additional thread |
+| Rust-Java REST `4.4.1` | No starter is required | Reuses the framework's `rust_hyper` library | `0` |
+| Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.2.1` | Loads the small standalone agent library | `1` |
+| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.2.1` bootstrap | Same runtime as the row above | No additional thread |
 
 The bootstrap JAR only maps `-javaagent:key=value` arguments to properties. It contains one class,
 no native binary, no transformer, and no runtime dependency. The Spring starter is a separate JAR
@@ -57,18 +57,18 @@ Request bodies, query values, headers, SQL text, and personal data are not copie
 
 This is intentionally not a replacement for every full Glowroot feature. Use the full Glowroot
 agent when you need arbitrary Java method tracing, JDBC SQL capture, JMX, profiling, heap dumps, or
-remote configuration. Spring WebFlux is not supported by `0.2.0`; the adapter targets Servlet MVC.
+remote configuration. Spring WebFlux is not supported by `0.2.1`; the adapter targets Servlet MVC.
 
 ## Rust-Java REST Setup
 
-Use the coordinated `4.4.0` framework line. It contains Glowroot native ABI `1` and validates the
+Use the coordinated `4.4.1` framework line. It contains Glowroot native ABI `1` and validates the
 native provenance before the HTTP server starts.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.4.0</version>
+  <version>4.4.1</version>
 </dependency>
 ```
 
@@ -96,7 +96,7 @@ configuration reaches the same embedded Rust engine:
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.0.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.1.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
   -jar catalog-api.jar
 ```
 
@@ -108,7 +108,7 @@ java \
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
 </dependency>
 ```
 
@@ -144,7 +144,7 @@ start metadata captured before Spring starts.
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-agent</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -153,7 +153,7 @@ Keep the bootstrap JAR outside the executable Spring Boot JAR and pass its file 
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.0.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.1.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
   -jar orders-api.jar
 ```
 
@@ -302,12 +302,13 @@ endpoint/concurrency cell must keep:
 - non-2xx regression at `0` percentage points;
 - additional threads at `0` for embedded Rust-Java and at most `1` for standalone Spring.
 
-The full Spring matrix covers small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and
-c256 with six balanced paired runs. RPS, p99, and startup use each pair's delta before the median is
-calculated. After both variants complete the same full workload, a controlled equal-process-age
-phase requires paired-median process RSS and cgroup deltas at or below `+3 MiB`. Per-cell RSS maxima
-stay visible as diagnostics. The separate exact-source footprint gate enforces the hard native
-resident-memory maximum.
+The stable release runs this full matrix separately for Spring Boot and Rust-Java REST. Both cover
+small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and c256 with six balanced paired
+runs. RPS, p99, and startup use each pair's delta before the median is calculated. After both
+variants complete the same full workload, a controlled equal-process-age phase requires
+paired-median process RSS and cgroup deltas at or below `+3 MiB`. Rust-Java REST may add no thread;
+Spring may add one bounded exporter thread. REST wire compatibility, collector-down fail-open, and
+the optional bootstrap are separate mandatory checks.
 
 See [Validation Evidence](docs/VALIDATION.md),
 [Architecture And Production Boundary](docs/ARCHITECTURE.md), and
@@ -318,9 +319,9 @@ See [Validation Evidence](docs/VALIDATION.md),
 | Component | Release | Contract |
 | --- | ---: | --- |
 | Java | `21` | Semeru OpenJ9 is the primary tested JVM |
-| Rust-Java REST | `4.4.0` | REST ABI `28`, Glowroot ABI `1` |
-| Agent bootstrap | `0.2.0` | One class; works with either supported runtime |
-| Spring Boot starter | `0.2.0` | Spring Boot `3.x`, Servlet MVC |
+| Rust-Java REST | `4.4.1` | REST ABI `28`, Glowroot ABI `1` |
+| Agent bootstrap | `0.2.1` | One class; works with either supported runtime |
+| Spring Boot starter | `0.2.1` | Spring Boot `3.x`, Servlet MVC |
 | Standalone native source | `rust-spring v4.4.1` | Glowroot ABI `1`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
@@ -337,8 +338,8 @@ mvn -B -ntp clean verify
 
 The Maven reactor builds:
 
-- `agent-bootstrap/target/java-rust-glowroot-agent-0.2.0.jar`
-- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.2.0.jar`
+- `agent-bootstrap/target/java-rust-glowroot-agent-0.2.1.jar`
+- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.2.1.jar`
 
 The native DLL/SO are built only from the clean `rust-spring` commit recorded in
 `native-provenance.properties`. Run `scripts/sync-native-artifacts.ps1` with verified CI artifacts;
@@ -355,5 +356,17 @@ do not publish a local dirty native build.
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
+
+Use the following additional parameters to reproduce the embedded REST matrix:
+
+```powershell
+-ApplicationKind rust-java-rest `
+-RequiredRestVersion "4.4.1" `
+-RequiredRestNativeAbi 28 `
+-MemoryLimit "128m" `
+-AllowedThreadDelta 0
+```
+
+See [Validation Evidence](docs/VALIDATION.md) for the complete copy-paste commands.
 
 The mock collector is test-only. Never deploy it in place of Glowroot Central.

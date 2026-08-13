@@ -47,5 +47,79 @@ jobs:
         with:
           name: spring-boot-production-gate
           path: benchmark/results/spring_gate_*/
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 30
+
+  rust-java-rest-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out agent source
+        uses: actions/checkout@v5
+        with:
+          path: java-rust-glowroot-agent
+
+      - name: Check out production Rust-Java REST runtime
+        uses: actions/checkout@v5
+        with:
+          repository: esasmer-dou/rust-java-rest
+          ref: v4.4.1
+          path: rust-java-rest
+
+      - name: Check out pinned Glowroot wire contract
+        uses: actions/checkout@v5
+        with:
+          repository: glowroot/glowroot
+          ref: 622dc6f800228cccc6fa37b0ed9e779446d7c41e
+          path: glowroot
+
+      - name: Set up Semeru OpenJ9 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: semeru
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: |
+            java-rust-glowroot-agent/pom.xml
+            rust-java-rest/pom.xml
+
+      - name: Run full paired Rust-Java REST matrix
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        run: |
+          ./benchmark/spring_boot_gate.ps1 `
+            -ApplicationKind rust-java-rest `
+            -RequiredRestVersion "4.4.1" `
+            -RequiredRestNativeAbi 28 `
+            -PairRepeats 6 `
+            -ConcurrencyLevels "64,256" `
+            -EndpointClasses "small-json,raw-json,heavy-json" `
+            -Duration "15s" `
+            -Warmup "8s" `
+            -MemoryLimit "128m" `
+            -AllowedThreadDelta 0 `
+            -AutoSelectCpuRoles `
+            -AllowRunnerCollectorSiblingSharing `
+            -FailOnGate
+
+      - name: Run Rust-Java REST protocol and fail-open gate
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        run: |
+          ./benchmark/glowroot_gate.ps1 `
+            -ProtocolOnly `
+            -SkipBuild `
+            -AutoSelectCpuRoles `
+            -AllowRunnerCollectorSiblingSharing `
+            -FailOnGate
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-java-rest-production-gate
+          path: |
+            java-rust-glowroot-agent/benchmark/results/rest_gate_*/
+            java-rust-glowroot-agent/benchmark/results/glowroot_gate_*/
+          if-no-files-found: error
           retention-days: 30

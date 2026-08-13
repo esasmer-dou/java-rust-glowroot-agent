@@ -117,7 +117,7 @@ ve classpath taraması yapmaz. Standalone Rust
 kütüphanesi, `256 KiB` stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint
 tablosu, trace buffer, mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.
 
-Adapter; bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty veya genel event bus kullanmaz. `0.2.0`
+Adapter; bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty veya genel event bus kullanmaz. `0.2.1`
 sürümü Servlet MVC destekler, WebFlux desteklemez. Spring'e özel method, JDBC, JMX veya profiler
 instrumentation gerekiyorsa tam Glowroot agent kullanın.
 

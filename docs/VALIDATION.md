@@ -4,7 +4,7 @@
 
 ## Release Decision
 
-Version `0.2.0` has two intentionally different runtime shapes:
+Version `0.2.1` has two intentionally different runtime shapes:
 
 - Rust-Java REST reuses the framework's Rust runtime. The telemetry feature adds no OS thread.
 - Spring Boot MVC loads the standalone Rust exporter. It adds one bounded thread with a `256 KiB`
@@ -26,13 +26,16 @@ Release assets. A result from another branch or an older commit cannot satisfy t
 | Embedded native attributed ceiling | PASS | `0.694 MiB`, including measured feature code pages; `0` additional threads |
 | Embedded observed resident maximum | PASS | smaps RSS maximum `+1.817 MiB`, below the `+3 MiB` boundary |
 | Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` |
+| Rust-Java REST performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, REST `4.4.1`, native ABI `28` |
+| Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, collector outage, and optional `-javaagent` bootstrap must all pass |
 | Spring performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, exact-commit evidence |
 | Spring steady memory | RELEASE ENFORCED | Same full workload and process age; paired median RSS/cgroup delta must stay within `+3 MiB` |
 
 The embedded footprint report remains under
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md). For stable
-`0.2.0`, the authoritative Spring report is the `spring-boot-production-gate.md` asset attached to
-the GitHub Release. Its JSON companion contains the exact thresholds and result.
+`0.2.1`, the authoritative reports are the `spring-boot-production-gate.md` and
+`rust-java-rest-production-gate.md` assets attached to the GitHub Release. The release workflow
+rejects a tag unless both reports came from one successful exact-commit Production Gate run.
 
 ## How The Spring Gate Works
 
@@ -60,6 +63,18 @@ variant completes the same warmup and full endpoint workload, waits for the same
 sampled five times at equal process age. The median paired process RSS and cgroup deltas must each
 remain within `+3 MiB`. The source-attributed native ceiling remains a separate stricter gate.
 
+## How The Rust-Java REST Gate Works
+
+The REST gate checks out the published `rust-java-rest:4.4.1` source tag and rejects any native ABI
+other than `28`. It builds one minimal production image and runs telemetry off/on sequentially on
+the same physical CPU. The matrix uses the same small JSON, raw JSON, and heavy JSON classes and the
+same c64/c256 limits as the Spring gate. Embedded telemetry may not add an OS thread.
+
+A second gate validates messages against the pinned Glowroot wire schema. It also stops the
+collector and proves that business HTTP remains available. Finally, it starts the same REST image
+with the optional `-javaagent` bootstrap and verifies that the requested bounded native settings
+were applied. All three checks are mandatory for a stable tag.
+
 ## Reproduce The Gates
 
 Spring production matrix:
@@ -76,10 +91,34 @@ Spring production matrix:
   -FailOnGate
 ```
 
+Rust-Java REST production matrix:
+
+```powershell
+.\benchmark\spring_boot_gate.ps1 `
+  -ApplicationKind rust-java-rest `
+  -RequiredRestVersion "4.4.1" `
+  -RequiredRestNativeAbi 28 `
+  -PairRepeats 6 `
+  -ConcurrencyLevels "64,256" `
+  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -Duration "15s" `
+  -Warmup "8s" `
+  -MemoryLimit "128m" `
+  -AllowedThreadDelta 0 `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
+  -FailOnGate
+```
+
 Protocol and collector-down fail-open gate:
 
 ```powershell
-.\benchmark\glowroot_gate.ps1 -ProtocolOnly -FailOnGate
+.\benchmark\glowroot_gate.ps1 `
+  -ProtocolOnly `
+  -SkipBuild `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
+  -FailOnGate
 ```
 
 Embedded exact-source footprint gate:

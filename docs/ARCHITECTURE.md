@@ -119,7 +119,7 @@ Tokio exporter on a `256 KiB` stack. Every queue, route table, trace buffer, mes
 set is bounded by the same native engine contract.
 
 The adapter does not use bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty, or a general-purpose
-event bus. Version `0.2.0` supports Servlet MVC, not WebFlux. Use the full Glowroot agent when
+event bus. Version `0.2.1` supports Servlet MVC, not WebFlux. Use the full Glowroot agent when
 Spring-specific method, JDBC, JMX, or profiler instrumentation is required.
 
 The certified low-memory Spring path activates the starter with properties or environment

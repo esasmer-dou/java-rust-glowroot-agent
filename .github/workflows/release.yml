@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 0.2.0"
+        description: "Release version, for example 0.2.1"
         required: true
         type: string
       repair_partial_package:
@@ -105,17 +105,42 @@ jobs:
           test "$(sha256sum spring-boot-starter/src/main/resources/native/windows-x64/rust_glowroot_agent.dll | awk '{print $1}')" = "$WINDOWS_EXPECTED"
           test "$(sha256sum spring-boot-starter/src/main/resources/native/linux-x64/librust_glowroot_agent.so | awk '{print $1}')" = "$LINUX_EXPECTED"
 
-          mkdir -p "${RUNNER_TEMP}/java-rust-glowroot-release-gate"
+          SPRING_GATE_DIR="${RUNNER_TEMP}/java-rust-glowroot-spring-gate"
+          REST_GATE_DIR="${RUNNER_TEMP}/java-rust-glowroot-rest-gate"
+          mkdir -p "$SPRING_GATE_DIR" "$REST_GATE_DIR"
           gh run download "${{ steps.production_gate.outputs.run_id }}" \
             --name spring-boot-production-gate \
-            --dir "${RUNNER_TEMP}/java-rust-glowroot-release-gate"
-          REPORT="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name REPORT.md -type f -print -quit)"
-          SUMMARY="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name summary.json -type f -print -quit)"
-          STEADY="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name steady-memory.json -type f -print -quit)"
-          test -s "$REPORT"
-          test -s "$SUMMARY"
-          test -s "$STEADY"
-          jq -e '.passed == true and .steady_memory.gate == "PASS"' "$SUMMARY" >/dev/null
+            --dir "$SPRING_GATE_DIR"
+          gh run download "${{ steps.production_gate.outputs.run_id }}" \
+            --name rust-java-rest-production-gate \
+            --dir "$REST_GATE_DIR"
+
+          SPRING_REPORT="$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/REPORT.md' -type f -print -quit)"
+          SPRING_SUMMARY="$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/summary.json' -type f -print -quit)"
+          SPRING_STEADY="$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/steady-memory.json' -type f -print -quit)"
+          REST_REPORT="$(find "$REST_GATE_DIR" -path '*/rest_gate_*/REPORT.md' -type f -print -quit)"
+          REST_SUMMARY="$(find "$REST_GATE_DIR" -path '*/rest_gate_*/summary.json' -type f -print -quit)"
+          REST_STEADY="$(find "$REST_GATE_DIR" -path '*/rest_gate_*/steady-memory.json' -type f -print -quit)"
+          REST_PROTOCOL_REPORT="$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/REPORT.md' -type f -print -quit)"
+          REST_PROTOCOL_SUMMARY="$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/gate-summary.json' -type f -print -quit)"
+          for FILE in "$SPRING_REPORT" "$SPRING_SUMMARY" "$SPRING_STEADY" \
+            "$REST_REPORT" "$REST_SUMMARY" "$REST_STEADY" \
+            "$REST_PROTOCOL_REPORT" "$REST_PROTOCOL_SUMMARY"; do
+            test -s "$FILE"
+          done
+          jq -e '.passed == true and .application_kind == "spring-boot" and
+            .pair_repeats >= 6 and .steady_memory.gate == "PASS" and
+            (.rows | length) == 6 and all(.rows[]; .gate == "PASS")' \
+            "$SPRING_SUMMARY" >/dev/null
+          jq -e '.passed == true and .application_kind == "rust-java-rest" and
+            .required_rest_version == "4.4.1" and .required_rest_native_abi == 28 and
+            .activation_mode == "embedded_native_properties" and .pair_repeats >= 6 and
+            .steady_memory.gate == "PASS" and (.rows | length) == 6 and
+            all(.rows[]; .gate == "PASS" and .max_paired_non_2xx_delta_pp <= 0)' \
+            "$REST_SUMMARY" >/dev/null
+          jq -e '.passed == true and .protocol_gate == "PASS" and
+            .fail_open_gate == "PASS" and .javaagent_bootstrap_gate == "PASS"' \
+            "$REST_PROTOCOL_SUMMARY" >/dev/null
 
       - name: Remove incomplete Maven package versions
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_partial_package }}
@@ -196,12 +221,22 @@ jobs:
             release-assets/rust_glowroot_agent-windows-x64.dll
           cp spring-boot-starter/src/main/resources/native/linux-x64/librust_glowroot_agent.so \
             release-assets/librust_glowroot_agent-linux-x64.so
-          REPORT="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name REPORT.md -type f -print -quit)"
-          SUMMARY="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name summary.json -type f -print -quit)"
-          STEADY="$(find "${RUNNER_TEMP}/java-rust-glowroot-release-gate" -name steady-memory.json -type f -print -quit)"
-          cp "$REPORT" release-assets/spring-boot-production-gate.md
-          cp "$SUMMARY" release-assets/spring-boot-production-gate-summary.json
-          cp "$STEADY" release-assets/spring-boot-steady-memory.json
+          SPRING_GATE_DIR="${RUNNER_TEMP}/java-rust-glowroot-spring-gate"
+          REST_GATE_DIR="${RUNNER_TEMP}/java-rust-glowroot-rest-gate"
+          cp "$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/REPORT.md' -type f -print -quit)" \
+            release-assets/spring-boot-production-gate.md
+          cp "$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/summary.json' -type f -print -quit)" \
+            release-assets/spring-boot-production-gate-summary.json
+          cp "$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/steady-memory.json' -type f -print -quit)" \
+            release-assets/spring-boot-steady-memory.json
+          cp "$(find "$REST_GATE_DIR" -path '*/rest_gate_*/REPORT.md' -type f -print -quit)" \
+            release-assets/rust-java-rest-production-gate.md
+          cp "$(find "$REST_GATE_DIR" -path '*/rest_gate_*/summary.json' -type f -print -quit)" \
+            release-assets/rust-java-rest-production-gate-summary.json
+          cp "$(find "$REST_GATE_DIR" -path '*/rest_gate_*/steady-memory.json' -type f -print -quit)" \
+            release-assets/rust-java-rest-steady-memory.json
+          cp "$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/gate-summary.json' -type f -print -quit)" \
+            release-assets/rust-java-rest-protocol-gate-summary.json
           (cd release-assets && sha256sum ./* > SHA256SUMS)
 
       - name: Create or update GitHub release

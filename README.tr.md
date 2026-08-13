@@ -31,9 +31,9 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 
 | Uygulama | Uygulamaya eklenecek paket | Native çalışma şekli | Ek telemetri thread'i |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.4.0` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | `0` |
-| Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.2.0` | Küçük standalone agent kütüphanesini yükler | `1` |
-| `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.2.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Yeni thread eklemez |
+| Rust-Java REST `4.4.1` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | `0` |
+| Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.2.1` | Küçük standalone agent kütüphanesini yükler | `1` |
+| `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.2.1` bootstrap | Yukarıdaki çalışma şekli değişmez | Yeni thread eklemez |
 
 Bootstrap JAR yalnızca `-javaagent:key=value` değerlerini property'lere aktarır. İçinde tek sınıf
 vardır. Native binary, transformer ve runtime dependency yoktur. Spring starter ayrı JAR olarak
@@ -57,18 +57,18 @@ Request body, query değeri, header, SQL metni ve kişisel veri telemetriye kopy
 
 Bu agent, bütün Glowroot özelliklerinin küçük bir kopyası değildir. Rastgele Java metodu izleme,
 JDBC SQL, JMX, profiler, heap dump veya uzaktan ayar gerekiyorsa tam Glowroot agent kullanın.
-`0.2.0` sürümü Spring WebFlux desteklemez. Spring adapter Servlet MVC içindir.
+`0.2.1` sürümü Spring WebFlux desteklemez. Spring adapter Servlet MVC içindir.
 
 ## Rust-Java REST Kurulumu
 
-Uyumlu `4.4.0` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `1` içerir. Native dosyanın
+Uyumlu `4.4.1` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `1` içerir. Native dosyanın
 kaynak revision ve ABI bilgisi HTTP server başlamadan doğrulanır.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.4.0</version>
+  <version>4.4.1</version>
 </dependency>
 ```
 
@@ -96,7 +96,7 @@ ayarların aynı Rust engine'e nasıl aktarıldığını değiştirir:
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.0.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.1.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
   -jar catalog-api.jar
 ```
 
@@ -108,7 +108,7 @@ java \
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
 </dependency>
 ```
 
@@ -144,7 +144,7 @@ almak istiyorsanız bootstrap paketini de ekleyin:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-agent</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -153,7 +153,7 @@ Bootstrap JAR'ını executable Spring Boot JAR'ın dışında tutun. JVM'e dosya
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.0.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.1.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
   -jar orders-api.jar
 ```
 
@@ -304,12 +304,13 @@ Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
 - non-2xx artışı `0` yüzde puanı;
 - Rust-Java içinde ek thread `0`, Spring standalone için en fazla `1`.
 
-Tam Spring matrisi small JSON, önceden hazırlanmış raw JSON ve dynamic heavy JSON endpoint'lerini
-c64 ve c256 seviyelerinde altı dengeli çiftle ölçer. RPS, p99 ve startup için önce her çiftin farkı
-bulunur, sonra medyan hesaplanır. İki varyant aynı tam yükü bitirdikten sonra eşit process yaşında
-kontrollü bellek ölçümü yapılır. Process RSS ve cgroup eşleştirilmiş medyan farkları en fazla
-`+3 MiB` olmalıdır. Endpoint içindeki RSS maksimumları tanılama amacıyla raporda kalır. Sert native
-resident memory maksimumunu exact-source footprint gate'i uygular.
+Stable release bu tam matrisi Spring Boot ve Rust-Java REST için ayrı çalıştırır. İki matris de
+small JSON, önceden hazırlanmış raw JSON ve dynamic heavy JSON endpoint'lerini c64/c256 seviyesinde
+altı dengeli çiftle ölçer. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan
+hesaplanır. Aynı tam yükten sonra eşit process yaşında ölçülen RSS ve cgroup medyan farkları en fazla
+`+3 MiB` olabilir. Rust-Java REST yeni thread ekleyemez. Spring yalnız tek sınırlı exporter thread'i
+ekleyebilir. REST wire uyumu, collector kapalıyken fail-open ve opsiyonel bootstrap ayrıca zorunlu
+olarak test edilir.
 
 [Doğrulama Kanıtı](docs/VALIDATION.tr.md),
 [Mimari ve Production Sınırı](docs/ARCHITECTURE.tr.md) ve
@@ -320,9 +321,9 @@ resident memory maksimumunu exact-source footprint gate'i uygular.
 | Bileşen | Sürüm | Sözleşme |
 | --- | ---: | --- |
 | Java | `21` | Ana test JVM'i Semeru OpenJ9'dur |
-| Rust-Java REST | `4.4.0` | REST ABI `28`, Glowroot ABI `1` |
-| Agent bootstrap | `0.2.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
-| Spring Boot starter | `0.2.0` | Spring Boot `3.x`, Servlet MVC |
+| Rust-Java REST | `4.4.1` | REST ABI `28`, Glowroot ABI `1` |
+| Agent bootstrap | `0.2.1` | Tek sınıf; iki desteklenen ortamda da çalışır |
+| Spring Boot starter | `0.2.1` | Spring Boot `3.x`, Servlet MVC |
 | Standalone native kaynak | `rust-spring v4.4.1` | Glowroot ABI `1`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |
@@ -339,8 +340,8 @@ mvn -B -ntp clean verify
 
 Maven reactor şu dosyaları üretir:
 
-- `agent-bootstrap/target/java-rust-glowroot-agent-0.2.0.jar`
-- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.2.0.jar`
+- `agent-bootstrap/target/java-rust-glowroot-agent-0.2.1.jar`
+- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.2.1.jar`
 
 Native DLL/SO yalnız `native-provenance.properties` içinde yazan temiz `rust-spring` commit'inden
 üretilir. Doğrulanmış CI artifact'lerini `scripts/sync-native-artifacts.ps1` ile alın. Yerel dirty
@@ -357,5 +358,17 @@ native build yayınlamayın.
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
+
+Embedded REST matrisini çalıştırmak için aynı komuta şu parametreleri ekleyin:
+
+```powershell
+-ApplicationKind rust-java-rest `
+-RequiredRestVersion "4.4.1" `
+-RequiredRestNativeAbi 28 `
+-MemoryLimit "128m" `
+-AllowedThreadDelta 0
+```
+
+Tam kopyala-yapıştır komutları için [Doğrulama Kanıtı](docs/VALIDATION.tr.md) belgesine bakın.
 
 Mock collector yalnız test içindir. Glowroot Central yerine production ortamına kurmayın.

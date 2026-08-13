@@ -4,7 +4,7 @@
 
 ## Release Kararı
 
-`0.2.0` sürümünde iki farklı çalışma şekli vardır:
+`0.2.1` sürümünde iki farklı çalışma şekli vardır:
 
 - Rust-Java REST, framework içindeki Rust runtime'ını kullanır. Telemetri yeni işletim sistemi
   thread'i eklemez.
@@ -27,13 +27,16 @@ eski commit üzerinde alınmış sonuç bu kontrolü geçemez.
 | Embedded native atfedilen üst sınır | PASS | Kod sayfaları dahil `0,694 MiB`; ek thread `0` |
 | Embedded resident maksimum | PASS | smaps RSS maksimumu `+1,817 MiB`; `+3 MiB` sınırının altında |
 | Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` revision'ından üretildi |
+| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256, REST `4.4.1` ve native ABI `28` |
+| Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, collector kesintisi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
 | Spring performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256 ve exact-commit kanıtı |
 | Spring steady memory | RELEASE ZORUNLULUĞU | Aynı tam yük ve process yaşı; RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` |
 
 Embedded footprint raporu
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md) dosyasındadır.
-Stable `0.2.0` için geçerli Spring kanıtı, GitHub Release'e eklenen
-`spring-boot-production-gate.md` asset'idir. JSON dosyası uygulanan sınırları ve sonucu içerir.
+Stable `0.2.1` için geçerli kanıtlar, GitHub Release'e eklenen
+`spring-boot-production-gate.md` ve `rust-java-rest-production-gate.md` dosyalarıdır. Release
+workflow'u, iki rapor da aynı exact-commit Production Gate koşusundan gelmedikçe etiketi reddeder.
 
 ## Spring Gate Nasıl Çalışır?
 
@@ -61,6 +64,18 @@ sayfaları bağımsız prosesler arasında iki yönde değişebilir. Bu nedenle 
 process yaşında beş örnek alınır. Eşleştirilmiş process RSS ve cgroup medyan farklarının ikisi de
 `+3 MiB` içinde kalmalıdır. Kaynak koda atfedilen native üst sınır ayrıca ve daha sıkı ölçülür.
 
+## Rust-Java REST Gate Nasıl Çalışır?
+
+REST gate, yayınlanmış `rust-java-rest:4.4.1` source tag'ini kullanır. Native ABI `28` değilse test
+başlamaz. Tek bir minimal production image hazırlanır. Telemetri kapalı ve açık varyantlar aynı
+fiziksel CPU üzerinde sıralı çalışır. Matris; küçük JSON, raw JSON ve heavy JSON endpoint'lerini
+c64/c256 altında ölçer. Embedded telemetri yeni işletim sistemi thread'i ekleyemez.
+
+İkinci gate, mesajları sabitlenen Glowroot wire şemasıyla doğrular. Collector durdurulduğunda
+business HTTP'nin çalışmaya devam ettiğini de kanıtlar. Son olarak aynı REST image, opsiyonel
+`-javaagent` bootstrap ile başlatılır. İstenen sınırlı native ayarların uygulandığı kontrol edilir.
+Stable tag için bu kontrollerin tamamı zorunludur.
+
 ## Gate'leri Tekrarlayın
 
 Spring production matrisi:
@@ -77,10 +92,34 @@ Spring production matrisi:
   -FailOnGate
 ```
 
+Rust-Java REST production matrisi:
+
+```powershell
+.\benchmark\spring_boot_gate.ps1 `
+  -ApplicationKind rust-java-rest `
+  -RequiredRestVersion "4.4.1" `
+  -RequiredRestNativeAbi 28 `
+  -PairRepeats 6 `
+  -ConcurrencyLevels "64,256" `
+  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -Duration "15s" `
+  -Warmup "8s" `
+  -MemoryLimit "128m" `
+  -AllowedThreadDelta 0 `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
+  -FailOnGate
+```
+
 Protokol ve collector kapalı fail-open gate'i:
 
 ```powershell
-.\benchmark\glowroot_gate.ps1 -ProtocolOnly -FailOnGate
+.\benchmark\glowroot_gate.ps1 `
+  -ProtocolOnly `
+  -SkipBuild `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
+  -FailOnGate
 ```
 
 Embedded exact-source footprint gate'i:

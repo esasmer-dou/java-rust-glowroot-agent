@@ -1,5 +1,9 @@
 [CmdletBinding()]
 param(
+    [ValidateSet("spring-boot", "rust-java-rest")]
+    [string] $ApplicationKind = "spring-boot",
+    [string] $RequiredRestVersion = "4.4.1",
+    [int] $RequiredRestNativeAbi = 28,
     [int] $PairRepeats = 3,
     [string] $ConcurrencyLevels = "64,256",
     [string] $EndpointClasses = "small-json,raw-json,heavy-json",
@@ -38,22 +42,38 @@ if ($MaxMemoryRegressionMiB -gt 3.0) { throw "The agent memory gate cannot excee
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "benchmark_isolation.ps1")
 $ProjectRoot = Split-Path -Parent $ScriptDir
+$IsRustJavaRest = $ApplicationKind -eq "rust-java-rest"
 $SpringRoot = Join-Path $ScriptDir "spring-app"
-$Context = Join-Path $ScriptDir "spring-context"
-$Results = Join-Path $ScriptDir ("results\spring_gate_{0}" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+$FrameworkRoot = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "..\rust-java-rest"))
+$ContextName = if ($IsRustJavaRest) { "context" } else { "spring-context" }
+$ResultPattern = if ($IsRustJavaRest) { "results\rest_gate_{0}" } else { "results\spring_gate_{0}" }
+$Context = Join-Path $ScriptDir $ContextName
+$Results = Join-Path $ScriptDir ($ResultPattern -f (Get-Date -Format "yyyyMMdd_HHmmss"))
 $Network = "reactor-benchmark-net"
-$AppImage = "java-rust-glowroot-agent:spring-benchmark"
+$AppImage = if ($IsRustJavaRest) {
+    "java-rust-glowroot-agent:benchmark-app"
+} else {
+    "java-rust-glowroot-agent:spring-benchmark"
+}
 $CollectorImage = "java-rust-glowroot-agent:mock-collector"
 $RunnerImage = "curlimages/curl:8.12.1"
 $WrkImage = "williamyeh/wrk:latest"
-$Baseline = "spring-glowroot-baseline"
-$Candidate = "spring-glowroot-candidate"
-$Collector = "spring-glowroot-collector"
+$Baseline = if ($IsRustJavaRest) { "rest-glowroot-baseline" } else { "spring-glowroot-baseline" }
+$Candidate = if ($IsRustJavaRest) { "rest-glowroot-candidate" } else { "spring-glowroot-candidate" }
+$Collector = if ($IsRustJavaRest) { "rest-glowroot-collector" } else { "spring-glowroot-collector" }
 
-$EndpointMap = @{
-    "small-json" = "/api/small?id=42"
-    "raw-json" = "/api/raw"
-    "heavy-json" = "/api/heavy?items=100"
+$EndpointMap = if ($IsRustJavaRest) {
+    @{
+        "small-json" = "/api/v1/candidates/direct"
+        "raw-json" = "/api/v1/heavy/raw"
+        "heavy-json" = "/api/v1/heavy?items=100"
+    }
+} else {
+    @{
+        "small-json" = "/api/small?id=42"
+        "raw-json" = "/api/raw"
+        "heavy-json" = "/api/heavy?items=100"
+    }
 }
 $concurrency = @($ConcurrencyLevels -split "[,\s]+" | Where-Object { $_ } | ForEach-Object { [int] $_ })
 $endpoints = @($EndpointClasses -split "[,\s]+" | Where-Object { $_ })
@@ -89,6 +109,14 @@ function Find-AgentJar {
     return $jar.FullName
 }
 
+function Find-SingleArtifact([string] $Directory, [string] $Pattern) {
+    $artifacts = @(Get-ChildItem -LiteralPath $Directory -Filter $Pattern -File)
+    if ($artifacts.Count -ne 1) {
+        throw "Expected exactly one artifact matching $Pattern under $Directory; found $($artifacts.Count)."
+    }
+    return $artifacts[0].FullName
+}
+
 function Prepare-Build {
     if (-not $SkipBuild) {
         $windowsSemeru = "D:\Dropbox\java64\Semeru\jdk-21.0.2.13-openj9"
@@ -101,7 +129,29 @@ function Prepare-Build {
         $javaBin = Join-Path $env:JAVA_HOME "bin"
         $env:Path = "$javaBin$([IO.Path]::PathSeparator)$env:Path"
         Invoke-Checked mvn @("-B", "-ntp", "clean", "install") $ProjectRoot | Out-Null
-        Invoke-Checked mvn @("-B", "-ntp", "clean", "package") $SpringRoot | Out-Null
+        if ($IsRustJavaRest) {
+            if (-not (Test-Path -LiteralPath (Join-Path $FrameworkRoot "pom.xml") -PathType Leaf)) {
+                throw "Rust-Java REST checkout is missing: $FrameworkRoot"
+            }
+            [xml] $frameworkPom = Get-Content -Raw -LiteralPath (Join-Path $FrameworkRoot "pom.xml")
+            $frameworkVersion = "$($frameworkPom.project.version)"
+            if ($frameworkVersion -ne $RequiredRestVersion) {
+                throw "Rust-Java REST version mismatch: expected $RequiredRestVersion, found $frameworkVersion."
+            }
+            $bridgeSource = Get-Content -Raw -LiteralPath `
+                    (Join-Path $FrameworkRoot "src\main\java\com\reactor\rust\bridge\NativeBridge.java")
+            if ($bridgeSource -notmatch "EXPECTED_NATIVE_ABI_VERSION\s*=\s*$RequiredRestNativeAbi\s*;") {
+                throw "Rust-Java REST does not require native ABI $RequiredRestNativeAbi."
+            }
+            $frameworkProvenance = Get-Content -Raw -LiteralPath `
+                    (Join-Path $FrameworkRoot "src\main\resources\native\native-provenance.properties")
+            if ($frameworkProvenance -notmatch "(?m)^rest\.abi=$RequiredRestNativeAbi\r?$") {
+                throw "Rust-Java REST packaged native provenance is not ABI $RequiredRestNativeAbi."
+            }
+            Invoke-Checked mvn @("-B", "-ntp", "-DskipTests", "clean", "package") $FrameworkRoot | Out-Null
+        } else {
+            Invoke-Checked mvn @("-B", "-ntp", "clean", "package") $SpringRoot | Out-Null
+        }
         $glowrootSource = [IO.Path]::GetFullPath((Join-Path $ProjectRoot "..\glowroot"))
         $workflowGlowrootSource = Join-Path $ProjectRoot "glowroot-upstream"
         if (-not (Test-Path -LiteralPath (Join-Path $glowrootSource "wire-api\src\main\protobuf") -PathType Container)) {
@@ -117,10 +167,25 @@ function Prepare-Build {
     }
     if (Test-Path $Context) { Remove-Item -LiteralPath $Context -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $Context | Out-Null
-    Copy-Item (Join-Path $SpringRoot "target\spring-glowroot-benchmark-1.0.0.jar") `
-            (Join-Path $Context "application.jar")
-    Copy-Item (Find-AgentJar) (Join-Path $Context "agent.jar")
-    Invoke-Checked docker @("build", "-f", "spring.Dockerfile", "-t", $AppImage, ".") $ScriptDir | Out-Null
+    if ($IsRustJavaRest) {
+        Copy-Item (Find-SingleArtifact (Join-Path $FrameworkRoot "target") "*-core-runtime.jar") `
+                (Join-Path $Context "framework.jar")
+        Copy-Item (Find-SingleArtifact (Join-Path $FrameworkRoot "target") "*-codegen.jar") `
+                (Join-Path $Context "codegen.jar")
+        Copy-Item (Find-AgentJar) (Join-Path $Context "agent.jar")
+        Copy-Item (Join-Path $FrameworkRoot "benchmark\minimal-production\src") `
+                (Join-Path $Context "src") -Recurse
+        Invoke-Checked docker @("build", "-f", "app.Dockerfile", "-t", $AppImage, ".") `
+                $ScriptDir | Out-Null
+        Invoke-Checked docker @("build", "-f", "Dockerfile.benchmark", "-t", `
+                "reactor-benchmark-runner:local", ".") (Join-Path $FrameworkRoot "benchmark") | Out-Null
+    } else {
+        Copy-Item (Join-Path $SpringRoot "target\spring-glowroot-benchmark-1.0.0.jar") `
+                (Join-Path $Context "application.jar")
+        Copy-Item (Find-AgentJar) (Join-Path $Context "agent.jar")
+        Invoke-Checked docker @("build", "-f", "spring.Dockerfile", "-t", $AppImage, ".") `
+                $ScriptDir | Out-Null
+    }
     Invoke-Checked docker @("build", "-t", $CollectorImage, ".") (Join-Path $ScriptDir "mock-collector") | Out-Null
 }
 
@@ -171,27 +236,32 @@ function Start-Collector {
 
 function Start-App([string] $Name, [string] $CpuSet, [bool] $Enabled, [int] $Pair) {
     Remove-Container $Name
+    $agentIdPrefix = if ($IsRustJavaRest) { "rust-java-rest-benchmark" } else { "spring-benchmark" }
+    $applicationName = if ($IsRustJavaRest) { "rust-java-rest-benchmark" } else { "spring-glowroot-benchmark" }
+    $collectorAddress = if ($IsRustJavaRest) { "${Collector}:8181" } else { "http://${Collector}:8181" }
     $telemetry = if ($Enabled) {
         if ($UseJavaAgentBootstrap) {
-            "-javaagent:/app/agent.jar=collector=${Collector}:8181,agent-id=spring-benchmark::pair-${Pair}," +
-            "application=spring-glowroot-benchmark,http-sample-rate=256,trace-capacity=0," +
-            "max-routes=64,max-export-bytes=65536,spring-enabled=true"
+            $springArgument = if ($IsRustJavaRest) { "" } else { ",spring-enabled=true" }
+            "-javaagent:/app/agent.jar=collector=${Collector}:8181,agent-id=${agentIdPrefix}::pair-${Pair}," +
+            "application=${applicationName},http-sample-rate=256,trace-capacity=0," +
+            "max-routes=64,max-export-bytes=65536${springArgument}"
         } else {
+            $springProperty = if ($IsRustJavaRest) { "" } else { " -Dreactor.glowroot.spring.enabled=true" }
             "-Dreactor.glowroot.enabled=true " +
-            "-Dreactor.glowroot.collector.address=http://${Collector}:8181 " +
-            "-Dreactor.glowroot.agent.id=spring-benchmark::pair-${Pair} " +
-            "-Dreactor.glowroot.application.name=spring-glowroot-benchmark " +
+            "-Dreactor.glowroot.collector.address=${collectorAddress} " +
+            "-Dreactor.glowroot.agent.id=${agentIdPrefix}::pair-${Pair} " +
+            "-Dreactor.glowroot.application.name=${applicationName} " +
             "-Dreactor.glowroot.http.sample-rate=256 " +
             "-Dreactor.glowroot.trace.capacity=0 " +
             "-Dreactor.glowroot.max-routes=64 " +
-            "-Dreactor.glowroot.max-export-bytes=65536 " +
-            "-Dreactor.glowroot.spring.enabled=true"
+            "-Dreactor.glowroot.max-export-bytes=65536" + $springProperty
         }
     } else { "" }
+    $telemetryEnvironment = if ($IsRustJavaRest) { "JAVA_AGENT_OPTS" } else { "TELEMETRY_OPTS" }
     $args = @(
         "run", "-d", "--name", $Name, "--network", $Network,
         "--cpus", "$CpuLimit", "--memory", $MemoryLimit,
-        "-e", "TELEMETRY_OPTS=$telemetry"
+        "-e", "${telemetryEnvironment}=$telemetry"
     )
     if ($CpuSet) { $args += @("--cpuset-cpus", $CpuSet) }
     $args += $AppImage
@@ -200,6 +270,20 @@ function Start-App([string] $Name, [string] $CpuSet, [bool] $Enabled, [int] $Pai
     Wait-Http $Name
     $started.Stop()
     return $started.Elapsed.TotalMilliseconds
+}
+
+function Assert-NativeTelemetryLoaded([string] $Name) {
+    $libraryPattern = if ($IsRustJavaRest) { "rust_hyper" } else { "rust_glowroot_agent" }
+    & docker exec $Name sh -c "grep -q $libraryPattern /proc/1/maps"
+    if ($LASTEXITCODE -ne 0) {
+        throw "$ApplicationKind did not load the expected native telemetry library."
+    }
+}
+
+function Invoke-RouteSmoke([string] $Name) {
+    foreach ($path in @($EndpointMap.Values | Sort-Object -Unique)) {
+        Invoke-Curl "http://${Name}:8080$path" | Out-Null
+    }
 }
 
 function Convert-LatencyToMs([double] $Value, [string] $Unit) {
@@ -367,14 +451,9 @@ try {
                     ms = (Start-App $name $SlotACpuSet $enabled $pair)
                 })
                 if ($enabled) {
-                    & docker exec $name sh -c "grep -q rust_glowroot_agent /proc/1/maps"
-                    if ($LASTEXITCODE -ne 0) {
-                        throw "Spring auto-configuration did not load the standalone native agent."
-                    }
+                    Assert-NativeTelemetryLoaded $name
                 }
-                Invoke-Curl "http://${name}:8080/api/small?id=1" | Out-Null
-                Invoke-Curl "http://${name}:8080/api/raw" | Out-Null
-                Invoke-Curl "http://${name}:8080/api/heavy?items=10" | Out-Null
+                Invoke-RouteSmoke $name
                 foreach ($endpoint in $endpoints) {
                     Invoke-Warmup $name $EndpointMap[$endpoint]
                 }
@@ -423,12 +502,9 @@ try {
             $startups.Add([pscustomobject]@{ pair = $pair; variant = "candidate"; ms = (Start-App $Candidate $candidateCpu $true $pair) })
             $startups.Add([pscustomobject]@{ pair = $pair; variant = "baseline"; ms = (Start-App $Baseline $baselineCpu $false $pair) })
         }
-        & docker exec $Candidate sh -c "grep -q rust_glowroot_agent /proc/1/maps"
-        if ($LASTEXITCODE -ne 0) { throw "Spring auto-configuration did not load the standalone native agent." }
+        Assert-NativeTelemetryLoaded $Candidate
         foreach ($name in @($Baseline, $Candidate)) {
-            Invoke-Curl "http://${name}:8080/api/small?id=1" | Out-Null
-            Invoke-Curl "http://${name}:8080/api/raw" | Out-Null
-            Invoke-Curl "http://${name}:8080/api/heavy?items=10" | Out-Null
+            Invoke-RouteSmoke $name
             foreach ($endpoint in $endpoints) {
                 Invoke-Warmup $name $EndpointMap[$endpoint]
             }
@@ -597,9 +673,16 @@ $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json")
 $steadyMemory | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "steady-memory.json") -Encoding utf8
 [ordered]@{
     passed = $passedAll
+    application_kind = $ApplicationKind
+    required_rest_version = if ($IsRustJavaRest) { $RequiredRestVersion } else { $null }
+    required_rest_native_abi = if ($IsRustJavaRest) { $RequiredRestNativeAbi } else { $null }
     pair_repeats = $PairRepeats
     decision_statistic = "median_of_paired_deltas"
-    activation_mode = if ($UseJavaAgentBootstrap) { "javaagent_plus_starter" } else { "starter_properties" }
+    activation_mode = if ($IsRustJavaRest) {
+        if ($UseJavaAgentBootstrap) { "javaagent_bootstrap" } else { "embedded_native_properties" }
+    } else {
+        if ($UseJavaAgentBootstrap) { "javaagent_plus_starter" } else { "starter_properties" }
+    }
     cpu_roles = [ordered]@{
         application = $SlotACpuSet
         runner = $RunnerCpuSet
@@ -625,9 +708,21 @@ $steadyMemory | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "stead
 } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $Results "summary.json") -Encoding utf8
 
 $lines = [Collections.Generic.List[string]]::new()
-$lines.Add("# Spring Boot Agent Gate")
+$reportTitle = if ($IsRustJavaRest) { "Rust-Java REST Agent Gate" } else { "Spring Boot Agent Gate" }
+$compatibilityDescription = if ($IsRustJavaRest) {
+    "Compatibility: rust-java-rest $RequiredRestVersion, native ABI $RequiredRestNativeAbi."
+} else {
+    "Compatibility: Spring Boot Servlet MVC."
+}
+$lines.Add("# $reportTitle")
 $lines.Add("")
-$lines.Add("Activation: **$(if ($UseJavaAgentBootstrap) { 'optional -javaagent bootstrap + starter' } else { 'recommended starter + properties' })**.")
+$activationDescription = if ($IsRustJavaRest) {
+    if ($UseJavaAgentBootstrap) { "optional -javaagent bootstrap" } else { "embedded Rust runtime + properties" }
+} else {
+    if ($UseJavaAgentBootstrap) { "optional -javaagent bootstrap + starter" } else { "recommended starter + properties" }
+}
+$lines.Add("Application: **$ApplicationKind**. Activation: **$activationDescription**.")
+$lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("RPS, p99, and startup gates use the median of paired deltas. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
@@ -641,5 +736,5 @@ foreach ($row in $summary) {
 $lines.Add("")
 $lines.Add("Overall gate: **$(if ($passedAll) { 'PASS' } else { 'BLOCKED' })**")
 $lines | Set-Content (Join-Path $Results "REPORT.md") -Encoding utf8
-Write-Host "Spring Boot gate report: $(Join-Path $Results 'REPORT.md')"
-if ($FailOnGate -and -not $passedAll) { throw "Spring Boot production gate failed." }
+Write-Host "$ApplicationKind gate report: $(Join-Path $Results 'REPORT.md')"
+if ($FailOnGate -and -not $passedAll) { throw "$ApplicationKind production gate failed." }

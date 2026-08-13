@@ -53,7 +53,42 @@ and additional threads use the worst paired delta, so a failed response or unexp
 be hidden by a median. The separate footprint gates retain the stricter agent-owned and exact-source
 resident checks. The Spring path allows at most one additional thread; embedded Rust-Java allows none.
 
-Run the full gate from the project root:
+## Rust-Java REST Gate
+
+The stable REST gate uses the same paired same-core engine. It verifies the framework version and
+native ABI before building the image. It then measures the embedded native-properties path, which
+adds no telemetry thread.
+
+```powershell
+.\benchmark\spring_boot_gate.ps1 `
+  -ApplicationKind rust-java-rest `
+  -RequiredRestVersion "4.4.1" `
+  -RequiredRestNativeAbi 28 `
+  -PairRepeats 6 `
+  -ConcurrencyLevels "64,256" `
+  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -Duration "15s" `
+  -Warmup "8s" `
+  -MemoryLimit "128m" `
+  -AllowedThreadDelta 0 `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
+  -FailOnGate
+```
+
+After that matrix, reuse its images for the protocol, collector-down, and optional bootstrap gate:
+
+```powershell
+.\benchmark\glowroot_gate.ps1 `
+  -ProtocolOnly `
+  -SkipBuild `
+  -AutoSelectCpuRoles `
+  -AllowRunnerCollectorSiblingSharing `
+  -FailOnGate
+```
+
+The older dual-resident crossover tool remains available for machines with enough isolated physical
+cores. It is diagnostic and is not the stable hosted-runner release gate:
 
 ```powershell
 .\benchmark\glowroot_gate.ps1 -PairRepeats 4
@@ -61,10 +96,11 @@ Run the full gate from the project root:
 
 The script writes its report under `benchmark/results/`.
 
-To verify only current Glowroot wire compatibility and collector-down fail-open behavior:
+To run only current Glowroot wire compatibility and collector-down fail-open behavior after building
+the benchmark images:
 
 ```powershell
-.\benchmark\glowroot_gate.ps1 -ProtocolOnly -FailOnGate
+.\benchmark\glowroot_gate.ps1 -ProtocolOnly -SkipBuild -FailOnGate
 ```
 
 This short mode makes no RSS, RPS, p99, or startup claim.
@@ -102,8 +138,9 @@ or below `+3 MiB`, with no additional thread. Medians cannot override a failing 
 startup budget separately enforces the stricter `1 MiB` agent-attributed boundary.
 `gate-summary.json` is machine-readable.
 
-The current exact-source release evidence is tracked in
+The original exact-source attribution evidence is tracked in
 [`../docs/evidence/0.1.0-rc1/footprint-report.md`](../docs/evidence/0.1.0-rc1/footprint-report.md).
+Stable release decisions use the exact-commit Spring and REST evidence attached to GitHub Release.
 The deterministic embedded-native ceiling is
 `0.694 MiB` with `0` extra threads. The independent-process resident gate passed with maxima of
 `VmRSS +1.742 MiB`, smaps RSS `+1.817 MiB`, and cgroup current `+1.754 MiB`. The optional

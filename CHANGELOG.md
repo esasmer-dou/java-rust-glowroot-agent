@@ -2,6 +2,24 @@
 
 All notable changes to this project are recorded here.
 
+## [0.2.1] - 2026-08-13
+
+### Production Gate
+
+- Added a full Rust-Java REST c64/c256 matrix with six paired runs for small, raw, and heavy JSON.
+- Pinned the embedded path to `rust-java-rest:4.4.1` and native ABI `28`.
+- Repacked the standalone Windows/Linux native exporter from clean `rust-spring v4.4.2` CI
+  artifacts with full source-revision provenance.
+- Made REST protocol, collector-down fail-open, and optional bootstrap checks release-enforced.
+- Required both Spring Boot and Rust-Java REST evidence from the exact tag commit before publish.
+- Added REST performance, steady-memory, and protocol summaries to stable release assets.
+
+### Release Hygiene
+
+- Moved active documentation and Maven examples to stable `0.2.1`.
+- Marked the superseded `0.1.0-rc1` documentation as historical evidence.
+- Removed the pre-release version label from the internal, unpublished mock collector.
+
 ## [0.2.0] - 2026-08-13
 
 ### Added
@@ -46,3 +64,4 @@ All notable changes to this project are recorded here.
 
 [0.1.0-rc1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.1.0-rc1
 [0.2.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.0
+[0.2.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.1
