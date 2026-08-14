@@ -10,7 +10,7 @@ param(
     [string] $Duration = "12s",
     [string] $Warmup = "5s",
     [int] $MinWarmupRounds = 3,
-    [int] $MaxWarmupRounds = 8,
+    [int] $MaxWarmupRounds = 12,
     [double] $MaxWarmupRpsSpreadPercent = 8.0,
     [double] $CpuLimit = 1.0,
     [string] $MemoryLimit = "256m",

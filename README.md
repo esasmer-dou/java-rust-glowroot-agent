@@ -543,7 +543,7 @@ do not publish a local dirty native build.
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 8 `
+  -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `

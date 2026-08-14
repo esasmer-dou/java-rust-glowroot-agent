@@ -130,7 +130,7 @@ siblings in that group for the application, and pins the load runner and collect
 Every steal-time window must remain within `1%`. A manually configured single-logical-CPU run also
 keeps the paired SMT-sibling activity delta within `10%`.
 
-Each application process receives exactly eight endpoint-specific warmup rounds. Measurement starts
+Each application process receives exactly twelve endpoint-specific warmup rounds. Measurement starts
 only when the final three RPS samples have at most `8%` spread. This gives baseline and candidate the
 same warmup work and rejects OpenJ9 interpreter/JIT ramp-up instead of publishing it as agent
 overhead. Every raw warmup RPS sample is attached to the release.
@@ -166,7 +166,7 @@ Spring production matrix:
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 8 `
+  -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
@@ -186,7 +186,7 @@ Rust-Java REST production matrix:
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 8 `
+  -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 1 `

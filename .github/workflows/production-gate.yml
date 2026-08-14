@@ -20,7 +20,7 @@ jobs:
   spring-boot-agent:
     needs: gate-statistics
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -49,7 +49,7 @@ jobs:
             -Duration "15s" `
             -Warmup "8s" `
             -MinWarmupRounds 3 `
-            -MaxWarmupRounds 8 `
+            -MaxWarmupRounds 12 `
             -MaxWarmupRpsSpreadPercent 8 `
             -AutoSelectCpuRoles `
             -AllowRunnerCollectorSiblingSharing `
@@ -67,7 +67,7 @@ jobs:
   rust-java-rest-agent:
     needs: gate-statistics
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Check out agent source
         uses: actions/checkout@v5
@@ -112,7 +112,7 @@ jobs:
             -Duration "15s" `
             -Warmup "8s" `
             -MinWarmupRounds 3 `
-            -MaxWarmupRounds 8 `
+            -MaxWarmupRounds 12 `
             -MaxWarmupRpsSpreadPercent 8 `
             -MemoryLimit "128m" `
             -AllowedThreadDelta 1 `
