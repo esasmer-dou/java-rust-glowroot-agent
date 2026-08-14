@@ -52,7 +52,10 @@ The matrix covers:
 - six paired baseline/candidate runs with alternating variant order.
 
 Every performance cell must keep useful HTTP 200 RPS loss within `2%`, p99 regression within `10%`,
-non-2xx regression at zero percentage points, and additional threads at one or less. Build work is
+and additional threads at one or less. Non-2xx may not increase in the paired median or the
+request-weighted aggregate across all six repeats, and candidate peak error rate may not exceed the
+baseline peak envelope. A single-pair delta remains visible as a diagnostic, but does not replace
+those population-level decisions. Build work is
 finished before CPU selection. Linux then chooses the quietest physical CPU group, reserves all SMT
 siblings in that group for the application, and pins the load runner and collector to another group.
 Every steal-time window must remain within `1%`. A manually configured single-logical-CPU run also

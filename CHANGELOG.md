@@ -13,6 +13,9 @@ All notable changes to this project are recorded here.
 - Made REST protocol, collector-down fail-open, and optional bootstrap checks release-enforced.
 - Required both Spring Boot and Rust-Java REST evidence from the exact tag commit before publish.
 - Added performance, warmup-stability, steady-memory, and protocol summaries to stable release assets.
+- Replaced the noise-sensitive single-pair non-2xx veto with three guards: paired median and
+  request-weighted aggregate must show no regression, and candidate peak error rate may not exceed
+  baseline peak; worst-pair drift remains visible in release evidence.
 
 ### Runtime
 

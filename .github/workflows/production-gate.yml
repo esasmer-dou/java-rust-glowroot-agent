@@ -7,7 +7,18 @@ permissions:
   contents: read
 
 jobs:
+  gate-statistics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Verify benchmark decision statistics
+        shell: pwsh
+        run: ./benchmark/test_gate_statistics.ps1
+
   spring-boot-agent:
+    needs: gate-statistics
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -54,6 +65,7 @@ jobs:
           retention-days: 30
 
   rust-java-rest-agent:
+    needs: gate-statistics
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

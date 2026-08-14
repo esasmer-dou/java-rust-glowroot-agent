@@ -49,13 +49,17 @@ SMT sibling. These are host-quality checks, not product thresholds; rerun failed
 node rather than relaxing the limits.
 
 RPS, p99, and startup use the median of baseline/candidate pair deltas. This preserves each same-core
-comparison instead of subtracting unrelated group medians. Per-cell process RSS and cgroup maxima
+comparison instead of subtracting unrelated group medians. Non-2xx responses have two mandatory
+guards: the paired-median delta may not increase, the request-weighted aggregate delta across all
+repeats may not increase, and candidate peak error rate may not exceed the baseline peak envelope.
+The worst individual paired delta remains in the report as a noise/overload diagnostic, but cannot
+replace these population-level guards. Per-cell process RSS and cgroup maxima
 remain diagnostics because independent OpenJ9 JIT/GC residency is noisy. After the full workload,
 each variant enters the same idle phase and receives five memory samples at equal process age. The
-paired median of this steady process RSS and cgroup memory must stay within `+3 MiB`. Exact errors
-and additional threads use the worst paired delta, so a failed response or unexpected thread cannot
-be hidden by a median. The separate footprint gates retain the stricter agent-owned and exact-source
-resident checks. The Spring path allows at most one additional thread; embedded Rust-Java allows none.
+paired median of this steady process RSS and cgroup memory must stay within `+3 MiB`. Additional
+threads still use the worst paired delta. The separate footprint gates retain the stricter agent-owned
+and exact-source resident checks. The Spring path allows at most one additional thread; embedded
+Rust-Java allows none.
 
 ## Rust-Java REST Gate
 

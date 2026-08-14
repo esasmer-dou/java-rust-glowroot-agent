@@ -301,13 +301,17 @@ Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
 
 - başarılı HTTP 200 RPS kaybı en fazla `%2`;
 - p99 artışı en fazla `%10`;
-- non-2xx artışı `0` yüzde puanı;
+- eşleştirilmiş medyanda ve istek sayısıyla ağırlıklandırılmış toplamda non-2xx artışı `0` yüzde puanı;
+  adayın en yüksek hata oranı baseline'ın en yüksek oranını aşamaz;
 - Rust-Java içinde ek thread `0`, Spring standalone için en fazla `1`.
 
 Stable release bu tam matrisi Spring Boot ve Rust-Java REST için ayrı çalıştırır. İki matris de
 small JSON, önceden hazırlanmış raw JSON ve dynamic heavy JSON endpoint'lerini c64/c256 seviyesinde
 altı dengeli çiftle ölçer. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan
-hesaplanır. Aynı tam yükten sonra eşit process yaşında ölçülen RSS ve cgroup medyan farkları en fazla
+hesaplanır. Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırılmış toplamı ve en
+yüksek hata oranını birlikte kullanır. Doygun bir koşudaki tek fark raporda görünür; genel hata
+kararının yerine geçmez. Aynı tam
+yükten sonra eşit process yaşında ölçülen RSS ve cgroup medyan farkları en fazla
 `+3 MiB` olabilir. Rust-Java REST yeni thread ekleyemez. Spring yalnız tek sınırlı exporter thread'i
 ekleyebilir. REST wire uyumu, collector kapalıyken fail-open ve opsiyonel bootstrap ayrıca zorunlu
 olarak test edilir.

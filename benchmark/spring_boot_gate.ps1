@@ -26,7 +26,8 @@ param(
     [double] $MaxP99RegressionPercent = 10.0,
     [double] $MaxMemoryRegressionMiB = 3.0,
     [int] $AllowedThreadDelta = 1,
-    [double] $Max503DeltaPercentagePoints = 0.0,
+    [Alias("Max503DeltaPercentagePoints")]
+    [double] $MaxNon2xxDeltaPercentagePoints = 0.0,
     [double] $MaxHostCpuAveragePercent = 15.0,
     [double] $MaxHostCpuPeakPercent = 40.0,
     [double] $MaxHostSiblingCpuPercent = 10.0,
@@ -51,6 +52,7 @@ if ($MaxWarmupRpsSpreadPercent -le 0) {
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "benchmark_isolation.ps1")
+. (Join-Path $ScriptDir "gate_statistics.ps1")
 $ProjectRoot = Split-Path -Parent $ScriptDir
 $IsRustJavaRest = $ApplicationKind -eq "rust-java-rest"
 $SpringRoot = Join-Path $ScriptDir "spring-app"
@@ -453,6 +455,7 @@ function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] 
         rps = [math]::Round($rps, 2)
         useful_rps = [math]::Round($rps * (1.0 - ($non2xxRate / 100.0)), 2)
         p99_ms = [math]::Round($p99, 3)
+        requests = $requests
         non_2xx = $non2xx
         non_2xx_pct = [math]::Round($non2xxRate, 6)
         process_rss_mib = $maxRss
@@ -554,6 +557,7 @@ try {
                         rps = $metric.rps
                         useful_rps = $metric.useful_rps
                         p99_ms = $metric.p99_ms
+                        requests = $metric.requests
                         non_2xx = $metric.non_2xx
                         non_2xx_pct = $metric.non_2xx_pct
                         process_rss_mib = $metric.process_rss_mib
@@ -614,6 +618,7 @@ try {
                     rps = $metric.rps
                     useful_rps = $metric.useful_rps
                     p99_ms = $metric.p99_ms
+                    requests = $metric.requests
                     non_2xx = $metric.non_2xx
                     non_2xx_pct = $metric.non_2xx_pct
                     process_rss_mib = $metric.process_rss_mib
@@ -683,7 +688,6 @@ foreach ($endpoint in $endpoints) {
         $pairedRssDeltas = [Collections.Generic.List[double]]::new()
         $pairedContainerDeltas = [Collections.Generic.List[double]]::new()
         $pairedThreadDeltas = [Collections.Generic.List[int]]::new()
-        $pairedErrorDeltas = [Collections.Generic.List[double]]::new()
         foreach ($pair in 1..$PairRepeats) {
             $pairedBase = $base | Where-Object pair -eq $pair | Select-Object -First 1
             $pairedAgent = $agent | Where-Object pair -eq $pair | Select-Object -First 1
@@ -692,18 +696,19 @@ foreach ($endpoint in $endpoints) {
             $pairedRssDeltas.Add($pairedAgent.process_rss_mib - $pairedBase.process_rss_mib)
             $pairedContainerDeltas.Add($pairedAgent.container_mib - $pairedBase.container_mib)
             $pairedThreadDeltas.Add($pairedAgent.threads - $pairedBase.threads)
-            $pairedErrorDeltas.Add($pairedAgent.non_2xx_pct - $pairedBase.non_2xx_pct)
         }
         $rpsDelta = Median -Values @($pairedRpsDeltas)
         $p99Delta = Median -Values @($pairedP99Deltas)
         $rssDelta = Median -Values @($pairedRssDeltas)
         $containerDelta = Median -Values @($pairedContainerDeltas)
         $threadDelta = Median -Values @($pairedThreadDeltas)
-        $errorDelta = Median -Values @($pairedErrorDeltas)
         $maxRssDelta = ($pairedRssDeltas | Measure-Object -Maximum).Maximum
         $maxContainerDelta = ($pairedContainerDeltas | Measure-Object -Maximum).Maximum
         $observedMaxThreadDelta = ($pairedThreadDeltas | Measure-Object -Maximum).Maximum
-        $maxErrorDelta = ($pairedErrorDeltas | Measure-Object -Maximum).Maximum
+        $errorDecision = Get-ReactorNon2xxDecision `
+                -Baseline $base `
+                -Candidate $agent `
+                -MaximumDeltaPercentagePoints $MaxNon2xxDeltaPercentagePoints
         $pairedHostSiblingMaxima = [Collections.Generic.List[double]]::new()
         foreach ($pair in 1..$PairRepeats) {
             $pairedBase = $base | Where-Object pair -eq $pair | Select-Object -First 1
@@ -719,7 +724,7 @@ foreach ($endpoint in $endpoints) {
                 Measure-Object -Maximum).Maximum
         $passed = $rpsDelta -ge $MinUsefulRpsDeltaPercent -and $p99Delta -le $MaxP99RegressionPercent `
                 -and $observedMaxThreadDelta -le $AllowedThreadDelta `
-                -and $maxErrorDelta -le $Max503DeltaPercentagePoints `
+                -and $errorDecision.passed `
                 -and $hostSiblingBusy -le $MaxHostSiblingCpuPercent `
                 -and $maxHostSteal -le $MaxHostStealCpuPercent
         $summary.Add([pscustomobject]@{
@@ -734,8 +739,13 @@ foreach ($endpoint in $endpoints) {
             max_paired_container_delta_mib = [math]::Round($maxContainerDelta, 3)
             thread_delta = [int]$threadDelta
             max_paired_thread_delta = [int]$observedMaxThreadDelta
-            non_2xx_delta_pp = [math]::Round($errorDelta, 6)
-            max_paired_non_2xx_delta_pp = [math]::Round($maxErrorDelta, 6)
+            baseline_non_2xx_pct = [math]::Round($errorDecision.baseline_aggregate_pct, 6)
+            candidate_non_2xx_pct = [math]::Round($errorDecision.candidate_aggregate_pct, 6)
+            baseline_peak_non_2xx_pct = [math]::Round($errorDecision.baseline_peak_pct, 6)
+            candidate_peak_non_2xx_pct = [math]::Round($errorDecision.candidate_peak_pct, 6)
+            non_2xx_delta_pp = [math]::Round($errorDecision.median_paired_delta_pp, 6)
+            aggregate_non_2xx_delta_pp = [math]::Round($errorDecision.aggregate_delta_pp, 6)
+            max_paired_non_2xx_delta_pp = [math]::Round($errorDecision.max_paired_delta_pp, 6)
             paired_host_sibling_busy_percent = [math]::Round($hostSiblingBusy, 3)
             max_host_sibling_busy_percent = [math]::Round($maxHostSiblingBusy, 3)
             max_host_steal_percent = [math]::Round($maxHostSteal, 3)
@@ -787,6 +797,8 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     required_rest_native_abi = if ($IsRustJavaRest) { $RequiredRestNativeAbi } else { $null }
     pair_repeats = $PairRepeats
     decision_statistic = "median_of_paired_deltas"
+    non_2xx_decision = "paired_median_weighted_aggregate_and_peak_envelope"
+    non_2xx_threshold_percentage_points = $MaxNon2xxDeltaPercentagePoints
     activation_mode = if ($IsRustJavaRest) {
         if ($UseJavaAgentBootstrap) { "javaagent_bootstrap" } else { "embedded_native_properties" }
     } else {
@@ -843,13 +855,13 @@ $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process; the final $MinWarmupRounds-round window had an observed maximum RPS spread of $([math]::Round($observedMaxWarmupSpread,3))% within the $MaxWarmupRpsSpreadPercent% gate; latest first-stable round $observedMaxFirstStableRound.")
-$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
+$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx must not regress in the paired median, the request-weighted aggregate, or the peak error-rate envelope; the worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")
-$lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx paired med/max pp | Host sibling med/max; steal max | Gate |")
-$lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
+$lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx off/on agg % | non-2xx off/on peak % | non-2xx delta med/agg/max pp | Host sibling med/max; steal max | Gate |")
+$lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")
 foreach ($row in $summary) {
-    $lines.Add("| $($row.endpoint) | $($row.concurrency) | $($row.baseline_rps)/$($row.candidate_rps) | $($row.rps_delta_pct)% | $($row.baseline_p99_ms)/$($row.candidate_p99_ms) | $($row.p99_delta_pct)% | $($row.process_rss_delta_mib)/$($row.max_paired_process_rss_delta_mib) | $($row.container_delta_mib)/$($row.max_paired_container_delta_mib) | $($row.thread_delta)/$($row.max_paired_thread_delta) | $($row.non_2xx_delta_pp)/$($row.max_paired_non_2xx_delta_pp) | $($row.paired_host_sibling_busy_percent)%/$($row.max_host_sibling_busy_percent)%/$($row.max_host_steal_percent)% | $($row.gate) |")
+    $lines.Add("| $($row.endpoint) | $($row.concurrency) | $($row.baseline_rps)/$($row.candidate_rps) | $($row.rps_delta_pct)% | $($row.baseline_p99_ms)/$($row.candidate_p99_ms) | $($row.p99_delta_pct)% | $($row.process_rss_delta_mib)/$($row.max_paired_process_rss_delta_mib) | $($row.container_delta_mib)/$($row.max_paired_container_delta_mib) | $($row.thread_delta)/$($row.max_paired_thread_delta) | $($row.baseline_non_2xx_pct)/$($row.candidate_non_2xx_pct) | $($row.baseline_peak_non_2xx_pct)/$($row.candidate_peak_non_2xx_pct) | $($row.non_2xx_delta_pp)/$($row.aggregate_non_2xx_delta_pp)/$($row.max_paired_non_2xx_delta_pp) | $($row.paired_host_sibling_busy_percent)%/$($row.max_host_sibling_busy_percent)%/$($row.max_host_steal_percent)% | $($row.gate) |")
 }
 $lines.Add("")
 $lines.Add("Overall gate: **$(if ($passedAll) { 'PASS' } else { 'BLOCKED' })**")

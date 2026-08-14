@@ -52,8 +52,11 @@ Matris şu alanları kapsar:
 - `64` ve `256` concurrency;
 - sırası değiştirilen altı baseline/candidate çifti.
 
-Her performans hücresinde başarılı HTTP 200 RPS kaybı en fazla `%2`, p99 artışı en fazla `%10`,
-non-2xx artışı sıfır puan ve yeni thread sayısı en fazla bir olmalıdır. Build bittikten sonra Linux
+Her performans hücresinde başarılı HTTP 200 RPS kaybı en fazla `%2`, p99 artışı en fazla `%10` ve
+yeni thread sayısı en fazla bir olmalıdır. Non-2xx oranı eşleştirilmiş medyanda ve altı tekrarın istek
+sayısıyla ağırlıklandırılmış toplamında artmamalıdır. Adayın en yüksek hata oranı da baseline'ın en
+yüksek oranını aşmamalıdır. Tek bir eşleşmedeki fark tanı amacıyla raporda kalır; bu genel kararların
+yerine geçmez. Build bittikten sonra Linux
 en sakin fiziksel CPU grubunu seçer. Bu grubun bütün SMT kardeşleri uygulamaya ayrılır. Load runner ve
 collector başka bir gruba sabitlenir. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal
 CPU elle seçilirse eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.

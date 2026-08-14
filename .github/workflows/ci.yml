@@ -25,6 +25,10 @@ jobs:
       - name: Build and test
         run: mvn -B -ntp clean install
 
+      - name: Verify benchmark decision statistics
+        shell: pwsh
+        run: ./benchmark/test_gate_statistics.ps1
+
       - name: Verify plain JVM bootstrap without Spring
         shell: bash
         run: |

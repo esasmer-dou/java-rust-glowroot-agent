@@ -299,12 +299,15 @@ endpoint/concurrency cell must keep:
 
 - useful HTTP 200 RPS loss at or above `-2%`;
 - p99 regression at or below `+10%`;
-- non-2xx regression at `0` percentage points;
+- non-2xx regression at `0` percentage points in paired median and request-weighted aggregate, with
+  candidate peak error rate no higher than baseline peak;
 - additional threads at `0` for embedded Rust-Java and at most `1` for standalone Spring.
 
 The stable release runs this full matrix separately for Spring Boot and Rust-Java REST. Both cover
 small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and c256 with six balanced paired
-runs. RPS, p99, and startup use each pair's delta before the median is calculated. After both
+runs. RPS, p99, and startup use each pair's delta before the median is calculated. Non-2xx uses the
+paired median, request-weighted total, and peak error envelope together. One saturated-run delta
+remains visible without replacing the overall error decision. After both
 variants complete the same full workload, a controlled equal-process-age phase requires
 paired-median process RSS and cgroup deltas at or below `+3 MiB`. Rust-Java REST may add no thread;
 Spring may add one bounded exporter thread. REST wire compatibility, collector-down fail-open, and

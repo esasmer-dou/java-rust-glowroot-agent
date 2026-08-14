@@ -131,16 +131,25 @@ jobs:
             test -s "$FILE"
           done
           jq -e '.passed == true and .application_kind == "spring-boot" and
-            .pair_repeats >= 6 and .warmup_stability.gate == "PASS" and
+            .pair_repeats >= 6 and
+            .non_2xx_decision == "paired_median_weighted_aggregate_and_peak_envelope" and
+            .non_2xx_threshold_percentage_points == 0 and
+            .warmup_stability.gate == "PASS" and
             .steady_memory.gate == "PASS" and
-            (.rows | length) == 6 and all(.rows[]; .gate == "PASS")' \
+            (.rows | length) == 6 and all(.rows[]; .gate == "PASS" and
+              .non_2xx_delta_pp <= 0 and .aggregate_non_2xx_delta_pp <= 0 and
+              .candidate_peak_non_2xx_pct <= .baseline_peak_non_2xx_pct)' \
             "$SPRING_SUMMARY" >/dev/null
           jq -e '.passed == true and .application_kind == "rust-java-rest" and
             .required_rest_version == "4.4.1" and .required_rest_native_abi == 28 and
             .activation_mode == "embedded_native_properties" and .pair_repeats >= 6 and
+            .non_2xx_decision == "paired_median_weighted_aggregate_and_peak_envelope" and
+            .non_2xx_threshold_percentage_points == 0 and
             .warmup_stability.gate == "PASS" and .steady_memory.gate == "PASS" and
             (.rows | length) == 6 and
-            all(.rows[]; .gate == "PASS" and .max_paired_non_2xx_delta_pp <= 0)' \
+            all(.rows[]; .gate == "PASS" and .non_2xx_delta_pp <= 0 and
+              .aggregate_non_2xx_delta_pp <= 0 and
+              .candidate_peak_non_2xx_pct <= .baseline_peak_non_2xx_pct)' \
             "$REST_SUMMARY" >/dev/null
           jq -e '.passed == true and .protocol_gate == "PASS" and
             .fail_open_gate == "PASS" and .javaagent_bootstrap_gate == "PASS"' \
