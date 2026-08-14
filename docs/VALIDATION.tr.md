@@ -133,8 +133,8 @@ en sakin fiziksel CPU grubunu seçer. Bu grubun bütün SMT kardeşleri uygulama
 collector başka bir gruba sabitlenir. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal
 CPU elle seçilirse eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
-Her uygulama süreci, endpoint başına tam on dört ısınma turu tamamlar. İlk dört tur, tanımlı endpoint
-sınıflarını sırayla dolaşır. Böylece ortak HTTP, servlet ve JIT kodu, endpoint'e özel on turdan
+Her uygulama süreci, endpoint başına tam on altı ısınma turu tamamlar. İlk dört tur, tanımlı endpoint
+sınıflarını sırayla dolaşır. Böylece ortak HTTP, servlet ve JIT kodu, endpoint'e özel on iki turdan
 önce hazırlanır. Son altı turun normalize edilmiş Theil-Sen eğilimi en fazla `%3` olabilir. Bu
 örneklerin medyan mutlak sapması da `%4` sınırını aşamaz. Dayanıklı eğim hesabı, devam eden OpenJ9
 interpreter/JIT ısınmasını reddeder; geçici bir veya iki scheduler aykırı değerini kalıcı eğilim
@@ -173,7 +173,7 @@ Spring production matrisi:
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
-  -MaxWarmupRounds 14 `
+  -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
@@ -198,7 +198,7 @@ Rust-Java REST production matrisi:
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
-  -MaxWarmupRounds 14 `
+  -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
