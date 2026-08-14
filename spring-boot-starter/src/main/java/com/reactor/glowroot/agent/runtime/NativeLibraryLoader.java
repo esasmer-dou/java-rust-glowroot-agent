@@ -16,6 +16,8 @@ import java.util.Properties;
 final class NativeLibraryLoader {
 
     private static final String MANIFEST = "native/native-provenance.properties";
+    private static final String PATH_PROPERTY = "reactor.glowroot.native.path";
+    private static final String PATH_ENV = "REACTOR_GLOWROOT_NATIVE_PATH";
     private static final String EXTRACT_PROPERTY = "reactor.glowroot.native.extract-dir";
     private static final String EXTRACT_ENV = "REACTOR_GLOWROOT_NATIVE_EXTRACT_DIR";
     private static boolean loaded;
@@ -24,6 +26,16 @@ final class NativeLibraryLoader {
 
     static synchronized void load() {
         if (loaded) return;
+        String explicitPath = configured(PATH_PROPERTY, PATH_ENV);
+        if (explicitPath != null) {
+            Path library = Path.of(explicitPath).toAbsolutePath().normalize();
+            if (!Files.isRegularFile(library)) {
+                throw new IllegalStateException("Glowroot native library does not exist: " + library);
+            }
+            System.load(library.toString());
+            loaded = true;
+            return;
+        }
         if (tryExistingNativeRuntime()) {
             loaded = true;
             return;
@@ -119,9 +131,8 @@ final class NativeLibraryLoader {
     }
 
     private static Path extractionRoot() {
-        String configured = System.getProperty(EXTRACT_PROPERTY);
-        if (configured == null || configured.isBlank()) configured = System.getenv(EXTRACT_ENV);
-        if (configured != null && !configured.isBlank()) return Path.of(configured.trim());
+        String configured = configured(EXTRACT_PROPERTY, EXTRACT_ENV);
+        if (configured != null) return Path.of(configured);
         String home = System.getProperty("user.home");
         if (home == null || home.isBlank()) {
             throw new IllegalStateException(
@@ -129,6 +140,12 @@ final class NativeLibraryLoader {
             );
         }
         return Path.of(home, ".java-rust-glowroot-agent", "native");
+    }
+
+    private static String configured(String property, String environment) {
+        String value = System.getProperty(property);
+        if (value == null || value.isBlank()) value = System.getenv(environment);
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private static String platformResource() {

@@ -16,10 +16,12 @@ Hedefimiz tam Glowroot agent'tan daha dardır:
 
 - Java handler ve iş mantığı değişmeyecek;
 - HTTP, native Dubbo, native Redis, RSS, thread ve exporter sağlık verileri Glowroot'ta görülecek;
+- JVM/GC ölçümleri, açık SQL süreleri, sınırlı hata stack bilgisi ve tanılama komutları yalnız geçici
+  çalışma profilleriyle açılacak;
 - Rust-Java REST'e Java request filter eklenmeyecek; Spring MVC'de yalnız bir sınırlı MVC interceptor kullanılacak;
 - state, queue, payload ve reconnect davranışının tamamı sınırlı olacak;
-- agent-owned state ve feature sayfaları `1 MiB` altında kalacak; embedded yol yalnız eşleştirilmiş
-  Linux resident-memory farklarının tamamı `+3,00 MiB` altında ve ek thread sayısı `0` ise kabul edilecek.
+- agent-owned state ve feature sayfaları `1 MiB` altında kalacak; exporter ve profil kaynak bırakma
+  işleri Hyper veya uygulama worker'larını kullanmayan tek sınırlı native thread üzerinde çalışacak.
 
 ## Tam Glowroot Agent Neleri Yönetiyor?
 
@@ -57,8 +59,11 @@ değer katmaz.
 
 ### ACCEPTABLE: Tanılama podları için tam Glowroot agent
 
-Metot bazlı trace, JDBC SQL, JMX, stack trace veya profiler gerekiyorsa upstream Glowroot kullanın.
-Bu pod için ayrı memory bütçesi ölçün. Bu kullanım mikro ajan içinde çalışan otomatik fallback değildir.
+Rastgele Java metodu trace'i, otomatik JDBC interception, geniş JMX discovery, sürekli profiler, log
+veya canlı weaving gerekiyorsa upstream Glowroot kullanın. Mikro ajan yalnız açıkça tanımlanan sınırlı
+SQL sürelerini, sabit JVM/GC ölçümlerini, sınırlı hata stack bilgisini ve yetkili dump komutlarını
+sağlar. Upstream agent için ayrı pod memory bütçesi ölçün. Bu kullanım `micro` içinde otomatik
+fallback değildir.
 
 ### BEST: Framework'e özel Rust telemetri düzlemi
 
@@ -74,11 +79,13 @@ flowchart LR
     H["Rust Hyper"] --> B
     D["Native Dubbo"] --> C["Üç sabit native slot"]
     R["Native Redis"] --> C
+    J["Açık Java JVM/SQL/hata köprüsü"] --> O["Profile ait sınırlı state"]
     B --> M["Sınırlı atomic aggregate"]
     C --> M
+    O --> M
     M --> S["Bir dakikalık snapshot"]
     S --> P["Elle encode edilen protobuf"]
-    P --> X["Tek Rust h2 bağlantısı"]
+    P --> X["İzole 256 KiB Rust thread ve tek h2 bağlantısı"]
     X --> G["Glowroot Central"]
 ```
 
@@ -87,10 +94,23 @@ object veya Java callback üretmez. Başarılı HTTP request'leri ağırlıklı 
 örneklenir. `5xx` hataları tam sayılır. `trace.capacity=0` ise trace kuyruğu ayrılmaz ve yavaş trace
 akışı değerlendirilmez.
 
-Exporter, framework'ün Tokio runtime'ını paylaşır. Ayrı işletim sistemi thread'i açmaz. Route tablosu,
-trace kuyruğu, h2 window, response body, encode request, timeout ve reconnect gecikmesi için kesin üst
-sınırlar vardır. Collector kapalıyken retry backlog oluşmaz. Süresi biten interval drop edilir ve
-diagnostics sayacında görünür.
+Exporter ve profil kaynak bırakma döngüsü, `256 KiB` stack kullanan tek Rust thread ve current-thread
+Tokio runtime üzerinde çalışır. Bu izolasyon bilinçlidir. Collector DNS, h2 reconnect, protobuf encode,
+profil drop ve allocator trim işleri Hyper worker, Spring request thread veya uygulama executor'ını
+kullanamaz. Route tablosu, isteğe bağlı profil state'i, h2 window, encode request, timeout ve reconnect
+gecikmesi kesin sınırlıdır. Collector kapalıyken retry backlog oluşmaz. Süresi biten interval drop
+edilir ve diagnostics sayacında görünür.
+
+`micro`; JVM, SQL, hata stack veya tanılama state'i tutmaz. Geçiş yeni ve sabit şekilli bir profil state'i
+oluşturur. Bu state atomik olarak etkinleştirilir. En fazla bir eski state bekletilir. Kontrol API'si,
+son referans bırakılıp eski allocation drop edilmeden dönmez. SQL slotlarında generation kimliği
+vardır. Eski descriptor yeni açılan profile yanlışlıkla yazamaz.
+
+Seçilmiş JVM ölçümleri upstream benzeri Java gauge collector kullanmaz. Rust, sabit MXBean kümesini
+JNI üzerinden bulur, global referansları sahiplenir, izole exporter thread'inden okur ve sonucu
+doğrudan encode eder. Tanılama kuyruğu, JVM API çağrısı, dosya işlemi, atomik yayın ve hata temizliği
+de Rust'a aittir. Java polling worker'ı, bean listesi, snapshot buffer'ı veya tanılama yardımcı sınıfı
+tutmaz.
 
 ## Collector Kontratı
 
@@ -99,9 +119,9 @@ Mikro ajan şu mevcut unary mesajları gönderir:
 | Glowroot metodu | Gönderilen veri |
 | --- | --- |
 | `collectInit` | Agent id, host/process/Java bilgisi ve read-only config |
-| `collectAggregates` | HTTP, Dubbo ve Redis count, hata, süre ve HdrHistogram bilgisi |
-| `collectGaugeValues` | Process RSS, thread sayısı ve exporter sağlık bilgisi |
-| `collectTrace` | İsteğe bağlı sınırlı HTTP yavaş/hatalı request örneği |
+| `collectAggregates` | HTTP, Dubbo, Redis ve açık SQL count, hata, süre, satır ve HdrHistogram bilgisi |
+| `collectGaugeValues` | Process RSS, thread sayısı, exporter sağlığı ve isteğe bağlı sabit JVM/GC ölçümleri |
+| `collectTrace` | İsteğe bağlı sınırlı HTTP örnekleri ve profile bağlı sınırlı hata stack bilgisi |
 
 Unary aggregate ve trace metotları mevcut şemada deprecated olarak işaretlidir. Buna rağmen test
 edilen kontratta hâlâ vardır. Her Glowroot Central yükseltmesinde generated-protobuf protokol gate'i
@@ -110,9 +130,11 @@ varsayım değildir.
 
 ## Production Sınırı
 
-Mikro ajan; rastgele Java metodu, JDBC sorgusu, JMX discovery, log, profiler, heap dump, stack trace,
-canlı weaving veya remote agent config sağlamaz. v1 transport düz h2 kullanır. Şifreleme veya workload
-identity gerekiyorsa localhost mTLS sidecar ya da service mesh kullanın.
+Mikro ajan; rastgele Java metodu, otomatik JDBC proxy veya weaving, bind value, geniş JMX discovery,
+log, sürekli profiler, canlı weaving veya remote agent config sağlamaz. Heap ve thread operasyonları
+yalnız `diagnostic` profilinde açık, yerel ve yetkili komut olarak çalışır. Sürekli zamanlanmaz. v1
+transport düz h2 kullanır. Şifreleme veya workload identity gerekiyorsa localhost mTLS sidecar ya da
+service mesh kullanın.
 
 Bu sınır footprint'i koruyan ana özelliktir. Dışarıda bırakılan bir yüzey eklenecekse ayrı mimari ve
 yeni RSS/RPS/p99 gate gerekir. Mikro profile sessizce eklenmemelidir.

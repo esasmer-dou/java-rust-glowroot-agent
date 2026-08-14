@@ -4,7 +4,7 @@
 
 ## Release Decision
 
-Version `0.2.1` has two intentionally different runtime shapes:
+Version `0.3.0` has two intentionally different runtime shapes:
 
 - Rust-Java REST reuses the framework's Rust runtime. The telemetry feature adds no OS thread.
 - Spring Boot MVC loads the standalone Rust exporter. It adds one bounded thread with a `256 KiB`
@@ -13,6 +13,73 @@ Version `0.2.1` has two intentionally different runtime shapes:
 The release workflow cannot publish a tag unless the exact tag commit has a successful Production
 Gate run. The measured report and machine-readable summary from that run are copied into the GitHub
 Release assets. A result from another branch or an older commit cannot satisfy this check.
+
+This section records the published `0.3.0` contract. One isolated exporter thread serves both
+Spring and Rust-Java REST with Glowroot ABI `3` / REST ABI `29`.
+
+## Current Source Profile Gate
+
+The runtime-profile lifecycle was tested with the exact-source Linux standalone `.so`, Semeru
+OpenJ9 21, one CPU, a `256 MiB` container limit, `-Xms16m -Xmx64m -Xss256k`, and an unavailable
+collector. Each profile completed `100` upgrade/downgrade cycles in three independent processes.
+
+| Target profile | Median initial `micro` RSS | Median first active RSS delta | Median final `micro` RSS delta after 100 cycles |
+| --- | ---: | ---: | ---: |
+| `jvm` | `61,868 KiB` | `+4,380 KiB` | `+800 KiB` |
+| `sql` | `61,724 KiB` | `+4,052 KiB` | `+464 KiB` |
+| `full` | `61,900 KiB` | `+4,512 KiB` | `+812 KiB` |
+
+Every final state reported `active_profile_memory_ceiling_bytes=0`,
+`retired_profile_memory_ceiling_bytes=0`, `profile_release_pending=false`, and
+`jvm_probe_registered=false` and `jvm_probe_owned_global_refs=0`. All `100` logical releases completed; no cycle-by-cycle growth was
+observed. The current conservatively accounted `full` native state ceiling is approximately
+`79.3 KiB`. Most of the
+first-use RSS delta is OpenJ9 class/JIT/JMX/error warm state, not retained native profile queues.
+
+One representative `full -> micro` run measured release latency at `181 us` p50, `294 us` p95, and
+`350 us` p99. The HTTP native-record hot path remained around `30-32 ns` per call in alternating
+`micro`/`full` rounds and showed no repeatable profile regression. OpenJ9 created one JVM-owned
+`Finalizer thread` after management APIs were first used; the agent exporter is native and does not
+appear in the Java thread list.
+
+After adding export-generation, in-flight error-capture ownership, restart-safe release polling, and
+the fixed non-route Java error identity, `full -> configured micro` was rerun from the latest
+exact-source binary in three fresh `128 MiB`, one-CPU containers. Median initial RSS was
+`61,608 KiB`; median first-`full` delta was `+4,412 KiB`; median final delta after `100` cycles was
+`+828 KiB`. Median process-level downgrade/release percentiles were p50 `200 us`, p95 `269 us`, and
+p99 `299 us`. One release maximum reached `41.7 ms` under scheduler/JIT noise and first-use JVM/JIT
+upgrade maxima ranged from `50-100 ms`, but no pending release,
+retained profile bytes, JNI probe, or cycle growth remained. Three order-balanced hot-path processes
+measured `micro` at `27.22-28.78 ns` and `full` at `27.20-28.38 ns`; no repeatable profile-path
+regression was established on this host.
+
+After moving JVM discovery, polling, diagnostics, and diagnostic file I/O out of Java helpers, the
+ABI `3` exact-source binary passed a focused OpenJ9 gate. An active `full` or `diagnostic` profile
+owned `11` JNI global references in Rust; every return to `micro` reported `0`. A `100`-cycle `full`
+run moved from `62,112 KiB` initial RSS to `62,808 KiB` final RSS. A diagnostic run completed a real
+thread dump with `diagnostic_completed=1`, `diagnostic_failed=0`, and no retained profile bytes or
+references. The coordinated REST ABI `29` probe also completed `100` cycles and returned all owned
+state to zero.
+
+A real mock-collector wire run received one init and one gauge message with `20` values. Ten values
+were the Rust-collected heap, non-heap, memory-pool, and GC gauges. Three fresh hot-path processes
+measured `micro` at `27.95-29.96 ns` and `full` at `28.45-31.99 ns` per native record call; their
+within-process deltas were `1.79-6.88%`. These are focused ownership and protocol checks, not the
+randomized full release matrix.
+
+The coordinated REST ABI `29` Linux binary also completed `100` `full -> configured micro` cycles
+with `active/retired=0`, no pending release, and no JNI JVM probe. Its final RSS was lower than its
+initial RSS because glibc `malloc_trim(0)` can also return unrelated free process allocator pages.
+That observation proves lifecycle completion, not isolated agent RSS savings; only a fresh-process
+telemetry-off/on A/B gate can attribute resident memory to the feature.
+
+Both standalone and coordinated REST probes also passed a hostile `Throwable` whose
+`getStackTrace()` method throws. JNI cleared the pending probe exception, incremented the bounded
+drop counter, and left the business/error flow unchanged.
+
+These tests prove bounded ownership and repeatable release, not a new stable release. The exact
+source still requires the randomized full HTTP RPS/p99/RSS matrix and clean Windows/Linux packaged
+native artifacts before ABI `3` can be published.
 
 ## Verified Contracts
 
@@ -26,14 +93,14 @@ Release assets. A result from another branch or an older commit cannot satisfy t
 | Embedded native attributed ceiling | PASS | `0.694 MiB`, including measured feature code pages; `0` additional threads |
 | Embedded observed resident maximum | PASS | smaps RSS maximum `+1.817 MiB`, below the `+3 MiB` boundary |
 | Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` |
-| Rust-Java REST performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, REST `4.4.1`, native ABI `28` |
+| Rust-Java REST performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, REST `4.5.0`, native ABI `29` |
 | Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, collector outage, and optional `-javaagent` bootstrap must all pass |
 | Spring performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, exact-commit evidence |
 | Spring steady memory | RELEASE ENFORCED | Same full workload and process age; paired median RSS/cgroup delta must stay within `+3 MiB` |
 
 The embedded footprint report remains under
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md). For stable
-`0.2.1`, the authoritative reports are the `spring-boot-production-gate.md` and
+`0.3.0`, the authoritative reports are the `spring-boot-production-gate.md` and
 `rust-java-rest-production-gate.md` assets attached to the GitHub Release. The release workflow
 rejects a tag unless both reports came from one successful exact-commit Production Gate run.
 
@@ -74,8 +141,8 @@ remain within `+3 MiB`. The source-attributed native ceiling remains a separate 
 
 ## How The Rust-Java REST Gate Works
 
-The REST gate checks out the published `rust-java-rest:4.4.1` source tag and rejects any native ABI
-other than `28`. It builds one minimal production image and runs telemetry off/on sequentially on
+The REST gate checks out the published `rust-java-rest:4.5.0` source tag and rejects any native ABI
+other than `29`. It builds one minimal production image and runs telemetry off/on sequentially on
 the same physical CPU. The matrix uses the same small JSON, raw JSON, and heavy JSON classes and the
 same c64/c256 limits as the Spring gate. Embedded telemetry may not add an OS thread.
 
@@ -108,8 +175,8 @@ Rust-Java REST production matrix:
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.4.1" `
-  -RequiredRestNativeAbi 28 `
+  -RequiredRestVersion "4.5.0" `
+  -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `

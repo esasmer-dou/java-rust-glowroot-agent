@@ -63,15 +63,15 @@ Rust-Java allows none.
 
 ## Rust-Java REST Gate
 
-The stable REST gate uses the same paired same-core engine. It verifies the framework version and
-native ABI before building the image. It then measures the embedded native-properties path, which
-adds no telemetry thread.
+The published `0.3.0` REST gate uses the same paired same-core engine. It verifies the framework
+version and native ABI before building the image. The earlier ABI `1` implementation shared the
+framework runtime and allowed no telemetry thread.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.4.1" `
-  -RequiredRestNativeAbi 28 `
+  -RequiredRestVersion "4.5.0" `
+  -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
@@ -106,6 +106,48 @@ cores. It is diagnostic and is not the stable hosted-runner release gate:
 ```
 
 The script writes its report under `benchmark/results/`.
+
+Current unreleased Glowroot ABI `3` deliberately uses one isolated `256 KiB` Rust thread in both
+Spring and Rust-Java REST. When validating the next coordinated REST release, use REST ABI `29` and
+`-AllowedThreadDelta 1`. Do not compare this source against the historical no-thread gate without
+changing that contract explicitly.
+
+## Runtime Profile Release Probe
+
+`profile-switch/ProfileSwitchProbe.java` repeatedly raises the configured `micro` baseline to `jvm`,
+`sql`, `full`, or `diagnostic` and returns through `restoreConfiguredProfile()`. It fails if
+active/retired profile bytes remain, release stays pending, the Rust-owned JVM probe remains
+registered, or its JNI global-reference count does not return to zero. The optional
+`GLOWROOT_PROBE_COLLECTOR`, `GLOWROOT_PROBE_HOLD_MS`, and
+`GLOWROOT_PROBE_REQUEST_TIMEOUT_MS` variables exercise a real JVM-gauge export window.
+`ProfileHotPathProbe.java` alternates `micro` and `full` while timing the real JNI/native HTTP
+aggregate call.
+
+Build the exact-source standalone Linux native library first. Keep it outside packaged resources;
+dirty local binaries are test inputs, not release artifacts:
+
+```bash
+cd ../rust-spring/glowroot-agent-native
+CARGO_TARGET_DIR=/tmp/reactor-glowroot-profile cargo build --release
+```
+
+Compile the probes against `spring-boot-starter/target/classes`, then run them in the same OpenJ9
+container image and limits used by the service:
+
+```bash
+java -Xms16m -Xmx64m -Xss256k \
+  -cp spring-boot-starter/target/classes:target/profile-switch-classes \
+  ProfileSwitchProbe /native/librust_glowroot_agent.so full
+
+java -Xms16m -Xmx64m -Xss256k \
+  -cp spring-boot-starter/target/classes:target/profile-switch-classes \
+  ProfileHotPathProbe /native/librust_glowroot_agent.so
+```
+
+Run each target profile in at least three fresh processes. Compare initial `micro`, first active, and
+final `micro` RSS. A valid release has zero active/retired profile bytes after downgrade, no pending
+release, no registered JVM probe, no cycle-by-cycle growth, and no repeatable HTTP hot-path
+regression.
 
 To run only current Glowroot wire compatibility and collector-down fail-open behavior after building
 the benchmark images:

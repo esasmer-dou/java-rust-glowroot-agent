@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 0.2.1"
+        description: "Release version, for example 0.3.0"
         required: true
         type: string
       repair_partial_package:
@@ -94,7 +94,7 @@ jobs:
         run: |
           MANIFEST="spring-boot-starter/src/main/resources/native/native-provenance.properties"
           grep -qx 'schema=1' "$MANIFEST"
-          grep -qx 'glowroot.abi=1' "$MANIFEST"
+          grep -qx 'glowroot.abi=3' "$MANIFEST"
           grep -Eq '^source.revision=[0-9a-f]{40}$' "$MANIFEST"
           if grep -q -- '-dirty$' "$MANIFEST"; then
             echo "Dirty native provenance cannot be released" >&2
@@ -141,7 +141,7 @@ jobs:
               .candidate_peak_non_2xx_pct <= .baseline_peak_non_2xx_pct)' \
             "$SPRING_SUMMARY" >/dev/null
           jq -e '.passed == true and .application_kind == "rust-java-rest" and
-            .required_rest_version == "4.4.1" and .required_rest_native_abi == 28 and
+            .required_rest_version == "4.5.0" and .required_rest_native_abi == 29 and
             .activation_mode == "embedded_native_properties" and .pair_repeats >= 6 and
             .non_2xx_decision == "paired_median_weighted_aggregate_and_peak_envelope" and
             .non_2xx_threshold_percentage_points == 0 and

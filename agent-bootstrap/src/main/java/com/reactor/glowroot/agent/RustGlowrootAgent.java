@@ -95,6 +95,7 @@ public final class RustGlowrootAgent {
             return switch (key) {
                 case PREFIX + "enabled",
                         PREFIX + "profile",
+                        PREFIX + "profile.release-timeout-ms",
                         PREFIX + "collector.address",
                         PREFIX + "agent.id",
                         PREFIX + "application.name",
@@ -105,10 +106,15 @@ public final class RustGlowrootAgent {
                         PREFIX + "trace.slow-threshold-ms",
                         PREFIX + "http.sample-rate",
                         PREFIX + "trace.capacity",
+                        PREFIX + "sql.capacity",
+                        PREFIX + "error.trace.capacity",
+                        PREFIX + "error.max-frames",
+                        PREFIX + "error.max-bytes",
                         PREFIX + "max-routes",
                         PREFIX + "max-export-bytes",
                         PREFIX + "spring.enabled",
                         PREFIX + "spring.order",
+                        PREFIX + "native.path",
                         PREFIX + "native.extract-dir" -> key;
                 case PREFIX + "spring.filter-order",
                         PREFIX + "spring.interceptor-order" -> PREFIX + "spring.order";
@@ -121,17 +127,23 @@ public final class RustGlowrootAgent {
             case "application", "application-name" -> PREFIX + "application.name";
             case "hostname" -> PREFIX + "hostname";
             case "profile" -> PREFIX + "profile";
+            case "profile-release-timeout-ms" -> PREFIX + "profile.release-timeout-ms";
             case "export-interval-ms" -> PREFIX + "export.interval-ms";
             case "connect-timeout-ms" -> PREFIX + "connect-timeout-ms";
             case "request-timeout-ms" -> PREFIX + "request-timeout-ms";
             case "slow-threshold-ms" -> PREFIX + "trace.slow-threshold-ms";
             case "http-sample-rate", "sample-rate" -> PREFIX + "http.sample-rate";
             case "trace-capacity" -> PREFIX + "trace.capacity";
+            case "sql-capacity" -> PREFIX + "sql.capacity";
+            case "error-trace-capacity" -> PREFIX + "error.trace.capacity";
+            case "error-max-frames" -> PREFIX + "error.max-frames";
+            case "error-max-bytes" -> PREFIX + "error.max-bytes";
             case "max-routes" -> PREFIX + "max-routes";
             case "max-export-bytes" -> PREFIX + "max-export-bytes";
             case "spring-enabled" -> PREFIX + "spring.enabled";
             case "spring-order", "spring-filter-order", "spring-interceptor-order" ->
                     PREFIX + "spring.order";
+            case "native-path" -> PREFIX + "native.path";
             case "native-extract-dir" -> PREFIX + "native.extract-dir";
             default -> throw new IllegalArgumentException("Unsupported agent argument: " + raw);
         };

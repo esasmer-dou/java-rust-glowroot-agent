@@ -16,10 +16,13 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 - [Choose Your Runtime](#choose-your-runtime)
 - [What You Get](#what-you-get)
+- [Where The Work Runs](#where-the-work-runs)
 - [Rust-Java REST Setup](#rust-java-rest-setup)
 - [Spring Boot MVC Setup](#spring-boot-mvc-setup)
 - [Kubernetes](#kubernetes)
 - [Configuration](#configuration)
+- [Runtime Profiles](#runtime-profiles)
+- [Switch Profiles Without Restarting](#switch-profiles-without-restarting)
 - [Tuning Recipes](#tuning-recipes)
 - [Failure Behavior](#failure-behavior)
 - [Diagnostics](#diagnostics)
@@ -31,15 +34,19 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 | Application | Add to the application | Native runtime | Extra telemetry thread |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.4.1` | No starter is required | Reuses the framework's `rust_hyper` library | `0` |
-| Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.2.1` | Loads the small standalone agent library | `1` |
-| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.2.1` bootstrap | Same runtime as the row above | No additional thread |
+| Rust-Java REST `4.5.0` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
+| Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.3.0` | Loads the small standalone agent library | `1` |
+| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.3.0` bootstrap | Same runtime as the row above | No additional thread |
 
 The bootstrap JAR only maps `-javaagent:key=value` arguments to properties. It contains one class,
 no native binary, no transformer, and no runtime dependency. The Spring starter is a separate JAR
 so Spring classes never cross the executable-JAR classloader boundary.
 
 The existing Glowroot collector, UI, and database stay unchanged.
+
+> **Compatibility boundary:** runtime profile switching requires REST native ABI `29` and Glowroot
+> ABI `3`. Use agent `0.3.0` with Rust-Java REST `4.5.0`. Do not copy DLL/SO files from an older
+> package.
 
 ## What You Get
 
@@ -51,24 +58,48 @@ The existing Glowroot collector, UI, and database stay unchanged.
 | Rust-native Dubbo | Aggregate count, duration, and errors |
 | Rust-native Redis | Separate read/write count, duration, and errors |
 | Process gauges | RSS and thread count once per export interval |
+| JVM gauges | Optional heap, non-heap, memory-pool, GC count, and GC time gauges |
+| SQL aggregates | Optional explicit, bounded operation/statement timing; no JDBC proxy or bytecode weaving |
+| Error stacks | Optional bounded stack capture for failed Spring MVC and Rust-Java REST requests |
+| On-demand diagnostics | Optional thread dump, heap histogram, or heap dump in the short-lived diagnostic profile |
 | Export health | Connect, reconnect, failure, drop, and last-error counters |
 
 Request bodies, query values, headers, SQL text, and personal data are not copied into telemetry.
 
-This is intentionally not a replacement for every full Glowroot feature. Use the full Glowroot
-agent when you need arbitrary Java method tracing, JDBC SQL capture, JMX, profiling, heap dumps, or
-remote configuration. Spring WebFlux is not supported by `0.2.1`; the adapter targets Servlet MVC.
+## Where The Work Runs
+
+The heavy agent work belongs to Rust. Java is only the event boundary for information that exists
+inside Spring or the JVM.
+
+| Surface | Owner | What happens |
+| --- | --- | --- |
+| Aggregation and export | Rust | Bounded route/SQL state, sampling totals, queues, protobuf encoding, h2, reconnect, timeout, and drop policy |
+| JVM gauges | Rust | The isolated exporter discovers and owns JNI global references, invokes the selected MXBeans, aggregates values, and builds the gauge message |
+| Diagnostics | Rust | The command queue, JNI calls, bounded orchestration, file creation, atomic publication, failure cleanup, and counters stay in Rust |
+| Profile lifecycle | Rust | Optional state is allocated, retired, dropped, and optionally trimmed outside Hyper and application workers |
+| Spring MVC edge | Java, constant-time only | Supplies the matched route, status, async completion, timestamp, and optional `Throwable` reference to Rust |
+| JVM internals | JVM, invoked by Rust | MXBean and dump APIs still execute inside the JVM because that is where the data exists; no Java helper, polling thread, cache, or direct-buffer callback is used |
+
+Rust-Java REST HTTP telemetry is already recorded directly in the Rust server. Spring MVC cannot
+derive the final matched controller route from the socket layer. Moving its small edge adapter to
+Rust would require another JNI call at request start or general JVMTI/bytecode weaving. Both options
+increase request cost and violate the performance contract, so they are deliberately rejected.
+
+This is intentionally not a replacement for every full Glowroot feature. It does not weave arbitrary
+Java methods, wrap every JDBC object, run a profiler, capture logs, or accept remote instrumentation.
+Use the full Glowroot agent when those features are required. Spring WebFlux is not supported by
+`0.3.0`; the adapter targets Servlet MVC.
 
 ## Rust-Java REST Setup
 
-Use the coordinated `4.4.1` framework line. It contains Glowroot native ABI `1` and validates the
+Use the coordinated `4.5.0` framework line. It contains Glowroot native ABI `3` and validates the
 native provenance before the HTTP server starts.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.4.1</version>
+  <version>4.5.0</version>
 </dependency>
 ```
 
@@ -96,7 +127,7 @@ configuration reaches the same embedded Rust engine:
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.1.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.3.0.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
   -jar catalog-api.jar
 ```
 
@@ -108,7 +139,7 @@ java \
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.2.1</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
@@ -144,7 +175,7 @@ start metadata captured before Spring starts.
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-agent</artifactId>
-  <version>0.2.1</version>
+  <version>0.3.0</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -153,7 +184,7 @@ Keep the bootstrap JAR outside the executable Spring Boot JAR and pass its file 
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.2.1.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.3.0.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
   -jar orders-api.jar
 ```
 
@@ -228,8 +259,9 @@ underscores. Example: `reactor.glowroot.max-export-bytes` becomes
 | Property | Default | Allowed value | Purpose |
 | --- | ---: | --- | --- |
 | `reactor.glowroot.enabled` | `false` | boolean | Enables the bounded telemetry runtime |
-| `reactor.glowroot.profile` | `micro` | `micro` | Selects the hard-bounded feature set |
-| `reactor.glowroot.collector.address` | `http://127.0.0.1:8181` | h2 HTTP URL | Glowroot Central endpoint |
+| `reactor.glowroot.profile` | `micro` | `micro`, `jvm`, `sql`, `full`, `diagnostic` | Selects the bounded startup profile; it can change at runtime |
+| `reactor.glowroot.profile.release-timeout-ms` | `5000` | 100-60000 | Maximum wait for retired profile state to be dropped |
+| `reactor.glowroot.collector.address` | `http://127.0.0.1:8181` | plaintext HTTP URL | Glowroot Central gRPC over HTTP/2 endpoint |
 | `reactor.glowroot.agent.id` | empty | 1-256 bytes | Required unique agent/rollup id |
 | `reactor.glowroot.application.name` | application name | 1-128 bytes | Name shown in Glowroot |
 | `reactor.glowroot.hostname` | `HOSTNAME` | up to 255 bytes | Host or pod label |
@@ -239,25 +271,163 @@ underscores. Example: `reactor.glowroot.max-export-bytes` becomes
 | `reactor.glowroot.trace.slow-threshold-ms` | `500` | 1-3600000 | Slow trace threshold when traces are enabled |
 | `reactor.glowroot.http.sample-rate` | `256` | power of two, 1-1024 | Samples successful HTTP requests; `5xx` stays exact |
 | `reactor.glowroot.trace.capacity` | `0` | 0-32 | Bounded trace queue; `0` allocates no trace queue |
+| `reactor.glowroot.sql.capacity` | `16` | 0-32 | Maximum SQL statement slots allocated only by `sql`, `full`, or `diagnostic` |
+| `reactor.glowroot.error.trace.capacity` | `8` | 0-16 | Maximum retained detailed error stacks in enabled profiles |
+| `reactor.glowroot.error.max-frames` | `24` | 0-32 | Maximum frames copied for one captured error |
+| `reactor.glowroot.error.max-bytes` | `4096` | 256-8192 | Maximum UTF-8 error detail size |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Maximum retained HTTP route slots |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Maximum encoded collector request |
 | `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the Spring MVC interceptor when the starter is present |
 | `reactor.glowroot.spring.order` | `-2147483548` | integer | MVC interceptor order; former `interceptor-order` and `filter-order` names remain aliases |
 | `reactor.glowroot.native.extract-dir` | user home | directory | Standalone Spring native extraction directory |
+| `reactor.glowroot.native.path` | empty | existing DLL/SO path | Development and staging override; production should use packaged binaries |
 
 Invalid bounds stop startup. There is no property that enlarges the agent-owned memory ceiling.
 
+## Runtime Profiles
+
+Start with `micro`. Raise one pod only when you need more evidence. Return it to `micro` after the
+investigation.
+
+| Profile | Adds to the always-on HTTP/Dubbo/Redis aggregates | Good fit |
+| --- | --- | --- |
+| `micro` | Nothing | Normal production traffic and the lowest steady memory |
+| `jvm` | Heap, non-heap, memory-pool, GC count, and GC time gauges | Short JVM memory or GC investigation |
+| `sql` | Explicit bounded SQL aggregates and detailed error stacks | Database latency investigation without JVM gauges |
+| `full` | `jvm` plus `sql` and error stacks | Short incident window on one pod |
+| `diagnostic` | `full` plus a two-command queue for dump operations | One authorized thread dump, heap histogram, or heap dump |
+
+`sql` is explicit by design. The agent does not proxy `DataSource`, wrap JDBC objects, or weave
+drivers. Create a statement descriptor once and reuse it. The timed call does not allocate an
+observation wrapper:
+
+```java
+private final NativeTelemetry.SqlStatement findCustomer;
+
+CustomerRepository(NativeTelemetry telemetry) {
+    this.findCustomer = telemetry.sqlStatement(
+            "customer.find",
+            "select id, name from customer where id = ?"
+    );
+}
+
+Customer find(long id) {
+    long started = findCustomer.start();
+    try {
+        Customer customer = queryCustomer(id);
+        findCustomer.recordSuccess(started, customer == null ? 0 : 1);
+        return customer;
+    } catch (RuntimeException error) {
+        findCustomer.recordFailure(started, error);
+        throw error;
+    }
+}
+```
+
+The statement text is normalized and bounded when its slot is first registered. Bind values are not
+sent. Keep the descriptor in a singleton service or repository. Do not create it per request.
+
+Rust-Java REST uses the same lifecycle without the Spring starter:
+
+```java
+private static final GlowrootTelemetry.SqlStatement FIND_CUSTOMER =
+        GlowrootTelemetry.sql("customer.find", "select id, name from customer where id = ?");
+
+long started = FIND_CUSTOMER.start();
+try {
+    Customer customer = repository.find(id);
+    FIND_CUSTOMER.recordSuccess(started, customer == null ? 0 : 1);
+    return customer;
+} catch (RuntimeException error) {
+    FIND_CUSTOMER.recordFailure(started, error);
+    throw error;
+}
+```
+
+## Switch Profiles Without Restarting
+
+Rust-Java REST uses the built-in control API:
+
+```java
+import com.reactor.rust.telemetry.GlowrootTelemetry;
+import com.reactor.rust.telemetry.TelemetryProfile;
+import java.time.Duration;
+
+GlowrootTelemetry.switchTo(TelemetryProfile.FULL, Duration.ofSeconds(5));
+// Collect incident data for a bounded period.
+GlowrootTelemetry.restoreConfiguredProfile();
+```
+
+Spring Boot injects the existing process-scoped bean:
+
+```java
+import com.reactor.glowroot.agent.runtime.NativeTelemetry;
+import com.reactor.glowroot.agent.runtime.TelemetryProfile;
+import java.time.Duration;
+
+telemetry.updateProfile(TelemetryProfile.JVM, Duration.ofSeconds(5));
+// Collect a short JVM window.
+telemetry.restoreConfiguredProfile(Duration.ofSeconds(5));
+```
+
+`configuredProfile()` returns the startup value from `reactor.glowroot.profile`. Therefore an
+operations command does not need to hard-code `micro`. If the service later starts with another
+bounded baseline, the same restore call still returns to the correct profile.
+
+Do not expose profile changes on a public endpoint. Call the API from an authenticated operations
+endpoint or an internal control command. The starter and the REST framework intentionally do not
+open a profile-management endpoint. A profile switch is a control-plane operation, not a request
+feature. Do not switch profiles per request or on every health-check sample.
+
+SQL slot tokens use a separate positive 32-bit namespace with a 25-bit generation. A stale raw slot
+cannot alias a new statement during normal process life; exhaustion is fail-fast after more than
+`33 million` state-shape transitions instead of silently wrapping. Profiles are still control-plane
+incident tools, not per-request or periodic-sampling switches.
+
+The switch is synchronous and serialized. Returning from `switchTo` or `updateProfile` means:
+
+1. the old feature mask no longer accepts new SQL, error, or diagnostic work;
+2. old native queues, statement slots, and profile-derived export payloads have no remaining references;
+3. their Rust allocations were dropped only after an in-flight bounded collector request finished or timed out;
+4. Rust dropped every profile-owned JNI MXBean global reference when it was no longer needed;
+5. Linux glibc received `malloc_trim(0)` from the isolated agent thread.
+
+The trim call does not run on a Hyper or application worker, but glibc trimming is process-wide.
+Use profile switching only as a rare control-plane action. Do not infer agent-only RSS savings from
+a lower post-switch process RSS; validate feature footprint with fresh telemetry-off/on processes.
+
+If release does not finish before `reactor.glowroot.profile.release-timeout-ms`, the call fails. The
+transition id remains visible in diagnostics and the next control call waits for that exact release.
+The exporter is not stopped while retired state is pending. A downgrade from `diagnostic` is rejected
+while a dump is running.
+
+`micro` keeps the base exporter, route aggregates, and collector connection because telemetry is
+still enabled. Disable telemetry only at process startup when you want zero telemetry state.
+
+OpenJ9 cannot unload system-classloader metadata or its lazily created `Finalizer thread` after JVM
+management APIs are used once. The agent releases its references, native queues, and buffers, but a
+small one-time JVM/JIT warm-state residue can remain. It must not grow with repeated profile cycles.
+Linux can return allocator pages immediately; Windows releases ownership but lets the OS allocator
+reclaim resident pages later instead of forcing a process-wide working-set eviction.
+
 ## Tuning Recipes
 
-| Scenario | `sample-rate` | `trace.capacity` | Recommendation |
-| --- | ---: | ---: | --- |
-| High-traffic production API | `256` | `0` | Lowest steady overhead; keep exact `5xx` |
-| Low-traffic API, exact aggregate trend | `1` or `8` | `0` | More samples are needed because traffic is sparse |
-| Staging latency investigation | `64` | `0` | More histogram updates; run p99 A/B first |
-| Short incident investigation on one pod | `8` | `16` | Bounded traces; revert after the incident |
+| Scenario | Profile | `sample-rate` | `trace.capacity` | Recommendation |
+| --- | --- | ---: | ---: | --- |
+| High-traffic production API | `micro` | `256` | `0` | Lowest steady overhead; keep exact `5xx` |
+| Low-traffic API, exact aggregate trend | `micro` | `1` or `8` | `0` | More samples are needed because traffic is sparse |
+| JVM or GC investigation | `jvm` | unchanged | `0` | Raise one pod, observe several export intervals, then return to `micro` |
+| SQL latency investigation | `sql` | unchanged | `0` | Instrument only selected repository statements |
+| Short incident investigation | `full` | unchanged | `0` by default | JVM, SQL, and error state is dynamic; use one pod and revert after the incident |
+| Authorized dump operation | `diagnostic` | unchanged | unchanged | Run one command, confirm completion, then return to `micro` |
 
 Do not solve missing business metrics by setting the sample rate to `1` on every high-traffic pod.
 Use explicit business metrics for orders, payments, or domain failures.
+
+`http.sample-rate` and `trace.capacity` are startup settings. A profile switch does not resize them.
+If you start with `trace.capacity=16`, that bounded HTTP trace queue remains allocated in `micro`.
+Keep it at `0` when strict downgrade reclamation is the priority; profile-owned SQL, error, JVM, and
+diagnostic state is still allocated and released dynamically.
 
 ## Failure Behavior
 
@@ -283,13 +453,24 @@ you need it, then return `diagnosticsJson()`. The starter does not open a manage
 itself.
 
 Watch `connected`, `export_failure`, `dropped_intervals`, `dropped_transactions`, `dropped_traces`,
-`dropped_routes`, `reconnects`, and `last_error_code`.
+`dropped_routes`, `reconnects`, and `last_error_code`. During a profile change also watch
+`active_profile`, `active_profile_memory_ceiling_bytes`, `retired_profile_memory_ceiling_bytes`,
+`jvm_probe_registered`, `jvm_probe_owned_global_refs`, `profile_release_pending`, `profile_released_transition`,
+`profile_release_timeouts`, `profile_last_release_micros`, `profile_max_release_micros`, and
+`profile_trim_succeeded`.
+
+After returning to a profile without JVM gauges or diagnostics, both `jvm_probe_registered=false`
+and `jvm_probe_owned_global_refs=0` are required. Diagnostic output is written by Rust to a temporary
+file in the target directory and published only after success. Heap histograms and heap dumps can
+still create a large one-time JVM diagnostic allocation; use them on one pod, never as a periodic
+job or during a latency-sensitive peak.
 
 ## Performance Contract
 
-The embedded Rust-Java path enforces a deterministic `1 MiB` ceiling for agent-attributed state and
-native feature pages and adds no thread. The standalone Spring path is gated separately because it
-loads a small native library and one current-thread Tokio exporter with a `256 KiB` stack.
+The `micro` configuration enforces a deterministic `1 MiB` ceiling for agent-attributed state and
+native feature pages. Both Rust-Java REST and Spring use one isolated current-thread Tokio exporter
+with a `256 KiB` stack when telemetry is enabled. It does not share Hyper workers, application
+executors, or Spring request threads.
 The strict Spring gate enables the starter through properties or environment variables. The optional
 `-javaagent` bootstrap is a deployment convenience and is validated separately because starting the
 JVM instrumentation subsystem adds OpenJ9-owned memory even though no transformer is installed.
@@ -301,7 +482,7 @@ endpoint/concurrency cell must keep:
 - p99 regression at or below `+10%`;
 - non-2xx regression at `0` percentage points in paired median and request-weighted aggregate, with
   candidate peak error rate no higher than baseline peak;
-- additional threads at `0` for embedded Rust-Java and at most `1` for standalone Spring.
+- additional agent threads at most `1` for both embedded Rust-Java and standalone Spring.
 
 The stable release runs this full matrix separately for Spring Boot and Rust-Java REST. Both cover
 small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and c256 with six balanced paired
@@ -309,25 +490,31 @@ runs. RPS, p99, and startup use each pair's delta before the median is calculate
 paired median, request-weighted total, and peak error envelope together. One saturated-run delta
 remains visible without replacing the overall error decision. After both
 variants complete the same full workload, a controlled equal-process-age phase requires
-paired-median process RSS and cgroup deltas at or below `+3 MiB`. Rust-Java REST may add no thread;
-Spring may add one bounded exporter thread. REST wire compatibility, collector-down fail-open, and
+paired-median process RSS and cgroup deltas at or below `+3 MiB` for `micro`. Both runtimes may add
+one bounded exporter thread. `jvm`, `sql`, `full`, and `diagnostic` are separate temporary-profile
+gates because OpenJ9 management/error classes can create one-time JVM warm state. REST wire
+compatibility, collector-down fail-open, and
 the optional bootstrap are separate mandatory checks.
 
 See [Validation Evidence](docs/VALIDATION.md),
 [Architecture And Production Boundary](docs/ARCHITECTURE.md), and
-[Benchmark Guide](benchmark/README.md).
+[Benchmark Guide](benchmark/README.md). User-facing changes and compatibility details are in the
+[0.3.0 release notes](docs/releases/0.3.0.md).
 
 ## Compatibility
 
 | Component | Release | Contract |
 | --- | ---: | --- |
 | Java | `21` | Semeru OpenJ9 is the primary tested JVM |
-| Rust-Java REST | `4.4.1` | REST ABI `28`, Glowroot ABI `1` |
-| Agent bootstrap | `0.2.1` | One class; works with either supported runtime |
-| Spring Boot starter | `0.2.1` | Spring Boot `3.x`, Servlet MVC |
-| Standalone native source | `rust-spring v4.4.2` | Glowroot ABI `1`; clean CI DLL/SO |
+| Rust-Java REST | `4.5.0` | REST ABI `29`, Glowroot ABI `3` |
+| Agent bootstrap | `0.3.0` | One class; works with either supported runtime |
+| Spring Boot starter | `0.3.0` | Spring Boot `3.x`, Servlet MVC |
+| Standalone native source | `rust-spring v4.5.0` | Glowroot ABI `3`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
+
+Runtime profile switching requires the coordinated REST ABI `29` and Glowroot ABI `3` pair shown
+above. Startup provenance checks reject an older or locally copied native binary.
 
 Do not copy DLL/SO files between versions. The framework, cache, Dubbo, and agent libraries validate
 their coordinated native ABI at startup.
@@ -341,8 +528,8 @@ mvn -B -ntp clean verify
 
 The Maven reactor builds:
 
-- `agent-bootstrap/target/java-rust-glowroot-agent-0.2.1.jar`
-- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.2.1.jar`
+- `agent-bootstrap/target/java-rust-glowroot-agent-0.3.0.jar`
+- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.3.0.jar`
 
 The native DLL/SO are built only from the clean `rust-spring` commit recorded in
 `native-provenance.properties`. Run `scripts/sync-native-artifacts.ps1` with verified CI artifacts;
@@ -367,8 +554,8 @@ Use the following additional parameters to reproduce the embedded REST matrix:
 
 ```powershell
 -ApplicationKind rust-java-rest `
--RequiredRestVersion "4.4.1" `
--RequiredRestNativeAbi 28 `
+-RequiredRestVersion "4.5.0" `
+-RequiredRestNativeAbi 29 `
 -MemoryLimit "128m" `
 -AllowedThreadDelta 0
 ```

@@ -20,7 +20,7 @@ param(
 
     [string] $NativeSourceDirectory = (Join-Path $PSScriptRoot "..\..\rust-spring"),
 
-    [int] $GlowrootAbi = 1
+    [int] $GlowrootAbi = 3
 )
 
 $ErrorActionPreference = "Stop"

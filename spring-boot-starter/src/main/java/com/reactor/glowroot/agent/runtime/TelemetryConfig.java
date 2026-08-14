@@ -7,7 +7,7 @@ import java.util.function.Function;
 /**
  * Immutable, bounded configuration shared by the Spring MVC adapter and native exporter.
  *
- * @param collectorAddress Glowroot Central h2 endpoint
+ * @param collectorAddress Glowroot Central gRPC over HTTP/2 endpoint
  * @param agentId unique agent or rollup identity
  * @param applicationName application name shown by Glowroot
  * @param hostname host or pod identity
@@ -24,6 +24,12 @@ import java.util.function.Function;
  * @param traceCapacity bounded trace queue capacity
  * @param maxRoutes maximum number of retained HTTP route slots
  * @param maxExportBytes maximum encoded collector request size
+ * @param profile bounded telemetry surfaces enabled at startup
+ * @param profileReleaseTimeoutMs maximum synchronous wait for retired profile state
+ * @param sqlCapacity maximum SQL statement slots in SQL-capable profiles
+ * @param errorTraceCapacity maximum retained detailed error traces
+ * @param errorMaxFrames maximum stack frames copied for one detailed error
+ * @param errorMaxBytes maximum UTF-8 detail bytes copied for one detailed error
  */
 public record TelemetryConfig(
         String collectorAddress,
@@ -42,7 +48,13 @@ public record TelemetryConfig(
         int httpSampleRate,
         int traceCapacity,
         int maxRoutes,
-        int maxExportBytes) {
+        int maxExportBytes,
+        TelemetryProfile profile,
+        int profileReleaseTimeoutMs,
+        int sqlCapacity,
+        int errorTraceCapacity,
+        int errorMaxFrames,
+        int errorMaxBytes) {
 
     private static final String PREFIX = "reactor.glowroot.";
     private static final long PROCESS_START_FALLBACK_MS = System.currentTimeMillis();
@@ -70,6 +82,63 @@ public record TelemetryConfig(
         traceCapacity = bounded(traceCapacity, 0, 32, "trace capacity");
         maxRoutes = bounded(maxRoutes, 1, 64, "max routes");
         maxExportBytes = bounded(maxExportBytes, 16 * 1024, 64 * 1024, "max export bytes");
+        profile = Objects.requireNonNull(profile, "profile");
+        profileReleaseTimeoutMs = bounded(
+                profileReleaseTimeoutMs,
+                100,
+                60_000,
+                "profile release timeout"
+        );
+        sqlCapacity = bounded(sqlCapacity, 0, 32, "SQL capacity");
+        errorTraceCapacity = bounded(errorTraceCapacity, 0, 16, "error trace capacity");
+        errorMaxFrames = bounded(errorMaxFrames, 0, 32, "error max frames");
+        errorMaxBytes = bounded(errorMaxBytes, 256, 8 * 1024, "error max bytes");
+    }
+
+    /** Source-compatible constructor for the original bounded micro profile. */
+    public TelemetryConfig(
+            String collectorAddress,
+            String agentId,
+            String applicationName,
+            String hostname,
+            String javaVersion,
+            String javaVm,
+            String agentVersion,
+            long processId,
+            long processStartTimeMs,
+            int exportIntervalMs,
+            int connectTimeoutMs,
+            int requestTimeoutMs,
+            int slowThresholdMs,
+            int httpSampleRate,
+            int traceCapacity,
+            int maxRoutes,
+            int maxExportBytes) {
+        this(
+                collectorAddress,
+                agentId,
+                applicationName,
+                hostname,
+                javaVersion,
+                javaVm,
+                agentVersion,
+                processId,
+                processStartTimeMs,
+                exportIntervalMs,
+                connectTimeoutMs,
+                requestTimeoutMs,
+                slowThresholdMs,
+                httpSampleRate,
+                traceCapacity,
+                maxRoutes,
+                maxExportBytes,
+                TelemetryProfile.MICRO,
+                5_000,
+                16,
+                8,
+                24,
+                4 * 1024
+        );
     }
 
     /**
@@ -118,7 +187,13 @@ public record TelemetryConfig(
                 intValue(resolver, PREFIX + "http.sample-rate", 256),
                 intValue(resolver, PREFIX + "trace.capacity", 0),
                 intValue(resolver, PREFIX + "max-routes", 64),
-                intValue(resolver, PREFIX + "max-export-bytes", 65_536)
+                intValue(resolver, PREFIX + "max-export-bytes", 65_536),
+                TelemetryProfile.parse(value(resolver, PREFIX + "profile", "micro")),
+                intValue(resolver, PREFIX + "profile.release-timeout-ms", 5_000),
+                intValue(resolver, PREFIX + "sql.capacity", 16),
+                intValue(resolver, PREFIX + "error.trace.capacity", 8),
+                intValue(resolver, PREFIX + "error.max-frames", 24),
+                intValue(resolver, PREFIX + "error.max-bytes", 4 * 1024)
         );
     }
 

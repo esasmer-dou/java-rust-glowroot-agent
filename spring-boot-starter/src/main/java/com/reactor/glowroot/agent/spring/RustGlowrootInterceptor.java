@@ -58,6 +58,11 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
         public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
             telemetry.recordHttp(slot, status, durationNanos, sampleWeight);
         }
+
+        @Override
+        public void recordError(int slot, long durationNanos, Throwable error) {
+            telemetry.recordError(slot, durationNanos, error);
+        }
     }
 
     @Override
@@ -110,18 +115,19 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
         if (observed instanceof Observation observation) {
             long durationNanos = Math.max(0L, System.nanoTime() - observation.startedAtNanos());
             if (observation.sampled() || status >= 500 || durationNanos >= slowThresholdNanos) {
-                recordStatus(request, status, durationNanos, observation.sampled());
+                recordStatus(request, status, durationNanos, observation.sampled(), exception);
             }
             return;
         }
-        if (status >= 500) recordStatus(request, status, 0L, false);
+        if (status >= 500) recordStatus(request, status, 0L, false, exception);
     }
 
     private void recordStatus(
             HttpServletRequest request,
             int status,
             long durationNanos,
-            boolean sampled) {
+            boolean sampled,
+            Throwable error) {
         String method = request.getMethod();
         Object matched = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
         String route = matched == null ? UNMATCHED_ROUTE : matched.toString();
@@ -130,6 +136,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             // Errors are exact events, never statistically weighted successes.
             int sampleWeight = sampled && status < 500 ? sampleRate : 0;
             telemetry.recordHttp(slot, status, durationNanos, sampleWeight);
+            if (error != null) telemetry.recordError(slot, durationNanos, error);
         }
     }
 

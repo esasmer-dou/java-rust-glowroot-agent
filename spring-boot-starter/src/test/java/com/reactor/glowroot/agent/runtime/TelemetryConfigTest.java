@@ -17,6 +17,7 @@ class TelemetryConfigTest {
         properties.put("reactor.glowroot.application.name", "orders-api");
         properties.put("reactor.glowroot.http.sample-rate", "64");
         properties.put("reactor.glowroot.max-routes", "16");
+        properties.put("reactor.glowroot.profile", "full");
 
         TelemetryConfig config = TelemetryConfig.from(properties::get);
 
@@ -25,6 +26,10 @@ class TelemetryConfigTest {
         assertEquals(64, config.httpSampleRate());
         assertEquals(16, config.maxRoutes());
         assertEquals(60_000, config.exportIntervalMs());
+        assertEquals(TelemetryProfile.FULL, config.profile());
+        assertEquals(5_000, config.profileReleaseTimeoutMs());
+        assertEquals(16, config.sqlCapacity());
+        assertEquals(8, config.errorTraceCapacity());
     }
 
     @Test
@@ -34,6 +39,10 @@ class TelemetryConfigTest {
         Map<String, String> properties = new HashMap<>();
         properties.put("reactor.glowroot.agent.id", "orders::test");
         properties.put("reactor.glowroot.http.sample-rate", "3");
+        assertThrows(IllegalArgumentException.class, () -> TelemetryConfig.from(properties::get));
+
+        properties.put("reactor.glowroot.http.sample-rate", "64");
+        properties.put("reactor.glowroot.profile", "unbounded");
         assertThrows(IllegalArgumentException.class, () -> TelemetryConfig.from(properties::get));
     }
 }

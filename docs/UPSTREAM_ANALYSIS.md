@@ -16,10 +16,12 @@ The target is narrower than the full Glowroot agent:
 
 - keep Java handlers and business logic unchanged;
 - expose HTTP, native Dubbo, native Redis, RSS, thread, and exporter-health telemetry in Glowroot;
+- add JVM/GC gauges, explicit SQL timings, bounded error stacks, and diagnostic commands only through
+  temporary runtime profiles;
 - add no Java request filter to Rust-Java REST and only one bounded MVC interceptor to Spring MVC;
 - keep all state, queues, payloads, and reconnect behavior bounded;
-- keep agent-owned state and feature pages below `1 MiB`, and accept the embedded path only when
-  every paired Linux resident-memory delta stays at or below `+3.00 MiB` with no new thread.
+- keep agent-owned state and feature pages below `1 MiB`, and isolate all exporter/profile-release
+  work on one bounded native thread that never consumes Hyper or application workers.
 
 ## What The Full Agent Owns
 
@@ -57,9 +59,10 @@ risk without improving request telemetry.
 
 ### ACCEPTABLE: Full Glowroot agent for diagnostic pods
 
-Use upstream Glowroot when method-level traces, JDBC SQL, JMX, stack traces, or profiling are required.
-Run it with a separately measured pod budget. It is a different operational profile, not a fallback
-inside the micro agent.
+Use upstream Glowroot when arbitrary method traces, automatic JDBC interception, broad JMX discovery,
+continuous profiler data, logs, or live weaving are required. The micro agent provides only explicit
+bounded SQL descriptors, fixed JVM/GC gauges, bounded error stacks, and authorized dump commands.
+Run the upstream agent with a separately measured pod budget. It is not a fallback inside `micro`.
 
 ### BEST FOR THIS FRAMEWORK: Collector-compatible Rust telemetry plane
 
@@ -75,11 +78,13 @@ flowchart LR
     H["Rust Hyper"] --> B
     D["Native Dubbo"] --> C["Three fixed native slots"]
     R["Native Redis"] --> C
+    J["Explicit Java JVM/SQL/error bridge"] --> O["Profile-owned bounded state"]
     B --> M["Bounded atomic aggregates"]
     C --> M
+    O --> M
     M --> S["One-minute snapshot"]
     S --> P["Hand-encoded protobuf"]
-    P --> X["Single Rust h2 connection"]
+    P --> X["Isolated 256 KiB Rust thread and one h2 connection"]
     X --> G["Glowroot Central"]
 ```
 
@@ -88,10 +93,23 @@ protobuf object, trace object, or Java callback. Successful HTTP requests use de
 sampling. `5xx` errors stay exact. With `trace.capacity=0`, no trace queue is allocated and no slow
 trace path is evaluated.
 
-The exporter reuses the framework Tokio runtime. It creates tasks, not a dedicated operating-system
-thread. The route table, trace queue, h2 windows, response body, encoded request, timeouts, and
-reconnect delay all have hard limits. A disconnected collector never creates a retry backlog; the
-expired interval is dropped and counted.
+The exporter and profile reclaimer run on one dedicated Rust thread with a `256 KiB` stack and a
+current-thread Tokio runtime. This isolation is deliberate: collector DNS, h2 reconnect, protobuf
+encoding, profile drop, and allocator trim cannot consume Hyper workers, Spring request threads, or
+application executors. Route tables, optional profile state, h2 windows, encoded requests, timeouts,
+and reconnect delays all have hard limits. A disconnected collector never creates a retry backlog;
+the expired interval is dropped and counted.
+
+`micro` owns no JVM, SQL, error-stack, or diagnostic state. A transition allocates one fixed-shape
+profile state, atomically swaps it, and retires at most one old state. The control API returns only
+after the last reference is gone and the old allocation is dropped. SQL slots contain a generation
+id, so a stale descriptor cannot write into a newly enabled profile.
+
+Selected JVM gauges do not use an upstream-style Java gauge collector. Rust discovers the fixed
+MXBean set through JNI, owns the global references, polls them from the isolated exporter thread,
+and encodes the result directly. Diagnostic queuing, JVM API invocation, file I/O, atomic publication,
+and failure cleanup are also Rust-owned. Java retains no polling worker, bean list, snapshot buffer,
+or diagnostic helper.
 
 ## Collector Contract
 
@@ -100,9 +118,9 @@ The micro agent sends these existing unary messages:
 | Glowroot method | Data sent |
 | --- | --- |
 | `collectInit` | Agent id, host/process/Java identity, read-only config |
-| `collectAggregates` | HTTP, Dubbo, and Redis counts, errors, duration, and HdrHistogram |
-| `collectGaugeValues` | Process RSS, thread count, and exporter health |
-| `collectTrace` | Optional bounded HTTP slow/error samples |
+| `collectAggregates` | HTTP, Dubbo, Redis, and explicit SQL counts, errors, duration, rows, and HdrHistogram |
+| `collectGaugeValues` | Process RSS, thread count, exporter health, and optional fixed JVM/GC gauges |
+| `collectTrace` | Optional bounded HTTP samples and profile-gated bounded error stacks |
 
 The unary aggregate and trace methods are marked deprecated in the current schema but remain part of
 the tested contract. Every Central upgrade must rerun the generated-protobuf protocol gate. Migration
@@ -110,10 +128,12 @@ to the streaming methods is a future compatibility task, not an assumption hidde
 
 ## Production Boundary
 
-The micro agent deliberately does not provide arbitrary method instrumentation, JDBC query capture,
-JMX discovery, log capture, profiling, heap dumps, stack traces, live weaving, or remote agent
-configuration. It currently supports plaintext h2 only. Use a localhost mTLS sidecar or service mesh
-when the collector hop needs encryption or workload identity.
+The micro agent deliberately does not provide arbitrary method instrumentation, automatic JDBC
+proxying/weaving, bind-value capture, broad JMX discovery, log capture, continuous profiling, live
+weaving, or remote agent configuration. Heap/thread operations are explicit, local, authorized
+commands available only in `diagnostic`; they are never scheduled continuously. It currently
+supports plaintext h2 only. Use a localhost mTLS sidecar or service mesh when the collector hop needs
+encryption or workload identity.
 
 This boundary is the feature that protects the footprint. Adding one of the omitted surfaces requires
 a separate architecture and a new RSS/RPS/p99 gate; it must not be silently added to the micro profile.

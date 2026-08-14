@@ -19,7 +19,10 @@ class RustGlowrootAgentTest {
         System.setProperty("reactor.glowroot.agent.id", "explicit-agent");
 
         RustGlowrootAgent.applyArguments(
-                "collector=collector.platform.svc:8181,agent-id=ignored,trace-capacity=8,sample-rate=64"
+                "collector=collector.platform.svc:8181,agent-id=ignored,trace-capacity=8,"
+                        + "sample-rate=64,profile=full,profile-release-timeout-ms=7000,"
+                        + "sql-capacity=12,error-trace-capacity=4,error-max-frames=16,"
+                        + "error-max-bytes=2048,native-path=C:/native/rust_glowroot_agent.dll"
         );
 
         assertEquals("collector.platform.svc:8181",
@@ -27,6 +30,16 @@ class RustGlowrootAgentTest {
         assertEquals("explicit-agent", System.getProperty("reactor.glowroot.agent.id"));
         assertEquals("8", System.getProperty("reactor.glowroot.trace.capacity"));
         assertEquals("64", System.getProperty("reactor.glowroot.http.sample-rate"));
+        assertEquals("12", System.getProperty("reactor.glowroot.sql.capacity"));
+        assertEquals("full", System.getProperty("reactor.glowroot.profile"));
+        assertEquals("7000", System.getProperty("reactor.glowroot.profile.release-timeout-ms"));
+        assertEquals("4", System.getProperty("reactor.glowroot.error.trace.capacity"));
+        assertEquals("16", System.getProperty("reactor.glowroot.error.max-frames"));
+        assertEquals("2048", System.getProperty("reactor.glowroot.error.max-bytes"));
+        assertEquals(
+                "C:/native/rust_glowroot_agent.dll",
+                System.getProperty("reactor.glowroot.native.path")
+        );
     }
 
     @Test

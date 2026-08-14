@@ -78,7 +78,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: esasmer-dou/rust-java-rest
-          ref: v4.4.1
+          ref: v4.5.0
           path: rust-java-rest
 
       - name: Check out pinned Glowroot wire contract
@@ -104,8 +104,8 @@ jobs:
         run: |
           ./benchmark/spring_boot_gate.ps1 `
             -ApplicationKind rust-java-rest `
-            -RequiredRestVersion "4.4.1" `
-            -RequiredRestNativeAbi 28 `
+            -RequiredRestVersion "4.5.0" `
+            -RequiredRestNativeAbi 29 `
             -PairRepeats 6 `
             -ConcurrencyLevels "64,256" `
             -EndpointClasses "small-json,raw-json,heavy-json" `

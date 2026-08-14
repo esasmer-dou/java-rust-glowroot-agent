@@ -2,8 +2,8 @@
 param(
     [ValidateSet("spring-boot", "rust-java-rest")]
     [string] $ApplicationKind = "spring-boot",
-    [string] $RequiredRestVersion = "4.4.1",
-    [int] $RequiredRestNativeAbi = 28,
+    [string] $RequiredRestVersion = "4.5.0",
+    [int] $RequiredRestNativeAbi = 29,
     [int] $PairRepeats = 3,
     [string] $ConcurrencyLevels = "64,256",
     [string] $EndpointClasses = "small-json,raw-json,heavy-json",

@@ -2,6 +2,55 @@
 
 All notable changes to this project are recorded here.
 
+## [Unreleased]
+
+## [0.3.0] - 2026-08-14
+
+### Added
+
+- Added bounded runtime profiles: `micro`, `jvm`, `sql`, `full`, and `diagnostic`.
+- Added synchronous, process-scoped profile switching for Spring MVC and the coordinated Rust-Java
+  REST runtime.
+- Added opt-in JVM memory/GC gauges, explicit reusable SQL timing descriptors, bounded error stack
+  capture, and authorized JVM diagnostic commands.
+- Added profile lifecycle diagnostics for active/retired bytes, transition ids, release latency,
+  timeouts, allocator trims, and JNI JVM-probe ownership.
+- Added `configuredProfile()` and `restoreConfiguredProfile()` so temporary incident profiles can
+  return to the configured baseline without hard-coding `micro`.
+
+### Changed
+
+- Moved the exporter and profile-release loop onto one isolated `256 KiB` Rust thread in both Spring
+  and Rust-Java REST. Telemetry no longer consumes Hyper workers or application executors.
+- Moved JVM bean discovery, heap/non-heap/pool/GC sampling, diagnostic orchestration, and diagnostic
+  file I/O out of Java helper classes and into the isolated Rust runtime. Java now supplies only
+  Spring/JVM boundary events that cannot be observed outside the JVM.
+- Made profile transitions generation-aware and serialized. Stale SQL slots become no-ops after a
+  downgrade and are re-registered when the profile is enabled again.
+- Made `full -> micro` release synchronous: profile-owned SQL slots, error/diagnostic queues,
+  Rust-owned JNI MXBean global references, and in-flight profile-derived export data are dropped
+  before the control call returns.
+- Widened generation-aware SQL tokens to a positive 32-bit namespace so stale raw slots cannot
+  alias after the former 10-bit generation range.
+- Counted retained error-frame structures and per-string allocator metadata in the hard startup
+  memory budget instead of accounting only for UTF-8 payload bytes.
+
+### Fixed
+
+- Made HTTP/SQL telemetry registration and error-stack extraction fail open. JNI inspection failure
+  increments a drop counter and cannot replace or interrupt the application exception flow.
+- Replaced per-exception-class REST labels with one fixed `Java Error` identity so temporary `full`
+  mode cannot leave permanent route slots after returning to `micro`.
+- Made profile reclamation inspect pending retired state before waiting for a notification, allowing
+  an exporter restart to complete a release whose earlier notification was already consumed.
+
+### Compatibility
+
+- Agent `0.3.0` requires Glowroot native ABI `3`. The embedded path requires Rust-Java REST `4.5.0`
+  and REST native ABI `29`.
+- Windows x64 and Linux glibc x64 binaries are produced from the same clean `rust-spring v4.5.0`
+  source revision and are protected by SHA-256 provenance checks.
+
 ## [0.2.1] - 2026-08-14
 
 ### Production Gate
@@ -78,3 +127,4 @@ All notable changes to this project are recorded here.
 [0.1.0-rc1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.1.0-rc1
 [0.2.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.0
 [0.2.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.1
+[0.3.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.2.1...v0.3.0
