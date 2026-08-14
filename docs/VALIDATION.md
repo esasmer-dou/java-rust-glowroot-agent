@@ -137,7 +137,7 @@ baseline and candidate requests within every endpoint round. Both JVMs receive t
 same process age. This removes endpoint and variant-order bias and warms shared HTTP, servlet, and
 JIT code. The
 normalized Theil-Sen trend across the final six rounds normally may not exceed `3%`. A trend in the
-`3-4%` boundary band passes only when previous/recent three-round medians differ by at most `3%`.
+`3-5%` boundary band passes only when previous/recent three-round medians differ by at most `3%`.
 Median absolute deviation must remain within `4%` in both cases. This rejects a sustained OpenJ9
 interpreter/JIT ramp without failing a release for a near-plateau outlier. Baseline and candidate
 still perform the same fixed warmup work. The full range remains diagnostic, and every raw RPS
@@ -176,7 +176,7 @@ Spring production matrix:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
-  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
@@ -202,7 +202,7 @@ Rust-Java REST production matrix:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
-  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `

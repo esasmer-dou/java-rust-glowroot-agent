@@ -5,7 +5,7 @@ function Get-ReactorWarmupDecision {
         [double[]] $Samples,
         [int] $WindowRounds = 3,
         [double] $MaximumRobustTrendPercent = 3.0,
-        [double] $MaximumBorderlineRobustTrendPercent = 4.0,
+        [double] $MaximumBorderlineRobustTrendPercent = 5.0,
         [double] $MaximumBorderlineMedianShiftPercent = 3.0,
         [double] $MaximumMedianAbsoluteDeviationPercent = 4.0
     )

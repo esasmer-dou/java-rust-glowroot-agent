@@ -27,7 +27,7 @@ overhead.
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
-  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
@@ -48,7 +48,7 @@ classes in round-robin order. In the production dual-slot gate, baseline and can
 alternate within every endpoint round. Both JVMs therefore receive the same work at the same process
 age. This removes endpoint and variant-order bias while warming shared HTTP, servlet, and JIT code.
 The normalized Theil-Sen trend over the final six rounds normally must not exceed `3%`. A trend in
-the `3-4%` boundary band passes only when the previous/recent three-round medians differ by no more
+the `3-5%` boundary band passes only when the previous/recent three-round medians differ by no more
 than `3%`. Median absolute deviation must remain within `4%` in both cases. This rejects a sustained
 OpenJ9/JIT ramp without treating a near-plateau outlier as a trend. Full min/max range remains
 diagnostic. Baseline and candidate always do
@@ -96,7 +96,7 @@ thread because it shared the framework runtime.
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
-  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `

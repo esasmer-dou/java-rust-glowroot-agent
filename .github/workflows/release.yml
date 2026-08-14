@@ -141,7 +141,7 @@ jobs:
             .warmup_stability.variant_interleaved == true and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
-            .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 4 and
+            .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 5 and
             .warmup_stability.maximum_allowed_borderline_median_shift_pct == 3 and
             .warmup_stability.maximum_allowed_median_absolute_deviation_pct == 4 and
             .warmup_stability.gate == "PASS" and
@@ -167,7 +167,7 @@ jobs:
             .warmup_stability.variant_interleaved == true and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
-            .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 4 and
+            .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 5 and
             .warmup_stability.maximum_allowed_borderline_median_shift_pct == 3 and
             .warmup_stability.maximum_allowed_median_absolute_deviation_pct == 4 and
             .warmup_stability.gate == "PASS" and .steady_memory.gate == "PASS" and

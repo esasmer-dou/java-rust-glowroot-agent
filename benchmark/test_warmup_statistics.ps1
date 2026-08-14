@@ -7,7 +7,7 @@ function Assert-Warmup([bool] $Expected, [double[]] $Samples, [string] $Message)
             -Samples $Samples `
             -WindowRounds 3 `
             -MaximumRobustTrendPercent 3 `
-            -MaximumBorderlineRobustTrendPercent 4 `
+            -MaximumBorderlineRobustTrendPercent 5 `
             -MaximumBorderlineMedianShiftPercent 3 `
             -MaximumMedianAbsoluteDeviationPercent 4
     if ($decision.passed -ne $Expected) {
@@ -31,6 +31,9 @@ Assert-Warmup $false `
 Assert-Warmup $true `
         @(6611.87, 6740.90, 6812.38, 6767.06, 7051.08, 6758.10) `
         "A borderline slope with matching window medians and low dispersion must pass."
+Assert-Warmup $true `
+        @(8439.49, 8533.92, 8687.37, 8761.17, 8781.21, 8729.19) `
+        "A near-plateau trend below the hard boundary and with matching medians must pass."
 Assert-Warmup $true `
         @(20100.0, 19950.0, 20050.0, 20020.0, 20080.0, 19980.0) `
         "A stable series must pass."

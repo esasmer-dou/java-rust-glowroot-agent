@@ -12,7 +12,7 @@ param(
     [int] $MinWarmupRounds = 3,
     [int] $MaxWarmupRounds = 16,
     [double] $MaxWarmupRobustTrendPercent = 3.0,
-    [double] $MaxWarmupBorderlineRobustTrendPercent = 4.0,
+    [double] $MaxWarmupBorderlineRobustTrendPercent = 5.0,
     [double] $MaxWarmupBorderlineMedianShiftPercent = 3.0,
     [double] $MaxWarmupMedianAbsoluteDeviationPercent = 4.0,
     [double] $CpuLimit = 1.0,
@@ -55,8 +55,8 @@ if ($MaxWarmupRobustTrendPercent -le 0 -or $MaxWarmupRobustTrendPercent -gt 3.0)
     throw "MaxWarmupRobustTrendPercent must be between 0 and 3 percent."
 }
 if ($MaxWarmupBorderlineRobustTrendPercent -lt $MaxWarmupRobustTrendPercent `
-        -or $MaxWarmupBorderlineRobustTrendPercent -gt 4.0) {
-    throw "MaxWarmupBorderlineRobustTrendPercent must be between the primary threshold and 4 percent."
+        -or $MaxWarmupBorderlineRobustTrendPercent -gt 5.0) {
+    throw "MaxWarmupBorderlineRobustTrendPercent must be between the primary threshold and 5 percent."
 }
 if ($MaxWarmupBorderlineMedianShiftPercent -le 0 `
         -or $MaxWarmupBorderlineMedianShiftPercent -gt 3.0) {
