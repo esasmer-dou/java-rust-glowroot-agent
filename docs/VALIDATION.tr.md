@@ -133,7 +133,9 @@ en sakin fiziksel CPU grubunu seçer. Bu grubun bütün SMT kardeşleri uygulama
 collector başka bir gruba sabitlenir. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal
 CPU elle seçilirse eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
-Her uygulama süreci, endpoint başına tam on iki ısınma turu tamamlar. Son iki üç turluk pencerenin
+Her uygulama süreci, endpoint başına tam on iki ısınma turu tamamlar. İlk dört tur, tanımlı endpoint
+sınıflarını sırayla dolaşır. Böylece ortak HTTP, servlet ve JIT kodu, sekiz endpoint'e özel turdan
+önce hazırlanır. Son iki üç turluk pencerenin
 medyan RPS değerleri arasındaki fark en fazla `%3` olabilir. Son altı örneğin medyan mutlak sapması
 da `%4` sınırını aşamaz. Bu dayanıklı karar, devam eden OpenJ9 interpreter/JIT ısınmasını reddeder;
 tek bir scheduler aykırı değerini kararsızlık saymaz. Baseline ve candidate yine aynı sabit ısınma
@@ -170,6 +172,7 @@ Spring production matrisi:
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
+  -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 12 `
   -MaxWarmupMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
@@ -194,6 +197,7 @@ Rust-Java REST production matrisi:
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
+  -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 12 `
   -MaxWarmupMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `

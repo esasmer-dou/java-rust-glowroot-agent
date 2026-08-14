@@ -545,6 +545,7 @@ do not publish a local dirty native build.
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
+  -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 12 `
   -MaxWarmupMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `

@@ -551,6 +551,7 @@ native build yayınlamayın.
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
+  -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 12 `
   -MaxWarmupMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `

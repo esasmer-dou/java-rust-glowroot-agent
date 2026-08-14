@@ -47,6 +47,9 @@ All notable changes to this project are recorded here.
   `3%` median shift between the final two three-round windows and at most `4%` median absolute
   deviation across the final six rounds. Sustained JIT ramp-up still fails; one scheduler outlier
   remains diagnostic instead of blocking a release.
+- Kept the warmup budget at twelve rounds per endpoint while interleaving the first four rounds
+  across endpoint classes. Shared HTTP, servlet, and JIT code is primed before the final eight
+  endpoint-specific rounds, avoiding endpoint-order bias without adding benchmark work.
 - Replaced the impossible zero-error requirement for the deliberately saturated embedded REST heavy JSON c256
   cell with a bounded `0.02` percentage-point non-inferiority margin. Normal cells remain zero-delta,
   and every baseline/candidate aggregate and peak error rate is capped at `0.05%`.

@@ -10,6 +10,7 @@ param(
     [string] $Duration = "12s",
     [string] $Warmup = "5s",
     [int] $MinWarmupRounds = 3,
+    [int] $WarmupPrimerRounds = 4,
     [int] $MaxWarmupRounds = 12,
     [double] $MaxWarmupMedianShiftPercent = 3.0,
     [double] $MaxWarmupMedianAbsoluteDeviationPercent = 4.0,
@@ -46,8 +47,9 @@ $PSNativeCommandUseErrorActionPreference = $false
 if ($PairRepeats -lt 3) { throw "PairRepeats must be at least 3." }
 if ($MaxMemoryRegressionMiB -gt 3.0) { throw "The agent memory gate cannot exceed 3 MiB." }
 if ($MinWarmupRounds -lt 2) { throw "MinWarmupRounds must be at least 2." }
-if ($MaxWarmupRounds -lt (2 * $MinWarmupRounds)) {
-    throw "MaxWarmupRounds must contain at least two complete stability windows."
+if ($WarmupPrimerRounds -lt 1) { throw "WarmupPrimerRounds must be at least 1." }
+if (($MaxWarmupRounds - $WarmupPrimerRounds) -lt (2 * $MinWarmupRounds)) {
+    throw "Post-primer warmup must contain at least two complete stability windows."
 }
 if ($MaxWarmupMedianShiftPercent -le 0 -or $MaxWarmupMedianShiftPercent -gt 3.0) {
     throw "MaxWarmupMedianShiftPercent must be between 0 and 3 percent."
@@ -255,17 +257,32 @@ function Invoke-Warmup([string] $Target, [string] $Path) {
     return [double] $Matches[1]
 }
 
+function Invoke-InterleavedWarmupPrimer([string] $Target) {
+    $samplesByEndpoint = @{}
+    foreach ($endpoint in $endpoints) {
+        $samplesByEndpoint[$endpoint] = [Collections.Generic.List[double]]::new()
+    }
+    foreach ($round in 1..$WarmupPrimerRounds) {
+        foreach ($endpoint in $endpoints) {
+            $samplesByEndpoint[$endpoint].Add((Invoke-Warmup $Target $EndpointMap[$endpoint]))
+        }
+    }
+    return $samplesByEndpoint
+}
+
 function Invoke-StabilizedWarmup(
         [string] $Target,
         [string] $Path,
         [int] $Pair,
         [string] $Variant,
-        [string] $Endpoint) {
+        [string] $Endpoint,
+        [double[]] $PrimerSamples) {
     $samples = [Collections.Generic.List[double]]::new()
+    foreach ($sample in $PrimerSamples) { $samples.Add($sample) }
     $firstStableRound = $null
-    foreach ($round in 1..$MaxWarmupRounds) {
+    for ($round = $samples.Count + 1; $round -le $MaxWarmupRounds; $round++) {
         $samples.Add((Invoke-Warmup $Target $Path))
-        if ($samples.Count -lt (2 * $MinWarmupRounds)) { continue }
+        if ($samples.Count -lt ($WarmupPrimerRounds + (2 * $MinWarmupRounds))) { continue }
 
         $decision = Get-ReactorWarmupDecision `
                 -Samples @($samples) `
@@ -288,6 +305,8 @@ function Invoke-StabilizedWarmup(
         variant = $Variant
         endpoint = $Endpoint
         rounds = $MaxWarmupRounds
+        primer_rounds = $WarmupPrimerRounds
+        endpoint_stability_rounds = $MaxWarmupRounds - $WarmupPrimerRounds
         first_stable_round = $firstStableRound
         previous_median_rps = [math]::Round($finalDecision.previous_median_rps, 2)
         recent_median_rps = [math]::Round($finalDecision.recent_median_rps, 2)
@@ -558,9 +577,15 @@ try {
                     Assert-NativeTelemetryLoaded $name
                 }
                 Invoke-RouteSmoke $name
+                $primer = Invoke-InterleavedWarmupPrimer $name
                 foreach ($endpoint in $endpoints) {
                     Invoke-StabilizedWarmup `
-                            $name $EndpointMap[$endpoint] $pair $variant $endpoint
+                            -Target $name `
+                            -Path $EndpointMap[$endpoint] `
+                            -Pair $pair `
+                            -Variant $variant `
+                            -Endpoint $endpoint `
+                            -PrimerSamples @($primer[$endpoint])
                 }
                 foreach ($cell in $cells) {
                     $sequence++
@@ -612,9 +637,15 @@ try {
         foreach ($variant in @("baseline", "candidate")) {
             $name = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
             Invoke-RouteSmoke $name
+            $primer = Invoke-InterleavedWarmupPrimer $name
             foreach ($endpoint in $endpoints) {
                 Invoke-StabilizedWarmup `
-                        $name $EndpointMap[$endpoint] $pair $variant $endpoint
+                        -Target $name `
+                        -Path $EndpointMap[$endpoint] `
+                        -Pair $pair `
+                        -Variant $variant `
+                        -Endpoint $endpoint `
+                        -PrimerSamples @($primer[$endpoint])
             }
         }
 
@@ -848,6 +879,8 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     startup_delta_pct = [math]::Round($startupDelta, 2)
     warmup_stability = [ordered]@{
         fixed_rounds = $MaxWarmupRounds
+        interleaved_primer_rounds = $WarmupPrimerRounds
+        endpoint_stability_rounds = $MaxWarmupRounds - $WarmupPrimerRounds
         stability_window_rounds = $MinWarmupRounds
         maximum_allowed_median_shift_pct = $MaxWarmupMedianShiftPercent
         maximum_allowed_median_absolute_deviation_pct = $MaxWarmupMedianAbsoluteDeviationPercent
@@ -885,7 +918,7 @@ $lines.Add("Application: **$ApplicationKind**. Activation: **$activationDescript
 $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
-$lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process; the previous/recent $MinWarmupRounds-round medians had at most $([math]::Round($observedMaxWarmupMedianShift,3))% shift within the $MaxWarmupMedianShiftPercent% gate, and the final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupMad,3))% median absolute deviation within the $MaxWarmupMedianAbsoluteDeviationPercent% gate. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
+$lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process, split into $WarmupPrimerRounds interleaved primer rounds and $($MaxWarmupRounds - $WarmupPrimerRounds) endpoint-specific rounds. The previous/recent $MinWarmupRounds-round medians had at most $([math]::Round($observedMaxWarmupMedianShift,3))% shift within the $MaxWarmupMedianShiftPercent% gate, and the final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupMad,3))% median absolute deviation within the $MaxWarmupMedianAbsoluteDeviationPercent% gate. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
 $lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells and a $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin only for saturated embedded REST heavy-json c256+ cells. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")
