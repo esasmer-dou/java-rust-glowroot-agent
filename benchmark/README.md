@@ -25,7 +25,7 @@ overhead.
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 6 `
+  -MaxWarmupRounds 8 `
   -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
@@ -37,7 +37,7 @@ starts OpenJ9's instrumentation subsystem and is reported separately; it does no
 starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
 executable-JAR startup path.
 
-Each configured endpoint receives exactly six warmup rounds. The final three rounds must have no
+Each configured endpoint receives exactly eight warmup rounds. The final three rounds must have no
 more than `8%` RPS spread, otherwise the run is rejected. This keeps baseline and candidate warmup
 work equal. Cells and variant order are randomized. On Linux, `-AutoSelectCpuRoles` samples physical
 CPU groups after the build, chooses the
@@ -74,7 +74,7 @@ adds no telemetry thread.
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 6 `
+  -MaxWarmupRounds 8 `
   -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 0 `

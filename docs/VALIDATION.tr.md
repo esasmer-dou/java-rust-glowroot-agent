@@ -58,7 +58,7 @@ en sakin fiziksel CPU grubunu seçer. Bu grubun bütün SMT kardeşleri uygulama
 collector başka bir gruba sabitlenir. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal
 CPU elle seçilirse eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
-Her application process, endpoint başına tam altı warmup turu tamamlar. Son üç RPS örneğinin yayılımı
+Her application process, endpoint başına tam sekiz warmup turu tamamlar. Son üç RPS örneğinin yayılımı
 en fazla `%8` olduğunda ölçüm başlar. Böylece baseline ve candidate aynı warmup işini yapar. OpenJ9
 interpreter/JIT ısınması agent maliyeti gibi raporlanmaz. Ham warmup RPS örneklerinin tamamı release
 kanıtlarına eklenir.
@@ -93,7 +93,7 @@ Spring production matrisi:
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 6 `
+  -MaxWarmupRounds 8 `
   -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
@@ -113,7 +113,7 @@ Rust-Java REST production matrisi:
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 6 `
+  -MaxWarmupRounds 8 `
   -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 0 `

@@ -355,7 +355,7 @@ native build yayınlamayın.
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 6 `
+  -MaxWarmupRounds 8 `
   -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `

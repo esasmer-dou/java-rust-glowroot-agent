@@ -10,7 +10,7 @@ param(
     [string] $Duration = "12s",
     [string] $Warmup = "5s",
     [int] $MinWarmupRounds = 3,
-    [int] $MaxWarmupRounds = 6,
+    [int] $MaxWarmupRounds = 8,
     [double] $MaxWarmupRpsSpreadPercent = 8.0,
     [double] $CpuLimit = 1.0,
     [string] $MemoryLimit = "256m",
@@ -270,11 +270,8 @@ function Invoke-StabilizedWarmup(
     } else {
         100.0 * ($finalMaximum - $finalMinimum) / $finalMedian
     }
-    if ($finalSpread -gt $MaxWarmupRpsSpreadPercent) {
-        throw ("Warmup did not stabilize for pair=$Pair variant=$Variant endpoint=$Endpoint " +
-                "after $MaxWarmupRounds fixed rounds. RPS samples: $($samples -join ', ').")
-    }
-    return [pscustomobject]@{
+    $warmupPassed = $finalSpread -le $MaxWarmupRpsSpreadPercent
+    $script:warmups.Add([pscustomobject]@{
         pair = $Pair
         variant = $Variant
         endpoint = $Endpoint
@@ -283,6 +280,14 @@ function Invoke-StabilizedWarmup(
         median_rps = [math]::Round($finalMedian, 2)
         recent_spread_pct = [math]::Round($finalSpread, 3)
         rps_samples = @($samples)
+        gate = if ($warmupPassed) { "PASS" } else { "FAIL" }
+    })
+    if (-not $warmupPassed) {
+        $sampleText = @($samples | ForEach-Object {
+            $_.ToString("F2", [Globalization.CultureInfo]::InvariantCulture)
+        }) -join ", "
+        throw ("Warmup did not stabilize for pair=$Pair variant=$Variant endpoint=$Endpoint " +
+                "after $MaxWarmupRounds fixed rounds. RPS samples: $sampleText.")
     }
 }
 
@@ -535,8 +540,8 @@ try {
                 }
                 Invoke-RouteSmoke $name
                 foreach ($endpoint in $endpoints) {
-                    $warmups.Add((Invoke-StabilizedWarmup `
-                            $name $EndpointMap[$endpoint] $pair $variant $endpoint))
+                    Invoke-StabilizedWarmup `
+                            $name $EndpointMap[$endpoint] $pair $variant $endpoint
                 }
                 foreach ($cell in $cells) {
                     $sequence++
@@ -588,8 +593,8 @@ try {
             $name = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
             Invoke-RouteSmoke $name
             foreach ($endpoint in $endpoints) {
-                $warmups.Add((Invoke-StabilizedWarmup `
-                        $name $EndpointMap[$endpoint] $pair $variant $endpoint))
+                Invoke-StabilizedWarmup `
+                        $name $EndpointMap[$endpoint] $pair $variant $endpoint
             }
         }
 
@@ -641,6 +646,21 @@ try {
         Remove-Container $Candidate
         Start-Sleep -Seconds 5
     }
+} catch {
+    ConvertTo-Json -InputObject @($records) -Depth 6 | Set-Content `
+            (Join-Path $Results "raw-partial.json") -Encoding utf8
+    ConvertTo-Json -InputObject @($steadyMemory) -Depth 6 | Set-Content `
+            (Join-Path $Results "steady-memory-partial.json") -Encoding utf8
+    ConvertTo-Json -InputObject @($warmups) -Depth 6 | Set-Content `
+            (Join-Path $Results "warmup.json") -Encoding utf8
+    [ordered]@{
+        passed = $false
+        application_kind = $ApplicationKind
+        stage = "matrix"
+        error = $_.Exception.Message
+    } | ConvertTo-Json -Depth 4 | Set-Content `
+            (Join-Path $Results "failure.json") -Encoding utf8
+    throw
 } finally {
     foreach ($name in @($Baseline, $Candidate, $Collector)) { Remove-Container $name }
 }
@@ -754,9 +774,12 @@ $observedMaxWarmupSpread = ($warmups.recent_spread_pct | Measure-Object -Maximum
 $observedMaxFirstStableRound = ($warmups.first_stable_round | Measure-Object -Maximum).Maximum
 $passedAll = -not ($summary.gate -contains "FAIL") -and $startupDelta -le 10.0 -and $steadyMemoryPassed
 
-$records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json") -Encoding utf8
-$steadyMemory | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "steady-memory.json") -Encoding utf8
-$warmups | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "warmup.json") -Encoding utf8
+ConvertTo-Json -InputObject @($records) -Depth 5 |
+        Set-Content (Join-Path $Results "raw.json") -Encoding utf8
+ConvertTo-Json -InputObject @($steadyMemory) -Depth 5 |
+        Set-Content (Join-Path $Results "steady-memory.json") -Encoding utf8
+ConvertTo-Json -InputObject @($warmups) -Depth 5 |
+        Set-Content (Join-Path $Results "warmup.json") -Encoding utf8
 [ordered]@{
     passed = $passedAll
     application_kind = $ApplicationKind
