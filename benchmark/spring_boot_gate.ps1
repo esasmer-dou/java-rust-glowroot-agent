@@ -11,7 +11,7 @@ param(
     [string] $Warmup = "5s",
     [int] $MinWarmupRounds = 3,
     [int] $WarmupPrimerRounds = 4,
-    [int] $MaxWarmupRounds = 12,
+    [int] $MaxWarmupRounds = 14,
     [double] $MaxWarmupMedianShiftPercent = 3.0,
     [double] $MaxWarmupMedianAbsoluteDeviationPercent = 4.0,
     [double] $CpuLimit = 1.0,

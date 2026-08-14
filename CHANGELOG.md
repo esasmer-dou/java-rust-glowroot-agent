@@ -42,14 +42,15 @@ All notable changes to this project are recorded here.
 ### Fixed
 
 - Aligned the production gate with the one-thread exporter isolation contract and extended fixed
-  OpenJ9 warmup to twelve equal rounds before measuring either variant.
+  OpenJ9 warmup before measuring either variant.
 - Replaced the outlier-sensitive final-three min/max warmup check with two robust controls: at most
   `3%` median shift between the final two three-round windows and at most `4%` median absolute
   deviation across the final six rounds. Sustained JIT ramp-up still fails; one scheduler outlier
   remains diagnostic instead of blocking a release.
-- Kept the warmup budget at twelve rounds per endpoint while interleaving the first four rounds
-  across endpoint classes. Shared HTTP, servlet, and JIT code is primed before the final eight
-  endpoint-specific rounds, avoiding endpoint-order bias without adding benchmark work.
+- Interleaved the first four of fourteen fixed rounds across endpoint classes. Shared HTTP, servlet,
+  and JIT code is primed before the final ten endpoint-specific rounds. The two additional rounds
+  keep a genuine heavy-JSON compilation trend outside the measured window instead of weakening the
+  stability thresholds.
 - Replaced the impossible zero-error requirement for the deliberately saturated embedded REST heavy JSON c256
   cell with a bounded `0.02` percentage-point non-inferiority margin. Normal cells remain zero-delta,
   and every baseline/candidate aggregate and peak error rate is capped at `0.05%`.

@@ -131,9 +131,9 @@ siblings in that group for the application, and pins the load runner and collect
 Every steal-time window must remain within `1%`. A manually configured single-logical-CPU run also
 keeps the paired SMT-sibling activity delta within `10%`.
 
-Each application process receives exactly twelve warmup rounds per endpoint. The first four rounds
+Each application process receives exactly fourteen warmup rounds per endpoint. The first four rounds
 visit all configured endpoint classes in round-robin order. This primes shared HTTP, servlet, and JIT
-code before the eight endpoint-specific rounds. The final two three-round windows may have at most
+code before the ten endpoint-specific rounds. The final two three-round windows may have at most
 `3%` median RPS shift, and the final six samples may have at
 most `4%` median absolute deviation. This robust decision rejects a sustained OpenJ9 interpreter/JIT
 ramp without failing a release for one scheduler outlier. Baseline and candidate still perform the
@@ -172,7 +172,7 @@ Spring production matrix:
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
-  -MaxWarmupRounds 12 `
+  -MaxWarmupRounds 14 `
   -MaxWarmupMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
@@ -197,7 +197,7 @@ Rust-Java REST production matrix:
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
-  -MaxWarmupRounds 12 `
+  -MaxWarmupRounds 14 `
   -MaxWarmupMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `

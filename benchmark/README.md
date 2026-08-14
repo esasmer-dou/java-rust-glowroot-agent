@@ -26,7 +26,7 @@ overhead.
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
-  -MaxWarmupRounds 12 `
+  -MaxWarmupRounds 14 `
   -MaxWarmupMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
@@ -42,9 +42,9 @@ starts OpenJ9's instrumentation subsystem and is reported separately; it does no
 starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
 executable-JAR startup path.
 
-Each configured endpoint receives exactly twelve warmup rounds. The first four rounds visit all
+Each configured endpoint receives exactly fourteen warmup rounds. The first four rounds visit all
 endpoint classes in round-robin order, so the shared HTTP, servlet, and JIT surface is primed before
-the eight endpoint-specific rounds. The final two three-round windows
+the ten endpoint-specific rounds. The final two three-round windows
 must have no more than `3%` median RPS shift, and the final six samples must have no more than `4%`
 median absolute deviation. This rejects a sustained OpenJ9/JIT ramp without treating one scheduler
 outlier as instability. The full min/max range remains diagnostic. Baseline and candidate always do
@@ -91,7 +91,7 @@ thread because it shared the framework runtime.
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
-  -MaxWarmupRounds 12 `
+  -MaxWarmupRounds 14 `
   -MaxWarmupMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
