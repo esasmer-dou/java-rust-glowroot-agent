@@ -131,9 +131,10 @@ siblings in that group for the application, and pins the load runner and collect
 Every steal-time window must remain within `1%`. A manually configured single-logical-CPU run also
 keeps the paired SMT-sibling activity delta within `10%`.
 
-Each application process receives exactly sixteen warmup rounds per endpoint. The first four rounds
-visit all configured endpoint classes in round-robin order. This primes shared HTTP, servlet, and JIT
-code before the twelve endpoint-specific rounds. The normalized Theil-Sen trend across the final six
+Each application process receives exactly sixteen warmup rounds per endpoint. Every round visits all
+configured endpoint classes in round-robin order. This gives every class the same process-age
+distribution, removes endpoint-order bias, and warms shared HTTP, servlet, and JIT code. The
+normalized Theil-Sen trend across the final six
 rounds may not exceed `3%`, and their median absolute deviation may not exceed `4%`. This robust
 slope rejects a sustained OpenJ9 interpreter/JIT ramp without failing a release for one or two
 temporary scheduler outliers. Baseline and candidate still perform the same fixed warmup work.
@@ -171,7 +172,6 @@ Spring production matrix:
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
@@ -196,7 +196,6 @@ Rust-Java REST production matrix:
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `

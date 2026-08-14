@@ -25,7 +25,6 @@ overhead.
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
@@ -42,9 +41,9 @@ starts OpenJ9's instrumentation subsystem and is reported separately; it does no
 starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
 executable-JAR startup path.
 
-Each configured endpoint receives exactly sixteen warmup rounds. The first four rounds visit all
-endpoint classes in round-robin order, so the shared HTTP, servlet, and JIT surface is primed before
-the twelve endpoint-specific rounds. The normalized Theil-Sen trend over the final six rounds must not
+Each configured endpoint receives exactly sixteen warmup rounds. Every round visits all endpoint
+classes in round-robin order. This gives each class the same process-age distribution and removes
+endpoint-order bias while warming shared HTTP, servlet, and JIT code. The normalized Theil-Sen trend over the final six rounds must not
 exceed `3%`, and their median absolute deviation must not exceed `4%`. The robust slope rejects a
 sustained OpenJ9/JIT ramp without treating one or two temporary scheduler outliers as a trend. The
 previous/recent median shift and full min/max range remain diagnostic. Baseline and candidate always do
@@ -90,7 +89,6 @@ thread because it shared the framework runtime.
   -Duration "15s" `
   -Warmup "8s" `
   -MinWarmupRounds 3 `
-  -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `

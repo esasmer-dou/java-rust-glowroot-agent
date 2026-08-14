@@ -137,8 +137,7 @@ jobs:
             .saturated_non_2xx_threshold_percentage_points == 0.02 and
             .absolute_non_2xx_ceiling_percent == 0.05 and
             .warmup_stability.fixed_rounds == 16 and
-            .warmup_stability.interleaved_primer_rounds == 4 and
-            .warmup_stability.endpoint_stability_rounds == 12 and
+            .warmup_stability.interleaved_rounds == 16 and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
             .warmup_stability.maximum_allowed_median_absolute_deviation_pct == 4 and
@@ -161,8 +160,7 @@ jobs:
             .saturated_non_2xx_threshold_percentage_points == 0.02 and
             .absolute_non_2xx_ceiling_percent == 0.05 and
             .warmup_stability.fixed_rounds == 16 and
-            .warmup_stability.interleaved_primer_rounds == 4 and
-            .warmup_stability.endpoint_stability_rounds == 12 and
+            .warmup_stability.interleaved_rounds == 16 and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
             .warmup_stability.maximum_allowed_median_absolute_deviation_pct == 4 and
