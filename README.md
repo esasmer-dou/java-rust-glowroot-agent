@@ -129,11 +129,11 @@ Then run the existing Spring Boot application:
 java -jar orders-api.jar
 ```
 
-Spring auto-configuration registers one Servlet filter around MVC dispatch. The filter reads the
-normalized route pattern selected by Spring, such as `/orders/{id}`, after the handler completes.
-It does not scan application classes and does not create a Java worker pool. Synchronous requests
-use stack-local timing state; only an actual async request gets a bounded completion listener.
-Mapped status codes and unhandled failures remain exact.
+Spring auto-configuration registers one MVC interceptor. It reads the normalized route pattern
+selected by Spring, such as `/orders/{id}`, after the handler completes. It does not add a Servlet
+filter, scan application classes, or create a Java worker pool. A normal unsampled success creates no
+agent request object. Sampled, slow, failed, and async requests reuse Spring MVC's completion
+lifecycle. Mapped status codes and unhandled failures remain exact.
 
 ### 2. Optional early-start bootstrap
 
@@ -241,8 +241,8 @@ underscores. Example: `reactor.glowroot.max-export-bytes` becomes
 | `reactor.glowroot.trace.capacity` | `0` | 0-32 | Bounded trace queue; `0` allocates no trace queue |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Maximum retained HTTP route slots |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Maximum encoded collector request |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the Spring MVC Servlet filter when the starter is present |
-| `reactor.glowroot.spring.order` | `-2147483548` | integer | Servlet filter order; former `interceptor-order` and `filter-order` names remain aliases |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the Spring MVC interceptor when the starter is present |
+| `reactor.glowroot.spring.order` | `-2147483548` | integer | MVC interceptor order; former `interceptor-order` and `filter-order` names remain aliases |
 | `reactor.glowroot.native.extract-dir` | user home | directory | Standalone Spring native extraction directory |
 
 Invalid bounds stop startup. There is no property that enlarges the agent-owned memory ceiling.
@@ -322,7 +322,7 @@ See [Validation Evidence](docs/VALIDATION.md),
 | Rust-Java REST | `4.4.1` | REST ABI `28`, Glowroot ABI `1` |
 | Agent bootstrap | `0.2.1` | One class; works with either supported runtime |
 | Spring Boot starter | `0.2.1` | Spring Boot `3.x`, Servlet MVC |
-| Standalone native source | `rust-spring v4.4.1` | Glowroot ABI `1`; clean CI DLL/SO |
+| Standalone native source | `rust-spring v4.4.2` | Glowroot ABI `1`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
 
@@ -352,6 +352,9 @@ do not publish a local dirty native build.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -MinWarmupRounds 3 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate

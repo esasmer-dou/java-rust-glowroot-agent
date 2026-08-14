@@ -9,6 +9,9 @@ param(
     [string] $EndpointClasses = "small-json,raw-json,heavy-json",
     [string] $Duration = "12s",
     [string] $Warmup = "5s",
+    [int] $MinWarmupRounds = 3,
+    [int] $MaxWarmupRounds = 6,
+    [double] $MaxWarmupRpsSpreadPercent = 8.0,
     [double] $CpuLimit = 1.0,
     [string] $MemoryLimit = "256m",
     [string] $SlotACpuSet = "0",
@@ -38,6 +41,13 @@ $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
 if ($PairRepeats -lt 3) { throw "PairRepeats must be at least 3." }
 if ($MaxMemoryRegressionMiB -gt 3.0) { throw "The agent memory gate cannot exceed 3 MiB." }
+if ($MinWarmupRounds -lt 2) { throw "MinWarmupRounds must be at least 2." }
+if ($MaxWarmupRounds -lt $MinWarmupRounds) {
+    throw "MaxWarmupRounds must be greater than or equal to MinWarmupRounds."
+}
+if ($MaxWarmupRpsSpreadPercent -le 0) {
+    throw "MaxWarmupRpsSpreadPercent must be greater than zero."
+}
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "benchmark_isolation.ps1")
@@ -61,6 +71,7 @@ $WrkImage = "williamyeh/wrk:latest"
 $Baseline = if ($IsRustJavaRest) { "rest-glowroot-baseline" } else { "spring-glowroot-baseline" }
 $Candidate = if ($IsRustJavaRest) { "rest-glowroot-candidate" } else { "spring-glowroot-candidate" }
 $Collector = if ($IsRustJavaRest) { "rest-glowroot-collector" } else { "spring-glowroot-collector" }
+$ContainerCpuSets = @{}
 
 $EndpointMap = if ($IsRustJavaRest) {
     @{
@@ -98,6 +109,7 @@ function Remove-Container([string] $Name) {
     if (& docker ps -a --format "{{.Names}}" | Where-Object { $_ -eq $Name }) {
         & docker rm -f $Name *> $null
     }
+    [void] $ContainerCpuSets.Remove($Name)
 }
 
 function Find-AgentJar {
@@ -207,9 +219,70 @@ function Invoke-Warmup([string] $Target, [string] $Path) {
     $args = @("run", "--rm", "--network", $Network)
     if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
     $args += @($WrkImage, "-t1", "-c32", "-d$Warmup", "http://${Target}:8080$Path")
-    $output = & docker @args 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Warmup failed for ${Target}${Path}:`n$($output -join "`n")"
+    $output = $null
+    foreach ($attempt in 1..3) {
+        $output = & docker @args 2>&1
+        if ($LASTEXITCODE -eq 0) { break }
+        if ($attempt -eq 3) {
+            throw "Warmup failed for ${Target}${Path}:`n$($output -join "`n")"
+        }
+        Start-Sleep -Seconds 1
+    }
+    $text = $output -join "`n"
+    if ($text -notmatch 'Requests/sec:\s+([0-9.]+)') {
+        throw "Cannot parse warmup RPS for ${Target}${Path}:`n$text"
+    }
+    return [double] $Matches[1]
+}
+
+function Invoke-StabilizedWarmup(
+        [string] $Target,
+        [string] $Path,
+        [int] $Pair,
+        [string] $Variant,
+        [string] $Endpoint) {
+    $samples = [Collections.Generic.List[double]]::new()
+    $firstStableRound = $null
+    foreach ($round in 1..$MaxWarmupRounds) {
+        $samples.Add((Invoke-Warmup $Target $Path))
+        if ($samples.Count -lt $MinWarmupRounds) { continue }
+
+        $recent = @($samples | Select-Object -Last $MinWarmupRounds)
+        $median = Median -Values $recent
+        $minimum = ($recent | Measure-Object -Minimum).Minimum
+        $maximum = ($recent | Measure-Object -Maximum).Maximum
+        $spread = if ($median -le 0) {
+            [double]::PositiveInfinity
+        } else {
+            100.0 * ($maximum - $minimum) / $median
+        }
+        if ($null -eq $firstStableRound -and $spread -le $MaxWarmupRpsSpreadPercent) {
+            $firstStableRound = $round
+        }
+    }
+
+    $finalWindow = @($samples | Select-Object -Last $MinWarmupRounds)
+    $finalMedian = Median -Values $finalWindow
+    $finalMinimum = ($finalWindow | Measure-Object -Minimum).Minimum
+    $finalMaximum = ($finalWindow | Measure-Object -Maximum).Maximum
+    $finalSpread = if ($finalMedian -le 0) {
+        [double]::PositiveInfinity
+    } else {
+        100.0 * ($finalMaximum - $finalMinimum) / $finalMedian
+    }
+    if ($finalSpread -gt $MaxWarmupRpsSpreadPercent) {
+        throw ("Warmup did not stabilize for pair=$Pair variant=$Variant endpoint=$Endpoint " +
+                "after $MaxWarmupRounds fixed rounds. RPS samples: $($samples -join ', ').")
+    }
+    return [pscustomobject]@{
+        pair = $Pair
+        variant = $Variant
+        endpoint = $Endpoint
+        rounds = $MaxWarmupRounds
+        first_stable_round = $firstStableRound
+        median_rps = [math]::Round($finalMedian, 2)
+        recent_spread_pct = [math]::Round($finalSpread, 3)
+        rps_samples = @($samples)
     }
 }
 
@@ -267,6 +340,7 @@ function Start-App([string] $Name, [string] $CpuSet, [bool] $Enabled, [int] $Pai
     $args += $AppImage
     $started = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Checked docker $args $ProjectRoot | Out-Null
+    $ContainerCpuSets[$Name] = $CpuSet
     Wait-Http $Name
     $started.Stop()
     return $started.Elapsed.TotalMilliseconds
@@ -323,8 +397,13 @@ function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] 
     $runner = "spring-glowroot-wrk-$Sequence"
     Remove-Container $runner
     $hostBefore = if ($IsLinux) { Get-ReactorLinuxCpuSnapshot } else { $null }
-    $applicationCpus = if ($IsLinux) { @(ConvertFrom-ReactorCpuSet -CpuSet $SlotACpuSet) } else { @() }
-    $physicalCpus = if ($IsLinux) { @(Get-ReactorLinuxPhysicalCpuSet -CpuSet $SlotACpuSet) } else { @() }
+    $targetCpuSet = if ($ContainerCpuSets.ContainsKey($Target)) {
+        "$($ContainerCpuSets[$Target])"
+    } else {
+        $SlotACpuSet
+    }
+    $applicationCpus = if ($IsLinux) { @(ConvertFrom-ReactorCpuSet -CpuSet $targetCpuSet) } else { @() }
+    $physicalCpus = if ($IsLinux) { @(Get-ReactorLinuxPhysicalCpuSet -CpuSet $targetCpuSet) } else { @() }
     $siblingCpus = if ($IsLinux) {
         @($physicalCpus | Where-Object { $applicationCpus -notcontains $_ })
     } else { @() }
@@ -432,6 +511,7 @@ Start-Collector
 $records = [Collections.Generic.List[object]]::new()
 $startups = [Collections.Generic.List[object]]::new()
 $steadyMemory = [Collections.Generic.List[object]]::new()
+$warmups = [Collections.Generic.List[object]]::new()
 $sequence = 0
 try {
     for ($pair = 1; $pair -le $PairRepeats; $pair++) {
@@ -455,7 +535,8 @@ try {
                 }
                 Invoke-RouteSmoke $name
                 foreach ($endpoint in $endpoints) {
-                    Invoke-Warmup $name $EndpointMap[$endpoint]
+                    $warmups.Add((Invoke-StabilizedWarmup `
+                            $name $EndpointMap[$endpoint] $pair $variant $endpoint))
                 }
                 foreach ($cell in $cells) {
                     $sequence++
@@ -503,10 +584,12 @@ try {
             $startups.Add([pscustomobject]@{ pair = $pair; variant = "baseline"; ms = (Start-App $Baseline $baselineCpu $false $pair) })
         }
         Assert-NativeTelemetryLoaded $Candidate
-        foreach ($name in @($Baseline, $Candidate)) {
+        foreach ($variant in @("baseline", "candidate")) {
+            $name = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
             Invoke-RouteSmoke $name
             foreach ($endpoint in $endpoints) {
-                Invoke-Warmup $name $EndpointMap[$endpoint]
+                $warmups.Add((Invoke-StabilizedWarmup `
+                        $name $EndpointMap[$endpoint] $pair $variant $endpoint))
             }
         }
 
@@ -667,10 +750,13 @@ $steadyThreadDelta = Median -Values @($pairedSteadyThreadDeltas)
 $steadyMemoryPassed = $steadyRssDelta -le $MaxMemoryRegressionMiB `
         -and $steadyContainerDelta -le $MaxMemoryRegressionMiB `
         -and $steadyThreadDelta -le $AllowedThreadDelta
+$observedMaxWarmupSpread = ($warmups.recent_spread_pct | Measure-Object -Maximum).Maximum
+$observedMaxFirstStableRound = ($warmups.first_stable_round | Measure-Object -Maximum).Maximum
 $passedAll = -not ($summary.gate -contains "FAIL") -and $startupDelta -le 10.0 -and $steadyMemoryPassed
 
 $records | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "raw.json") -Encoding utf8
 $steadyMemory | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "steady-memory.json") -Encoding utf8
+$warmups | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "warmup.json") -Encoding utf8
 [ordered]@{
     passed = $passedAll
     application_kind = $ApplicationKind
@@ -697,6 +783,14 @@ $steadyMemory | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $Results "stead
     startup_baseline_median_ms = [math]::Round($startupBase, 2)
     startup_candidate_median_ms = [math]::Round($startupAgent, 2)
     startup_delta_pct = [math]::Round($startupDelta, 2)
+    warmup_stability = [ordered]@{
+        fixed_rounds = $MaxWarmupRounds
+        stability_window_rounds = $MinWarmupRounds
+        maximum_allowed_recent_spread_pct = $MaxWarmupRpsSpreadPercent
+        observed_maximum_recent_spread_pct = [math]::Round($observedMaxWarmupSpread, 3)
+        observed_maximum_first_stable_round = [int] $observedMaxFirstStableRound
+        gate = "PASS"
+    }
     steady_memory = [ordered]@{
         process_rss_delta_mib = [math]::Round($steadyRssDelta, 3)
         container_delta_mib = [math]::Round($steadyContainerDelta, 3)
@@ -725,6 +819,7 @@ $lines.Add("Application: **$ApplicationKind**. Activation: **$activationDescript
 $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
+$lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process; the final $MinWarmupRounds-round window had an observed maximum RPS spread of $([math]::Round($observedMaxWarmupSpread,3))% within the $MaxWarmupRpsSpreadPercent% gate; latest first-stable round $observedMaxFirstStableRound.")
 $lines.Add("RPS, p99, and startup gates use the median of paired deltas. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")

@@ -9,7 +9,7 @@ permissions:
 jobs:
   spring-boot-agent:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -37,6 +37,9 @@ jobs:
             -EndpointClasses "small-json,raw-json,heavy-json" `
             -Duration "15s" `
             -Warmup "8s" `
+            -MinWarmupRounds 3 `
+            -MaxWarmupRounds 6 `
+            -MaxWarmupRpsSpreadPercent 8 `
             -AutoSelectCpuRoles `
             -AllowRunnerCollectorSiblingSharing `
             -FailOnGate
@@ -52,7 +55,7 @@ jobs:
 
   rust-java-rest-agent:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Check out agent source
         uses: actions/checkout@v5
@@ -96,6 +99,9 @@ jobs:
             -EndpointClasses "small-json,raw-json,heavy-json" `
             -Duration "15s" `
             -Warmup "8s" `
+            -MinWarmupRounds 3 `
+            -MaxWarmupRounds 6 `
+            -MaxWarmupRpsSpreadPercent 8 `
             -MemoryLimit "128m" `
             -AllowedThreadDelta 0 `
             -AutoSelectCpuRoles `

@@ -2,7 +2,7 @@
 
 All notable changes to this project are recorded here.
 
-## [0.2.1] - 2026-08-13
+## [0.2.1] - 2026-08-14
 
 ### Production Gate
 
@@ -12,7 +12,17 @@ All notable changes to this project are recorded here.
   artifacts with full source-revision provenance.
 - Made REST protocol, collector-down fail-open, and optional bootstrap checks release-enforced.
 - Required both Spring Boot and Rust-Java REST evidence from the exact tag commit before publish.
-- Added REST performance, steady-memory, and protocol summaries to stable release assets.
+- Added performance, warmup-stability, steady-memory, and protocol summaries to stable release assets.
+
+### Runtime
+
+- Replaced the Spring Servlet filter with a bounded MVC interceptor so normal unsampled successes
+  allocate no agent request object and do not wrap the Servlet filter chain.
+- Kept mapped and unhandled `5xx` accounting exact across synchronous and async MVC completion.
+- Replaced sampled-request composite route keys with a fixed-capacity allocation-free lookup table.
+- Retained the public 0.2.0 filter as a deprecated, non-auto-configured binary compatibility adapter.
+- Reserved the complete application SMT group and added an RPS-stability warmup gate before every
+  measured endpoint/process pair.
 
 ### Release Hygiene
 

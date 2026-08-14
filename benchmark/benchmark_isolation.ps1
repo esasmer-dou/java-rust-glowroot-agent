@@ -141,16 +141,20 @@ function Select-ReactorBenchmarkCpuRoles {
     $ranked = @($ranked | Sort-Object busy_percent, steal_percent, group)
     $application = $ranked[0]
     $load = $ranked[1]
-    $appCpu = $application.logical[0].cpu
+    # Reserve the complete SMT sibling group for the application. Pinning only one logical CPU
+    # leaves its sibling available to unrelated host work, which can steal execution resources from
+    # the same physical core and create false A/B regressions. --cpus still enforces the requested
+    # aggregate CPU quota inside this bounded cpuset.
+    $applicationCpuSet = $application.cpus -join ","
     $runnerCpu = $load.logical[0].cpu
     $collectorCpu = if ($load.logical.Count -gt 1) { $load.logical[1].cpu } else { $runnerCpu }
 
     Write-Host (("CPU roles selected after build: app={0} group={1} busy={2:N2}% steal={3:N2}%; " +
             "runner={4} collector={5} group={6}") -f `
-            $appCpu, $application.group, $application.busy_percent, $application.steal_percent, `
+            $applicationCpuSet, $application.group, $application.busy_percent, $application.steal_percent, `
             $runnerCpu, $collectorCpu, $load.group)
     return [pscustomobject]@{
-        application = "$appCpu"
+        application = $applicationCpuSet
         runner = "$runnerCpu"
         collector = "$collectorCpu"
         application_group = "$($application.group)"

@@ -129,11 +129,11 @@ Mevcut Spring Boot uygulamasını başlatın:
 java -jar orders-api.jar
 ```
 
-Spring auto-configuration, MVC çağrısını çevreleyen tek bir Servlet filter ekler. Filter, Spring'in
-seçtiği `/orders/{id}` gibi normalize edilmiş endpoint kalıbını handler tamamlandıktan sonra okur.
-Uygulama sınıflarını taramaz ve Java worker pool oluşturmaz. Senkron isteklerde süre bilgisi yalnız
-metot stack'inde tutulur. Sadece gerçekten async olan isteğe sınırlı bir completion listener eklenir.
-Handler'ın ürettiği durum kodları ve yakalanmamış hatalar tam sayılır.
+Spring auto-configuration tek bir MVC interceptor ekler. Spring'in seçtiği `/orders/{id}` gibi
+normalize edilmiş endpoint kalıbını handler tamamlandıktan sonra okur. Servlet filter eklemez.
+Uygulama sınıflarını taramaz ve Java worker pool oluşturmaz. Örneklenmeyen normal bir başarılı istek
+için agent request nesnesi ayırmaz. Örneklenen, yavaş, hatalı ve async isteklerde Spring MVC'nin
+completion akışını kullanır. Handler'ın ürettiği durum kodları ve yakalanmamış hatalar tam sayılır.
 
 ### 2. İsteğe bağlı erken başlangıç bootstrap'ı
 
@@ -242,8 +242,8 @@ tire yerine alt çizgi kullanın. Örnek: `reactor.glowroot.max-export-bytes`,
 | `reactor.glowroot.trace.capacity` | `0` | 0-32 | Sınırlı trace kuyruğu; `0` kuyruk ayırmaz |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Bellekte tutulacak en fazla endpoint sayısı |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Tek collector mesajının en büyük boyutu |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Starter varsa Spring MVC Servlet filter'ını açar |
-| `reactor.glowroot.spring.order` | `-2147483548` | integer | Servlet filter sırası; eski `interceptor-order` ve `filter-order` adları da çalışır |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Starter varsa Spring MVC interceptor'ını açar |
+| `reactor.glowroot.spring.order` | `-2147483548` | integer | MVC interceptor sırası; eski `interceptor-order` ve `filter-order` adları da çalışır |
 | `reactor.glowroot.native.extract-dir` | kullanıcı home dizini | dizin | Spring standalone native çıkarma dizini |
 
 Sınır dışındaki değerler uygulamanın başlamasını engeller. Agent bellek sınırını büyüten bir property
@@ -324,7 +324,7 @@ olarak test edilir.
 | Rust-Java REST | `4.4.1` | REST ABI `28`, Glowroot ABI `1` |
 | Agent bootstrap | `0.2.1` | Tek sınıf; iki desteklenen ortamda da çalışır |
 | Spring Boot starter | `0.2.1` | Spring Boot `3.x`, Servlet MVC |
-| Standalone native kaynak | `rust-spring v4.4.1` | Glowroot ABI `1`; temiz CI DLL/SO |
+| Standalone native kaynak | `rust-spring v4.4.2` | Glowroot ABI `1`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |
 
@@ -354,6 +354,9 @@ native build yayınlamayın.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -MinWarmupRounds 3 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate

@@ -105,15 +105,16 @@ pod yeniden başlatılmalıdır; bu kullanım profil sözleşmesinin dışındad
 
 Spring Boot Servlet MVC yolu bilinçli olarak iki ayrı artifact kullanır. Bootstrap JAR içinde yalnız
 bir premain sınıfı vardır. Sınırlı argümanları property'lere aktarır. Starter ise Spring Boot'un
-uygulama classloader'ında kalır, tek MVC Servlet filter ekler ve standalone native binary'yi taşır. Bu
-ayrım, Servlet sınıflarının executable Spring Boot JAR ile kullanılan `-javaagent` JAR içine
+uygulama classloader'ında kalır, tek MVC interceptor ekler ve standalone native binary'yi taşır. Bu
+ayrım, Spring MVC sınıflarının executable Spring Boot JAR ile kullanılan `-javaagent` JAR içine
 konulması halinde oluşan parent/child classloader hatasını önler.
 
 Başarılı istekler JNI çağrısından önce Java tarafında örneklenir. Eşleşen MVC handler'larının `5xx`
-yanıtları tam sayılır. Filter, normalize edilmiş route kalıbını MVC dispatch tamamlandıktan sonra
-yalnız örneklenen, yavaş veya hatalı istekte çözer. Senkron isteklerin süre bilgisi request thread'inin
-stack alanında kalır. Sadece gerçek async istek completion listener ayırır. Java executor oluşturmaz
-ve classpath taraması yapmaz. Standalone Rust
+yanıtları tam sayılır. Interceptor, normalize edilmiş route kalıbını MVC dispatch tamamlandıktan sonra
+yalnız örneklenen, yavaş veya hatalı istekte çözer. Örneklenmeyen başarılı istekte agent request
+nesnesi ayırmaz. Örneklenen veya trace açık olan istekte request üzerinde tek küçük observation tutar.
+Async redispatch için Spring MVC'nin mevcut completion akışını kullanır. Java executor, Servlet
+filter veya classpath taraması oluşturmaz. Standalone Rust
 kütüphanesi, `256 KiB` stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint
 tablosu, trace buffer, mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.
 

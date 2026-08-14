@@ -54,9 +54,14 @@ Matris şu alanları kapsar:
 
 Her performans hücresinde başarılı HTTP 200 RPS kaybı en fazla `%2`, p99 artışı en fazla `%10`,
 non-2xx artışı sıfır puan ve yeni thread sayısı en fazla bir olmalıdır. Build bittikten sonra Linux
-en sakin fiziksel CPU grubunu seçer. Load runner ve collector başka gruba sabitlenir. Gürültülü
-preflight kontrolünü uygular. Eşleştirilmiş SMT kardeşi medyanı `%10` içinde, bütün steal-time
-aralıkları `%1` içinde kalmalıdır.
+en sakin fiziksel CPU grubunu seçer. Bu grubun bütün SMT kardeşleri uygulamaya ayrılır. Load runner ve
+collector başka bir gruba sabitlenir. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal
+CPU elle seçilirse eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
+
+Her application process, endpoint başına tam altı warmup turu tamamlar. Son üç RPS örneğinin yayılımı
+en fazla `%8` olduğunda ölçüm başlar. Böylece baseline ve candidate aynı warmup işini yapar. OpenJ9
+interpreter/JIT ısınması agent maliyeti gibi raporlanmaz. Ham warmup RPS örneklerinin tamamı release
+kanıtlarına eklenir.
 
 Endpoint içindeki anlık RSS maksimumları tanılama amacıyla raporda kalır. OpenJ9 JIT/GC resident
 sayfaları bağımsız prosesler arasında iki yönde değişebilir. Bu nedenle bellek kontrollü bir noktada
@@ -87,6 +92,9 @@ Spring production matrisi:
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -MinWarmupRounds 3 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
@@ -104,6 +112,9 @@ Rust-Java REST production matrisi:
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -MinWarmupRounds 3 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 0 `
   -AutoSelectCpuRoles `

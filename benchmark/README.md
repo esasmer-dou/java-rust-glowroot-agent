@@ -12,7 +12,7 @@ The footprint gate runs the same application image with the agent disabled and e
 ## Spring Boot MVC Gate
 
 The Spring gate builds one executable Spring Boot image and runs it with the starter present in both
-variants. Baseline keeps telemetry disabled. Candidate enables the MVC Servlet filter and standalone
+variants. Baseline keeps telemetry disabled. Candidate enables the MVC interceptor and standalone
 Rust exporter through system properties. This is the recommended strict-memory production path.
 The same-image design prevents application dependencies or JVM flags from being mistaken for agent
 overhead.
@@ -24,6 +24,9 @@ overhead.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -MinWarmupRounds 3 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
@@ -34,15 +37,16 @@ starts OpenJ9's instrumentation subsystem and is reported separately; it does no
 starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
 executable-JAR startup path.
 
-Each configured endpoint receives its own warmup. Cells and variant order are randomized. On Linux,
-`-AutoSelectCpuRoles` samples physical CPU groups after the build, chooses the quietest group for the
-application, and pins the load runner and collector to another group. Baseline and candidate then
-occupy the same application CPU in alternating order. A post-build host preflight rejects a noisy
-application core or excessive steal time instead of publishing misleading evidence.
-Every load cell also measures the otherwise-idle SMT sibling and application-core steal time. The
-release gate requires the paired sibling-activity median to remain within `10%` and every steal-time
-window to remain within `1%`; the observed sibling maximum remains visible. These are host-quality
-failures, not product regressions; rerun them on a quiet node.
+Each configured endpoint receives exactly six warmup rounds. The final three rounds must have no
+more than `8%` RPS spread, otherwise the run is rejected. This keeps baseline and candidate warmup
+work equal. Cells and variant order are randomized. On Linux, `-AutoSelectCpuRoles` samples physical
+CPU groups after the build, chooses the
+quietest group, reserves all of that group's SMT siblings for the application, and pins the load
+runner and collector to another group. Baseline and candidate then occupy the same reserved group in
+alternating order. A post-build host preflight rejects a noisy core or excessive steal time instead
+of publishing misleading evidence. Manual single-logical-CPU runs still measure the otherwise-idle
+SMT sibling. These are host-quality checks, not product thresholds; rerun failed evidence on a quiet
+node rather than relaxing the limits.
 
 RPS, p99, and startup use the median of baseline/candidate pair deltas. This preserves each same-core
 comparison instead of subtracting unrelated group medians. Per-cell process RSS and cgroup maxima
@@ -69,6 +73,9 @@ adds no telemetry thread.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -MinWarmupRounds 3 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 0 `
   -AutoSelectCpuRoles `

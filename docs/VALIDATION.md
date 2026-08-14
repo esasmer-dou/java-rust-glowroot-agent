@@ -53,9 +53,15 @@ The matrix covers:
 
 Every performance cell must keep useful HTTP 200 RPS loss within `2%`, p99 regression within `10%`,
 non-2xx regression at zero percentage points, and additional threads at one or less. Build work is
-finished before CPU selection. Linux then chooses the quietest physical CPU group, pins the load
-runner and collector elsewhere. The paired SMT-sibling median must remain within `10%`, and every
-steal-time window must remain within `1%`.
+finished before CPU selection. Linux then chooses the quietest physical CPU group, reserves all SMT
+siblings in that group for the application, and pins the load runner and collector to another group.
+Every steal-time window must remain within `1%`. A manually configured single-logical-CPU run also
+keeps the paired SMT-sibling activity delta within `10%`.
+
+Each application process receives exactly six endpoint-specific warmup rounds. Measurement starts
+only when the final three RPS samples have at most `8%` spread. This gives baseline and candidate the
+same warmup work and rejects OpenJ9 interpreter/JIT ramp-up instead of publishing it as agent
+overhead. Every raw warmup RPS sample is attached to the release.
 
 Per-cell RSS maxima remain diagnostics because OpenJ9 JIT/GC page residency can move in both
 directions between independent processes. Memory is gated at a controlled point instead: each
@@ -86,6 +92,9 @@ Spring production matrix:
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -MinWarmupRounds 3 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupRpsSpreadPercent 8 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
@@ -103,6 +112,9 @@ Rust-Java REST production matrix:
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "15s" `
   -Warmup "8s" `
+  -MinWarmupRounds 3 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 0 `
   -AutoSelectCpuRoles `

@@ -4,6 +4,7 @@ import com.reactor.glowroot.agent.runtime.NativeTelemetry;
 import com.reactor.glowroot.agent.runtime.TelemetryConfig;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -11,62 +12,35 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.web.servlet.HandlerMapping;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Low-allocation Spring MVC request timing adapter for the Rust telemetry runtime. */
+/**
+ * Compatibility adapter for applications that manually registered the public 0.2.0 filter.
+ *
+ * <p>The starter does not register this class. New applications use {@link RustGlowrootInterceptor}
+ * through auto-configuration, which avoids wrapping the Servlet filter chain.</p>
+ *
+ * @deprecated use starter auto-configuration and {@link RustGlowrootInterceptor}
+ */
+@Deprecated(since = "0.2.1", forRemoval = false)
 public final class RustGlowrootFilter implements Filter {
 
-    private static final int DISABLED_SLOT = -1;
-    private static final String UNMATCHED_ROUTE = "<unmatched>";
-
-    private final HttpTelemetryRecorder telemetry;
-    private final int sampleRate;
-    private final int sampleMask;
-    private final boolean slowTraceEnabled;
-    private final long slowThresholdNanos;
-    private final int maxRoutes;
-    private final ThreadLocal<SampleCursor> sampleCursor;
-    private final Map<String, Integer> routeSlots;
+    private final RustGlowrootInterceptor delegate;
 
     /**
-     * Creates the low-allocation Servlet MVC filter.
+     * Creates the manual compatibility filter.
      *
      * @param telemetry process telemetry handle
      * @param config bounded telemetry configuration
      */
     public RustGlowrootFilter(NativeTelemetry telemetry, TelemetryConfig config) {
-        this(new NativeRecorder(telemetry), config);
+        this.delegate = new RustGlowrootInterceptor(telemetry, config);
     }
 
     RustGlowrootFilter(HttpTelemetryRecorder telemetry, TelemetryConfig config) {
-        this.telemetry = telemetry;
-        this.sampleRate = config.httpSampleRate();
-        this.sampleMask = sampleRate - 1;
-        this.slowTraceEnabled = config.traceCapacity() != 0;
-        this.slowThresholdNanos = !slowTraceEnabled
-                ? Long.MAX_VALUE
-                : config.slowThresholdMs() * 1_000_000L;
-        this.maxRoutes = config.maxRoutes();
-        this.sampleCursor = ThreadLocal.withInitial(() ->
-                new SampleCursor(initialSampleOffset(Thread.currentThread().threadId(), sampleMask)));
-        this.routeSlots = new HashMap<>(Math.min(16, maxRoutes));
-    }
-
-    private record NativeRecorder(NativeTelemetry telemetry) implements HttpTelemetryRecorder {
-        @Override
-        public int registerHttpRoute(String method, String route) {
-            return telemetry.registerHttpRoute(method, route);
-        }
-
-        @Override
-        public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
-            telemetry.recordHttp(slot, status, durationNanos, sampleWeight);
-        }
+        this.delegate = new RustGlowrootInterceptor(telemetry, config);
     }
 
     @Override
@@ -75,184 +49,60 @@ public final class RustGlowrootFilter implements Filter {
             ServletResponse response,
             FilterChain chain) throws IOException, ServletException {
         if (!(request instanceof HttpServletRequest httpRequest)
-                || !(response instanceof HttpServletResponse httpResponse)) {
+                || !(response instanceof HttpServletResponse httpResponse)
+                || httpRequest.getDispatcherType() != DispatcherType.REQUEST) {
             chain.doFilter(request, response);
             return;
         }
 
-        boolean sampled = sampleCursor.get().next(sampleMask);
-        if (!sampled && !slowTraceEnabled) {
-            doUnobserved(httpRequest, httpResponse, chain);
-            return;
-        }
-
-        doObserved(httpRequest, httpResponse, chain, sampled);
-    }
-
-    private void doUnobserved(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain chain) throws IOException, ServletException {
+        delegate.preHandle(httpRequest, httpResponse, this);
         try {
             chain.doFilter(request, response);
-        } catch (IOException | ServletException | RuntimeException | Error error) {
-            recordStatus(request, 500, 0L, false);
+        } catch (IOException | ServletException | RuntimeException exception) {
+            delegate.afterCompletion(httpRequest, httpResponse, this, exception);
+            throw exception;
+        } catch (Error error) {
+            delegate.afterCompletion(httpRequest, httpResponse, this, new Exception(error));
             throw error;
         }
-        if (request.isAsyncStarted()) {
-            registerAsyncCompletion(request, response, false, false, 0L);
+
+        if (!httpRequest.isAsyncStarted()) {
+            delegate.afterCompletion(httpRequest, httpResponse, this, null);
             return;
         }
-        int status = response.getStatus();
-        if (status >= 500) {
-            recordStatus(request, status, 0L, false);
-        }
-    }
 
-    private void doObserved(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain chain,
-            boolean sampled) throws IOException, ServletException {
-        long startedAtNanos = System.nanoTime();
+        delegate.afterConcurrentHandlingStarted(httpRequest, httpResponse, this);
+        AsyncCompletion completion = new AsyncCompletion(httpRequest, httpResponse);
         try {
-            chain.doFilter(request, response);
-        } catch (IOException | ServletException | RuntimeException | Error error) {
-            recordStatus(request, 500, elapsedNanos(true, startedAtNanos), sampled);
-            throw error;
-        }
-        if (request.isAsyncStarted()) {
-            registerAsyncCompletion(request, response, sampled, true, startedAtNanos);
-            return;
-        }
-        record(request, response, sampled, elapsedNanos(true, startedAtNanos), 0);
-    }
-
-    private void registerAsyncCompletion(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            boolean sampled,
-            boolean observing,
-            long startedAtNanos) {
-        AsyncCompletion listener = new AsyncCompletion(
-                request,
-                response,
-                sampled,
-                observing,
-                startedAtNanos
-        );
-        try {
-            request.getAsyncContext().addListener(listener);
+            httpRequest.getAsyncContext().addListener(completion);
         } catch (IllegalStateException completedBeforeRegistration) {
-            record(
-                    request,
-                    response,
-                    sampled,
-                    elapsedNanos(observing, startedAtNanos),
-                    0
-            );
-        }
-    }
-
-    private void record(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            boolean sampled,
-            long durationNanos,
-            int forcedStatus) {
-        int status = forcedStatus == 0 ? response.getStatus() : forcedStatus;
-        if (!sampled && status < 500 && durationNanos < slowThresholdNanos) return;
-
-        recordStatus(request, status, durationNanos, sampled);
-    }
-
-    private void recordStatus(
-            HttpServletRequest request,
-            int status,
-            long durationNanos,
-            boolean sampled) {
-        String method = request.getMethod();
-        Object matched = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        String route = matched == null ? UNMATCHED_ROUTE : matched.toString();
-        int slot = routeSlot(method, route);
-        if (slot != DISABLED_SLOT) {
-            telemetry.recordHttp(slot, status, durationNanos, sampled ? sampleRate : 0);
-        }
-    }
-
-    private int routeSlot(String method, String route) {
-        String key = method + ' ' + route;
-        synchronized (routeSlots) {
-            Integer existing = routeSlots.get(key);
-            if (existing != null) return existing;
-            if (routeSlots.size() >= maxRoutes) return DISABLED_SLOT;
-            int slot = telemetry.registerHttpRoute(method, route);
-            if (slot != DISABLED_SLOT) routeSlots.put(key, slot);
-            return slot;
-        }
-    }
-
-    private static long elapsedNanos(boolean observing, long startedAtNanos) {
-        return observing ? Math.max(0L, System.nanoTime() - startedAtNanos) : 0L;
-    }
-
-    private static int initialSampleOffset(long threadId, int mask) {
-        long mixed = threadId * 0x9E3779B97F4A7C15L;
-        mixed ^= mixed >>> 33;
-        return (int) mixed & mask;
-    }
-
-    private static final class SampleCursor {
-        private int remaining;
-
-        private SampleCursor(int initialOffset) {
-            this.remaining = initialOffset;
-        }
-
-        private boolean next(int mask) {
-            if (remaining == 0) {
-                remaining = mask;
-                return true;
-            }
-            remaining--;
-            return false;
+            completion.complete(null, 0);
         }
     }
 
     private final class AsyncCompletion implements AsyncListener {
         private final HttpServletRequest request;
         private final HttpServletResponse response;
-        private final boolean sampled;
-        private final boolean observing;
-        private final long startedAtNanos;
         private final AtomicBoolean completed = new AtomicBoolean();
 
-        private AsyncCompletion(
-                HttpServletRequest request,
-                HttpServletResponse response,
-                boolean sampled,
-                boolean observing,
-                long startedAtNanos) {
+        private AsyncCompletion(HttpServletRequest request, HttpServletResponse response) {
             this.request = request;
             this.response = response;
-            this.sampled = sampled;
-            this.observing = observing;
-            this.startedAtNanos = startedAtNanos;
         }
 
         @Override
         public void onComplete(AsyncEvent event) {
-            complete(event, 0);
+            complete(null, 0);
         }
 
         @Override
         public void onTimeout(AsyncEvent event) {
-            complete(event, 504);
+            complete(new ServletException("Async request timed out"), 504);
         }
 
         @Override
         public void onError(AsyncEvent event) {
-            complete(event, 500);
+            complete(asException(event.getThrowable()), 500);
         }
 
         @Override
@@ -260,18 +110,16 @@ public final class RustGlowrootFilter implements Filter {
             event.getAsyncContext().addListener(this);
         }
 
-        private void complete(AsyncEvent event, int forcedStatus) {
-            if (!completed.compareAndSet(false, true)) return;
-            HttpServletResponse supplied = event.getSuppliedResponse() instanceof HttpServletResponse http
-                    ? http
-                    : response;
-            record(
-                    request,
-                    supplied,
-                    sampled,
-                    elapsedNanos(observing, startedAtNanos),
-                    forcedStatus
-            );
+        private void complete(Exception exception, int forcedStatus) {
+            if (completed.compareAndSet(false, true)) {
+                delegate.complete(request, response, exception, forcedStatus);
+            }
+        }
+
+        private static Exception asException(Throwable throwable) {
+            if (throwable instanceof Exception exception) return exception;
+            if (throwable == null) return new Exception("Async request failed");
+            return new Exception(throwable);
         }
     }
 }
