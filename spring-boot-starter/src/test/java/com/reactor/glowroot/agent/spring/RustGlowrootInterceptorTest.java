@@ -15,6 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RustGlowrootInterceptorTest {
 
+    private static final String OBSERVATION_ATTRIBUTE =
+            RustGlowrootInterceptor.class.getName() + ".observation";
+
     @Test
     void samplesSuccessesAndKeepsErrorsExactWithoutPerRequestRouteRegistration() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
@@ -152,6 +155,21 @@ class RustGlowrootInterceptorTest {
         assertEquals(0, recorder.records.get(0).sampleWeight());
     }
 
+    @Test
+    void keepsSynchronousRequestsOutOfTheServletAttributeTable() throws Exception {
+        FakeRecorder recorder = new FakeRecorder();
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
+        TrackingRequest request = new TrackingRequest();
+        request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/orders/{id}");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        interceptor.preHandle(request, response, new Object());
+        interceptor.afterCompletion(request, response, new Object(), null);
+
+        assertEquals(0, request.observationAttributeWrites);
+        assertEquals(1, recorder.records.size());
+    }
+
     private static void invoke(
             RustGlowrootInterceptor interceptor,
             int status,
@@ -215,6 +233,26 @@ class RustGlowrootInterceptorTest {
         @Override
         public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
             records.add(new Record(slot, status, sampleWeight));
+        }
+    }
+
+    private static final class TrackingRequest extends MockHttpServletRequest {
+        private int observationAttributeWrites;
+
+        private TrackingRequest() {
+            super("GET", "/orders/42");
+        }
+
+        @Override
+        public void setAttribute(String name, Object value) {
+            if (OBSERVATION_ATTRIBUTE.equals(name)) observationAttributeWrites++;
+            super.setAttribute(name, value);
+        }
+
+        @Override
+        public void removeAttribute(String name) {
+            if (OBSERVATION_ATTRIBUTE.equals(name)) observationAttributeWrites++;
+            super.removeAttribute(name);
         }
     }
 

@@ -112,7 +112,7 @@ public final class RustGlowrootFilter implements Filter {
 
         private void complete(Exception exception, int forcedStatus) {
             if (completed.compareAndSet(false, true)) {
-                delegate.complete(request, response, exception, forcedStatus);
+                delegate.completeAsync(request, response, exception, forcedStatus);
             }
         }
 

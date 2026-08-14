@@ -22,6 +22,10 @@ All notable changes to this project are recorded here.
 
 - Moved the exporter and profile-release loop onto one isolated `256 KiB` Rust thread in both Spring
   and Rust-Java REST. Telemetry no longer consumes Hyper workers or application executors.
+- Moved Spring MVC synchronous request sampling state into one reusable per-thread primitive holder.
+  Normal synchronous requests no longer touch the Servlet attribute table, and sampled synchronous
+  requests no longer allocate an `Observation` object. Async redispatch keeps the bounded attribute
+  hand-off required for cross-thread correctness.
 - Moved JVM bean discovery, heap/non-heap/pool/GC sampling, diagnostic orchestration, and diagnostic
   file I/O out of Java helper classes and into the isolated Rust runtime. Java now supplies only
   Spring/JVM boundary events that cannot be observed outside the JVM.
@@ -37,6 +41,8 @@ All notable changes to this project are recorded here.
 
 ### Fixed
 
+- Aligned the production gate with the one-thread exporter isolation contract and extended fixed
+  OpenJ9 warmup to twelve equal rounds before measuring either variant.
 - Made HTTP/SQL telemetry registration and error-stack extraction fail open. JNI inspection failure
   increments a drop counter and cannot replace or interrupt the application exception flow.
 - Replaced per-exception-class REST labels with one fixed `Java Error` identity so temporary `full`
