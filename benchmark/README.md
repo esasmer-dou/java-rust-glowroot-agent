@@ -27,7 +27,7 @@ overhead.
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 14 `
-  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
@@ -44,10 +44,10 @@ executable-JAR startup path.
 
 Each configured endpoint receives exactly fourteen warmup rounds. The first four rounds visit all
 endpoint classes in round-robin order, so the shared HTTP, servlet, and JIT surface is primed before
-the ten endpoint-specific rounds. The final two three-round windows
-must have no more than `3%` median RPS shift, and the final six samples must have no more than `4%`
-median absolute deviation. This rejects a sustained OpenJ9/JIT ramp without treating one scheduler
-outlier as instability. The full min/max range remains diagnostic. Baseline and candidate always do
+the ten endpoint-specific rounds. The normalized Theil-Sen trend over the final six rounds must not
+exceed `3%`, and their median absolute deviation must not exceed `4%`. The robust slope rejects a
+sustained OpenJ9/JIT ramp without treating one or two temporary scheduler outliers as a trend. The
+previous/recent median shift and full min/max range remain diagnostic. Baseline and candidate always do
 the same warmup work. Cells and variant order are randomized. On Linux, `-AutoSelectCpuRoles` samples physical
 CPU groups after the build, chooses the
 quietest group, reserves all of that group's SMT siblings for the application, and pins the load
@@ -92,7 +92,7 @@ thread because it shared the framework runtime.
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 14 `
-  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `

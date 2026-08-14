@@ -44,9 +44,9 @@ All notable changes to this project are recorded here.
 - Aligned the production gate with the one-thread exporter isolation contract and extended fixed
   OpenJ9 warmup before measuring either variant.
 - Replaced the outlier-sensitive final-three min/max warmup check with two robust controls: at most
-  `3%` median shift between the final two three-round windows and at most `4%` median absolute
-  deviation across the final six rounds. Sustained JIT ramp-up still fails; one scheduler outlier
-  remains diagnostic instead of blocking a release.
+  `3%` normalized Theil-Sen trend and at most `4%` median absolute deviation across the final six
+  rounds. Sustained JIT ramp-up still fails; one or two temporary scheduler outliers remain
+  diagnostic instead of being misclassified as a trend.
 - Interleaved the first four of fourteen fixed rounds across endpoint classes. Shared HTTP, servlet,
   and JIT code is primed before the final ten endpoint-specific rounds. The two additional rounds
   keep a genuine heavy-JSON compilation trend outside the measured window instead of weakening the

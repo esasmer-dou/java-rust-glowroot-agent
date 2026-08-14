@@ -553,7 +553,7 @@ native build yayınlamayın.
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 14 `
-  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `

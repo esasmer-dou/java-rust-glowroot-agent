@@ -4,7 +4,7 @@ function Get-ReactorWarmupDecision {
         [Parameter(Mandatory)]
         [double[]] $Samples,
         [int] $WindowRounds = 3,
-        [double] $MaximumMedianShiftPercent = 3.0,
+        [double] $MaximumRobustTrendPercent = 3.0,
         [double] $MaximumMedianAbsoluteDeviationPercent = 4.0
     )
 
@@ -23,6 +23,18 @@ function Get-ReactorWarmupDecision {
         [double]::PositiveInfinity
     } else {
         100.0 * [math]::Abs($recentMedian - $previousMedian) / $previousMedian
+    }
+    $slopes = [Collections.Generic.List[double]]::new()
+    for ($left = 0; $left -lt ($combined.Count - 1); $left++) {
+        for ($right = $left + 1; $right -lt $combined.Count; $right++) {
+            $slopes.Add(($combined[$right] - $combined[$left]) / ($right - $left))
+        }
+    }
+    $theilSenSlope = Get-ReactorMedian -Values @($slopes)
+    $robustTrend = if ($combinedMedian -le 0) {
+        [double]::PositiveInfinity
+    } else {
+        100.0 * [math]::Abs($theilSenSlope) * ($combined.Count - 1) / $combinedMedian
     }
     $deviations = @($combined | ForEach-Object { [math]::Abs($_ - $combinedMedian) })
     $medianAbsoluteDeviation = if ($combinedMedian -le 0) {
@@ -43,9 +55,11 @@ function Get-ReactorWarmupDecision {
         recent_median_rps = $recentMedian
         combined_median_rps = $combinedMedian
         median_shift_pct = $medianShift
+        theil_sen_slope_rps_per_round = $theilSenSlope
+        robust_trend_pct = $robustTrend
         median_absolute_deviation_pct = $medianAbsoluteDeviation
         range_spread_pct = $rangeSpread
-        passed = $medianShift -le $MaximumMedianShiftPercent `
+        passed = $robustTrend -le $MaximumRobustTrendPercent `
                 -and $medianAbsoluteDeviation -le $MaximumMedianAbsoluteDeviationPercent
     }
 }

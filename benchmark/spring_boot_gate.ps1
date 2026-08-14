@@ -12,7 +12,7 @@ param(
     [int] $MinWarmupRounds = 3,
     [int] $WarmupPrimerRounds = 4,
     [int] $MaxWarmupRounds = 14,
-    [double] $MaxWarmupMedianShiftPercent = 3.0,
+    [double] $MaxWarmupRobustTrendPercent = 3.0,
     [double] $MaxWarmupMedianAbsoluteDeviationPercent = 4.0,
     [double] $CpuLimit = 1.0,
     [string] $MemoryLimit = "256m",
@@ -51,8 +51,8 @@ if ($WarmupPrimerRounds -lt 1) { throw "WarmupPrimerRounds must be at least 1." 
 if (($MaxWarmupRounds - $WarmupPrimerRounds) -lt (2 * $MinWarmupRounds)) {
     throw "Post-primer warmup must contain at least two complete stability windows."
 }
-if ($MaxWarmupMedianShiftPercent -le 0 -or $MaxWarmupMedianShiftPercent -gt 3.0) {
-    throw "MaxWarmupMedianShiftPercent must be between 0 and 3 percent."
+if ($MaxWarmupRobustTrendPercent -le 0 -or $MaxWarmupRobustTrendPercent -gt 3.0) {
+    throw "MaxWarmupRobustTrendPercent must be between 0 and 3 percent."
 }
 if ($MaxWarmupMedianAbsoluteDeviationPercent -le 0 `
         -or $MaxWarmupMedianAbsoluteDeviationPercent -gt 4.0) {
@@ -287,7 +287,7 @@ function Invoke-StabilizedWarmup(
         $decision = Get-ReactorWarmupDecision `
                 -Samples @($samples) `
                 -WindowRounds $MinWarmupRounds `
-                -MaximumMedianShiftPercent $MaxWarmupMedianShiftPercent `
+                -MaximumRobustTrendPercent $MaxWarmupRobustTrendPercent `
                 -MaximumMedianAbsoluteDeviationPercent $MaxWarmupMedianAbsoluteDeviationPercent
         if ($null -eq $firstStableRound -and $decision.passed) {
             $firstStableRound = $round
@@ -297,7 +297,7 @@ function Invoke-StabilizedWarmup(
     $finalDecision = Get-ReactorWarmupDecision `
             -Samples @($samples) `
             -WindowRounds $MinWarmupRounds `
-            -MaximumMedianShiftPercent $MaxWarmupMedianShiftPercent `
+            -MaximumRobustTrendPercent $MaxWarmupRobustTrendPercent `
             -MaximumMedianAbsoluteDeviationPercent $MaxWarmupMedianAbsoluteDeviationPercent
     $warmupPassed = $finalDecision.passed
     $script:warmups.Add([pscustomobject]@{
@@ -311,6 +311,8 @@ function Invoke-StabilizedWarmup(
         previous_median_rps = [math]::Round($finalDecision.previous_median_rps, 2)
         recent_median_rps = [math]::Round($finalDecision.recent_median_rps, 2)
         median_shift_pct = [math]::Round($finalDecision.median_shift_pct, 3)
+        theil_sen_slope_rps_per_round = [math]::Round($finalDecision.theil_sen_slope_rps_per_round, 3)
+        robust_trend_pct = [math]::Round($finalDecision.robust_trend_pct, 3)
         median_absolute_deviation_pct = [math]::Round($finalDecision.median_absolute_deviation_pct, 3)
         range_spread_pct = [math]::Round($finalDecision.range_spread_pct, 3)
         rps_samples = @($samples)
@@ -321,8 +323,8 @@ function Invoke-StabilizedWarmup(
             $_.ToString("F2", [Globalization.CultureInfo]::InvariantCulture)
         }) -join ", "
         throw ("Warmup did not stabilize for pair=$Pair variant=$Variant endpoint=$Endpoint " +
-                "after $MaxWarmupRounds fixed rounds. Median shift=" +
-                "$([math]::Round($finalDecision.median_shift_pct,3))%; MAD=" +
+                "after $MaxWarmupRounds fixed rounds. Robust trend=" +
+                "$([math]::Round($finalDecision.robust_trend_pct,3))%; MAD=" +
                 "$([math]::Round($finalDecision.median_absolute_deviation_pct,3))%. " +
                 "RPS samples: $sampleText.")
     }
@@ -835,6 +837,7 @@ $steadyThreadDelta = Median -Values @($pairedSteadyThreadDeltas)
 $steadyMemoryPassed = $steadyRssDelta -le $MaxMemoryRegressionMiB `
         -and $steadyContainerDelta -le $MaxMemoryRegressionMiB `
         -and $steadyThreadDelta -le $AllowedThreadDelta
+$observedMaxWarmupRobustTrend = ($warmups.robust_trend_pct | Measure-Object -Maximum).Maximum
 $observedMaxWarmupMedianShift = ($warmups.median_shift_pct | Measure-Object -Maximum).Maximum
 $observedMaxWarmupMad = ($warmups.median_absolute_deviation_pct | Measure-Object -Maximum).Maximum
 $observedMaxWarmupRangeSpread = ($warmups.range_spread_pct | Measure-Object -Maximum).Maximum
@@ -882,8 +885,9 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
         interleaved_primer_rounds = $WarmupPrimerRounds
         endpoint_stability_rounds = $MaxWarmupRounds - $WarmupPrimerRounds
         stability_window_rounds = $MinWarmupRounds
-        maximum_allowed_median_shift_pct = $MaxWarmupMedianShiftPercent
+        maximum_allowed_robust_trend_pct = $MaxWarmupRobustTrendPercent
         maximum_allowed_median_absolute_deviation_pct = $MaxWarmupMedianAbsoluteDeviationPercent
+        observed_maximum_robust_trend_pct = [math]::Round($observedMaxWarmupRobustTrend, 3)
         observed_maximum_median_shift_pct = [math]::Round($observedMaxWarmupMedianShift, 3)
         observed_maximum_median_absolute_deviation_pct = [math]::Round($observedMaxWarmupMad, 3)
         observed_maximum_range_spread_pct = [math]::Round($observedMaxWarmupRangeSpread, 3)
@@ -918,7 +922,7 @@ $lines.Add("Application: **$ApplicationKind**. Activation: **$activationDescript
 $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
-$lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process, split into $WarmupPrimerRounds interleaved primer rounds and $($MaxWarmupRounds - $WarmupPrimerRounds) endpoint-specific rounds. The previous/recent $MinWarmupRounds-round medians had at most $([math]::Round($observedMaxWarmupMedianShift,3))% shift within the $MaxWarmupMedianShiftPercent% gate, and the final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupMad,3))% median absolute deviation within the $MaxWarmupMedianAbsoluteDeviationPercent% gate. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
+$lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process, split into $WarmupPrimerRounds interleaved primer rounds and $($MaxWarmupRounds - $WarmupPrimerRounds) endpoint-specific rounds. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend within the $MaxWarmupRobustTrendPercent% gate and at most $([math]::Round($observedMaxWarmupMad,3))% median absolute deviation within the $MaxWarmupMedianAbsoluteDeviationPercent% gate. Previous/recent median shift and range spread remain diagnostic at $([math]::Round($observedMaxWarmupMedianShift,3))% and $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
 $lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells and a $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin only for saturated embedded REST heavy-json c256+ cells. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")

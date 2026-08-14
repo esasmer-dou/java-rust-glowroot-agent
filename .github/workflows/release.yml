@@ -140,7 +140,7 @@ jobs:
             .warmup_stability.interleaved_primer_rounds == 4 and
             .warmup_stability.endpoint_stability_rounds == 10 and
             .warmup_stability.stability_window_rounds == 3 and
-            .warmup_stability.maximum_allowed_median_shift_pct == 3 and
+            .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
             .warmup_stability.maximum_allowed_median_absolute_deviation_pct == 4 and
             .warmup_stability.gate == "PASS" and
             .steady_memory.gate == "PASS" and
@@ -164,7 +164,7 @@ jobs:
             .warmup_stability.interleaved_primer_rounds == 4 and
             .warmup_stability.endpoint_stability_rounds == 10 and
             .warmup_stability.stability_window_rounds == 3 and
-            .warmup_stability.maximum_allowed_median_shift_pct == 3 and
+            .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
             .warmup_stability.maximum_allowed_median_absolute_deviation_pct == 4 and
             .warmup_stability.gate == "PASS" and .steady_memory.gate == "PASS" and
             (.rows | length) == 6 and

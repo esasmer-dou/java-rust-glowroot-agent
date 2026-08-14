@@ -133,12 +133,12 @@ keeps the paired SMT-sibling activity delta within `10%`.
 
 Each application process receives exactly fourteen warmup rounds per endpoint. The first four rounds
 visit all configured endpoint classes in round-robin order. This primes shared HTTP, servlet, and JIT
-code before the ten endpoint-specific rounds. The final two three-round windows may have at most
-`3%` median RPS shift, and the final six samples may have at
-most `4%` median absolute deviation. This robust decision rejects a sustained OpenJ9 interpreter/JIT
-ramp without failing a release for one scheduler outlier. Baseline and candidate still perform the
-same fixed warmup work. The full range remains diagnostic, and every raw RPS sample is attached to
-the release.
+code before the ten endpoint-specific rounds. The normalized Theil-Sen trend across the final six
+rounds may not exceed `3%`, and their median absolute deviation may not exceed `4%`. This robust
+slope rejects a sustained OpenJ9 interpreter/JIT ramp without failing a release for one or two
+temporary scheduler outliers. Baseline and candidate still perform the same fixed warmup work.
+Previous/recent median shift and the full range remain diagnostic, and every raw RPS sample is
+attached to the release.
 
 Per-cell RSS maxima remain diagnostics because OpenJ9 JIT/GC page residency can move in both
 directions between independent processes. Memory is gated at a controlled point instead: each
@@ -173,7 +173,7 @@ Spring production matrix:
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 14 `
-  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
@@ -198,7 +198,7 @@ Rust-Java REST production matrix:
   -MinWarmupRounds 3 `
   -WarmupPrimerRounds 4 `
   -MaxWarmupRounds 14 `
-  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
