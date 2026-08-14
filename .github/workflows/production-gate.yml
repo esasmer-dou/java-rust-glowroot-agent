@@ -15,7 +15,9 @@ jobs:
 
       - name: Verify benchmark decision statistics
         shell: pwsh
-        run: ./benchmark/test_gate_statistics.ps1
+        run: |
+          ./benchmark/test_gate_statistics.ps1
+          ./benchmark/test_warmup_statistics.ps1
 
   spring-boot-agent:
     needs: gate-statistics
@@ -50,7 +52,8 @@ jobs:
             -Warmup "8s" `
             -MinWarmupRounds 3 `
             -MaxWarmupRounds 12 `
-            -MaxWarmupRpsSpreadPercent 8 `
+            -MaxWarmupMedianShiftPercent 3 `
+            -MaxWarmupMedianAbsoluteDeviationPercent 4 `
             -MaxNon2xxDeltaPercentagePoints 0 `
             -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
             -MaxAbsoluteNon2xxPercent 0.05 `
@@ -116,7 +119,8 @@ jobs:
             -Warmup "8s" `
             -MinWarmupRounds 3 `
             -MaxWarmupRounds 12 `
-            -MaxWarmupRpsSpreadPercent 8 `
+            -MaxWarmupMedianShiftPercent 3 `
+            -MaxWarmupMedianAbsoluteDeviationPercent 4 `
             -MaxNon2xxDeltaPercentagePoints 0 `
             -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
             -MaxAbsoluteNon2xxPercent 0.05 `

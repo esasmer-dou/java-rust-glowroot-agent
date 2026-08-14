@@ -131,10 +131,12 @@ siblings in that group for the application, and pins the load runner and collect
 Every steal-time window must remain within `1%`. A manually configured single-logical-CPU run also
 keeps the paired SMT-sibling activity delta within `10%`.
 
-Each application process receives exactly twelve endpoint-specific warmup rounds. Measurement starts
-only when the final three RPS samples have at most `8%` spread. This gives baseline and candidate the
-same warmup work and rejects OpenJ9 interpreter/JIT ramp-up instead of publishing it as agent
-overhead. Every raw warmup RPS sample is attached to the release.
+Each application process receives exactly twelve endpoint-specific warmup rounds. The final two
+three-round windows may have at most `3%` median RPS shift, and the final six samples may have at
+most `4%` median absolute deviation. This robust decision rejects a sustained OpenJ9 interpreter/JIT
+ramp without failing a release for one scheduler outlier. Baseline and candidate still perform the
+same fixed warmup work. The full range remains diagnostic, and every raw RPS sample is attached to
+the release.
 
 Per-cell RSS maxima remain diagnostics because OpenJ9 JIT/GC page residency can move in both
 directions between independent processes. Memory is gated at a controlled point instead: each
@@ -168,7 +170,8 @@ Spring production matrix:
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
-  -MaxWarmupRpsSpreadPercent 8 `
+  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
   -MaxAbsoluteNon2xxPercent 0.05 `
@@ -191,7 +194,8 @@ Rust-Java REST production matrix:
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
-  -MaxWarmupRpsSpreadPercent 8 `
+  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
   -MaxAbsoluteNon2xxPercent 0.05 `

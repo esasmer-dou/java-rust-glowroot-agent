@@ -552,7 +552,8 @@ native build yayınlamayın.
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
-  -MaxWarmupRpsSpreadPercent 8 `
+  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
   -MaxAbsoluteNon2xxPercent 0.05 `

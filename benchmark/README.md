@@ -26,7 +26,8 @@ overhead.
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
-  -MaxWarmupRpsSpreadPercent 8 `
+  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
   -MaxAbsoluteNon2xxPercent 0.05 `
@@ -40,9 +41,11 @@ starts OpenJ9's instrumentation subsystem and is reported separately; it does no
 starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
 executable-JAR startup path.
 
-Each configured endpoint receives exactly twelve warmup rounds. The final three rounds must have no
-more than `8%` RPS spread, otherwise the run is rejected. This keeps baseline and candidate warmup
-work equal. Cells and variant order are randomized. On Linux, `-AutoSelectCpuRoles` samples physical
+Each configured endpoint receives exactly twelve warmup rounds. The final two three-round windows
+must have no more than `3%` median RPS shift, and the final six samples must have no more than `4%`
+median absolute deviation. This rejects a sustained OpenJ9/JIT ramp without treating one scheduler
+outlier as instability. The full min/max range remains diagnostic. Baseline and candidate always do
+the same warmup work. Cells and variant order are randomized. On Linux, `-AutoSelectCpuRoles` samples physical
 CPU groups after the build, chooses the
 quietest group, reserves all of that group's SMT siblings for the application, and pins the load
 runner and collector to another group. Baseline and candidate then occupy the same reserved group in
@@ -85,7 +88,8 @@ thread because it shared the framework runtime.
   -Warmup "8s" `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
-  -MaxWarmupRpsSpreadPercent 8 `
+  -MaxWarmupMedianShiftPercent 3 `
+  -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
   -MaxAbsoluteNon2xxPercent 0.05 `
