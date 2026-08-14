@@ -5,6 +5,8 @@ function Get-ReactorWarmupDecision {
         [double[]] $Samples,
         [int] $WindowRounds = 3,
         [double] $MaximumRobustTrendPercent = 3.0,
+        [double] $MaximumBorderlineRobustTrendPercent = 4.0,
+        [double] $MaximumBorderlineMedianShiftPercent = 3.0,
         [double] $MaximumMedianAbsoluteDeviationPercent = 4.0
     )
 
@@ -50,6 +52,15 @@ function Get-ReactorWarmupDecision {
         100.0 * ($maximum - $minimum) / $combinedMedian
     }
 
+    $trendGateMode = if ($robustTrend -le $MaximumRobustTrendPercent) {
+        "primary"
+    } elseif ($robustTrend -le $MaximumBorderlineRobustTrendPercent `
+            -and $medianShift -le $MaximumBorderlineMedianShiftPercent) {
+        "borderline_confirmed"
+    } else {
+        "failed"
+    }
+
     return [pscustomobject]@{
         previous_median_rps = $previousMedian
         recent_median_rps = $recentMedian
@@ -59,7 +70,8 @@ function Get-ReactorWarmupDecision {
         robust_trend_pct = $robustTrend
         median_absolute_deviation_pct = $medianAbsoluteDeviation
         range_spread_pct = $rangeSpread
-        passed = $robustTrend -le $MaximumRobustTrendPercent `
+        trend_gate_mode = $trendGateMode
+        passed = $trendGateMode -ne "failed" `
                 -and $medianAbsoluteDeviation -le $MaximumMedianAbsoluteDeviationPercent
     }
 }

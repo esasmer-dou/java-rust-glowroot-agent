@@ -44,9 +44,9 @@ All notable changes to this project are recorded here.
 - Aligned the production gate with the one-thread exporter isolation contract and extended fixed
   OpenJ9 warmup before measuring either variant.
 - Replaced the outlier-sensitive final-three min/max warmup check with two robust controls: at most
-  `3%` normalized Theil-Sen trend and at most `4%` median absolute deviation across the final six
-  rounds. Sustained JIT ramp-up still fails; one or two temporary scheduler outliers remain
-  diagnostic instead of being misclassified as a trend.
+  `3%` primary normalized Theil-Sen trend and at most `4%` median absolute deviation across the final
+  six rounds. A `3-4%` boundary trend is accepted only when adjacent three-round medians remain within
+  `3%`. Sustained JIT ramp-up still fails; a near-plateau outlier is not misclassified as a trend.
 - Interleaved all sixteen fixed rounds across endpoint classes and dual-slot baseline/candidate
   variants. Both JVMs now receive identical warmup work at the same process age; shared HTTP,
   servlet, and JIT code warms without endpoint or variant-order bias. Exact-source evidence drove

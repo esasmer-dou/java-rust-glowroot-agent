@@ -27,6 +27,8 @@ overhead.
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
+  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
@@ -45,10 +47,11 @@ Each configured endpoint receives exactly sixteen warmup rounds. Every round vis
 classes in round-robin order. In the production dual-slot gate, baseline and candidate requests also
 alternate within every endpoint round. Both JVMs therefore receive the same work at the same process
 age. This removes endpoint and variant-order bias while warming shared HTTP, servlet, and JIT code.
-The normalized Theil-Sen trend over the final six rounds must not
-exceed `3%`, and their median absolute deviation must not exceed `4%`. The robust slope rejects a
-sustained OpenJ9/JIT ramp without treating one or two temporary scheduler outliers as a trend. The
-previous/recent median shift and full min/max range remain diagnostic. Baseline and candidate always do
+The normalized Theil-Sen trend over the final six rounds normally must not exceed `3%`. A trend in
+the `3-4%` boundary band passes only when the previous/recent three-round medians differ by no more
+than `3%`. Median absolute deviation must remain within `4%` in both cases. This rejects a sustained
+OpenJ9/JIT ramp without treating a near-plateau outlier as a trend. Full min/max range remains
+diagnostic. Baseline and candidate always do
 the same warmup work. Cells and variant order are randomized. On Linux, `-AutoSelectCpuRoles` samples physical
 CPU groups after the build, chooses the
 quietest group, reserves all of that group's SMT siblings for the application, and pins the load
@@ -93,6 +96,8 @@ thread because it shared the framework runtime.
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
+  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `

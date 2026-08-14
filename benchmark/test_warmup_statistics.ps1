@@ -7,6 +7,8 @@ function Assert-Warmup([bool] $Expected, [double[]] $Samples, [string] $Message)
             -Samples $Samples `
             -WindowRounds 3 `
             -MaximumRobustTrendPercent 3 `
+            -MaximumBorderlineRobustTrendPercent 4 `
+            -MaximumBorderlineMedianShiftPercent 3 `
             -MaximumMedianAbsoluteDeviationPercent 4
     if ($decision.passed -ne $Expected) {
         throw ("$Message Expected=$Expected Actual=$($decision.passed) " +
@@ -23,6 +25,12 @@ Assert-Warmup $true `
 Assert-Warmup $false `
         @(3496.0, 5187.0, 5354.0, 5223.0, 5634.0, 5826.0) `
         "A continuing OpenJ9/JIT ramp must fail."
+Assert-Warmup $false `
+        @(9751.40, 9754.20, 9994.31, 10071.69, 10039.93, 10147.95) `
+        "A borderline trend with a material median-window shift must fail."
+Assert-Warmup $true `
+        @(6611.87, 6740.90, 6812.38, 6767.06, 7051.08, 6758.10) `
+        "A borderline slope with matching window medians and low dispersion must pass."
 Assert-Warmup $true `
         @(20100.0, 19950.0, 20050.0, 20020.0, 20080.0, 19980.0) `
         "A stable series must pass."

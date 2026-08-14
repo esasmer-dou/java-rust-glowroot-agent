@@ -136,12 +136,12 @@ CPU elle seçilirse eşleştirilmiş SMT kardeşi aktivite farkı da `%10` için
 Her uygulama süreci, endpoint başına tam on altı ısınma turu tamamlar. Her tur, tanımlı endpoint
 sınıflarını sırayla dolaşır. Production dual-slot gate, her endpoint turunda baseline ve candidate
 isteklerini de sırayla çalıştırır. Böylece iki JVM aynı işi aynı süreç yaşında alır. Endpoint ve
-varyant sırası yanlılığı kalkar; ortak HTTP, servlet ve JIT kodu hazırlanır. Son altı turun normalize edilmiş
-Theil-Sen eğilimi en fazla `%3` olabilir. Bu
-örneklerin medyan mutlak sapması da `%4` sınırını aşamaz. Dayanıklı eğim hesabı, devam eden OpenJ9
-interpreter/JIT ısınmasını reddeder; geçici bir veya iki scheduler aykırı değerini kalıcı eğilim
-saymaz. Baseline ve candidate yine aynı sabit ısınma işini yapar. Önceki/sonraki medyan farkı ile
-tam aralık tanı amacıyla raporlanır ve bütün ham RPS örnekleri release kanıtına eklenir.
+varyant sırası yanlılığı kalkar; ortak HTTP, servlet ve JIT kodu hazırlanır. Son altı turun normalize
+edilmiş Theil-Sen eğilimi normalde en fazla `%3` olabilir. Eğilim `%3-%4` sınır bandındaysa önceki
+ve sonraki üç turun medyanları en fazla `%3` ayrılabilir. Her iki durumda medyan mutlak sapma `%4`
+sınırını aşamaz. Bu hesap, devam eden OpenJ9 interpreter/JIT ısınmasını reddeder; plateau'ya yakın
+tekil sıçramayı kalıcı eğilim saymaz. Baseline ve candidate yine aynı sabit ısınma işini yapar. Tam
+aralık tanı amacıyla raporlanır ve bütün ham RPS örnekleri release kanıtına eklenir.
 
 Endpoint içindeki anlık RSS maksimumları tanılama amacıyla raporda kalır. OpenJ9 JIT/GC resident
 sayfaları bağımsız prosesler arasında iki yönde değişebilir. Bu nedenle bellek kontrollü bir noktada
@@ -176,6 +176,8 @@ Spring production matrisi:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
+  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
@@ -200,6 +202,8 @@ Rust-Java REST production matrisi:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
+  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `

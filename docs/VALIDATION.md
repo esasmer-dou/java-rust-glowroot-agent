@@ -136,12 +136,12 @@ configured endpoint classes in round-robin order. The production dual-slot gate 
 baseline and candidate requests within every endpoint round. Both JVMs receive the same work at the
 same process age. This removes endpoint and variant-order bias and warms shared HTTP, servlet, and
 JIT code. The
-normalized Theil-Sen trend across the final six
-rounds may not exceed `3%`, and their median absolute deviation may not exceed `4%`. This robust
-slope rejects a sustained OpenJ9 interpreter/JIT ramp without failing a release for one or two
-temporary scheduler outliers. Baseline and candidate still perform the same fixed warmup work.
-Previous/recent median shift and the full range remain diagnostic, and every raw RPS sample is
-attached to the release.
+normalized Theil-Sen trend across the final six rounds normally may not exceed `3%`. A trend in the
+`3-4%` boundary band passes only when previous/recent three-round medians differ by at most `3%`.
+Median absolute deviation must remain within `4%` in both cases. This rejects a sustained OpenJ9
+interpreter/JIT ramp without failing a release for a near-plateau outlier. Baseline and candidate
+still perform the same fixed warmup work. The full range remains diagnostic, and every raw RPS
+sample is attached to the release.
 
 Per-cell RSS maxima remain diagnostics because OpenJ9 JIT/GC page residency can move in both
 directions between independent processes. Memory is gated at a controlled point instead: each
@@ -176,6 +176,8 @@ Spring production matrix:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
+  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
@@ -200,6 +202,8 @@ Rust-Java REST production matrix:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 16 `
   -MaxWarmupRobustTrendPercent 3 `
+  -MaxWarmupBorderlineRobustTrendPercent 4 `
+  -MaxWarmupBorderlineMedianShiftPercent 3 `
   -MaxWarmupMedianAbsoluteDeviationPercent 4 `
   -MaxNon2xxDeltaPercentagePoints 0 `
   -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
