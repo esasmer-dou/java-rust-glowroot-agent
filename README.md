@@ -36,7 +36,7 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 | --- | --- | --- | ---: |
 | Rust-Java REST `4.5.0` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
 | Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.3.0` | Loads the small standalone agent library | `1` |
-| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.3.0` bootstrap | Same runtime as the row above | No additional thread |
+| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.3.0` bootstrap | Same runtime as the row above | Same single exporter; bootstrap adds none |
 
 The bootstrap JAR only maps `-javaagent:key=value` arguments to properties. It contains one class,
 no native binary, no transformer, and no runtime dependency. The Spring starter is a separate JAR
@@ -557,7 +557,7 @@ Use the following additional parameters to reproduce the embedded REST matrix:
 -RequiredRestVersion "4.5.0" `
 -RequiredRestNativeAbi 29 `
 -MemoryLimit "128m" `
--AllowedThreadDelta 0
+-AllowedThreadDelta 1
 ```
 
 See [Validation Evidence](docs/VALIDATION.md) for the complete copy-paste commands.

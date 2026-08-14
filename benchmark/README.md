@@ -58,14 +58,15 @@ remain diagnostics because independent OpenJ9 JIT/GC residency is noisy. After t
 each variant enters the same idle phase and receives five memory samples at equal process age. The
 paired median of this steady process RSS and cgroup memory must stay within `+3 MiB`. Additional
 threads still use the worst paired delta. The separate footprint gates retain the stricter agent-owned
-and exact-source resident checks. The Spring path allows at most one additional thread; embedded
-Rust-Java allows none.
+and exact-source resident checks. Spring and embedded Rust-Java each allow exactly one bounded,
+isolated exporter thread when telemetry is enabled.
 
 ## Rust-Java REST Gate
 
 The published `0.3.0` REST gate uses the same paired same-core engine. It verifies the framework
-version and native ABI before building the image. The earlier ABI `1` implementation shared the
-framework runtime and allowed no telemetry thread.
+version and native ABI before building the image. Glowroot ABI `3` deliberately isolates telemetry
+from Hyper on one `256 KiB` exporter thread; the earlier ABI `1` implementation had no telemetry
+thread because it shared the framework runtime.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
@@ -81,7 +82,7 @@ framework runtime and allowed no telemetry thread.
   -MaxWarmupRounds 8 `
   -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
-  -AllowedThreadDelta 0 `
+  -AllowedThreadDelta 1 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
@@ -107,8 +108,8 @@ cores. It is diagnostic and is not the stable hosted-runner release gate:
 
 The script writes its report under `benchmark/results/`.
 
-Current unreleased Glowroot ABI `3` deliberately uses one isolated `256 KiB` Rust thread in both
-Spring and Rust-Java REST. When validating the next coordinated REST release, use REST ABI `29` and
+Glowroot ABI `3` deliberately uses one isolated `256 KiB` Rust thread in both Spring and Rust-Java
+REST. When validating the coordinated release, use REST ABI `29` and
 `-AllowedThreadDelta 1`. Do not compare this source against the historical no-thread gate without
 changing that contract explicitly.
 

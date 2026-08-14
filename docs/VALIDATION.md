@@ -4,11 +4,13 @@
 
 ## Release Decision
 
-Version `0.3.0` has two intentionally different runtime shapes:
+Version `0.3.0` has two intentionally different packaging shapes:
 
-- Rust-Java REST reuses the framework's Rust runtime. The telemetry feature adds no OS thread.
-- Spring Boot MVC loads the standalone Rust exporter. It adds one bounded thread with a `256 KiB`
-  stack and one reused h2 collector connection.
+- Rust-Java REST uses the exporter included in the framework's native library.
+- Spring Boot MVC loads the standalone Rust exporter library.
+
+Both paths isolate telemetry from application and Hyper workers on one bounded thread with a
+`256 KiB` stack and one reused HTTP/2 collector connection.
 
 The release workflow cannot publish a tag unless the exact tag commit has a successful Production
 Gate run. The measured report and machine-readable summary from that run are copied into the GitHub
@@ -144,7 +146,8 @@ remain within `+3 MiB`. The source-attributed native ceiling remains a separate 
 The REST gate checks out the published `rust-java-rest:4.5.0` source tag and rejects any native ABI
 other than `29`. It builds one minimal production image and runs telemetry off/on sequentially on
 the same physical CPU. The matrix uses the same small JSON, raw JSON, and heavy JSON classes and the
-same c64/c256 limits as the Spring gate. Embedded telemetry may not add an OS thread.
+same c64/c256 limits as the Spring gate. Embedded telemetry may add only the single bounded exporter
+thread required by the architecture.
 
 A second gate validates messages against the pinned Glowroot wire schema. It also stops the
 collector and proves that business HTTP remains available. Finally, it starts the same REST image
@@ -186,7 +189,7 @@ Rust-Java REST production matrix:
   -MaxWarmupRounds 8 `
   -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
-  -AllowedThreadDelta 0 `
+  -AllowedThreadDelta 1 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate

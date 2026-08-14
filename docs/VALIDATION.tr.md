@@ -4,12 +4,13 @@
 
 ## Release Kararı
 
-`0.3.0` sürümünde iki farklı çalışma şekli vardır:
+`0.3.0` sürümünde iki farklı paketleme şekli vardır:
 
-- Rust-Java REST, framework içindeki Rust runtime'ını kullanır. Telemetri yeni işletim sistemi
-  thread'i eklemez.
-- Spring Boot MVC, standalone Rust exporter'ı yükler. `256 KiB` stack kullanan tek sınırlı thread ve
-  tekrar kullanılan tek h2 collector bağlantısı ekler.
+- Rust-Java REST, framework native kütüphanesindeki exporter'ı kullanır.
+- Spring Boot MVC, standalone Rust exporter kütüphanesini yükler.
+
+İki yol da telemetriyi uygulama ve Hyper worker'larından ayırır. Bunun için `256 KiB` stack kullanan
+tek sınırlı thread ve tekrar kullanılan tek HTTP/2 collector bağlantısı açılır.
 
 Release workflow, tag'in işaret ettiği commit başarılı Production Gate sonucu olmadan yayın yapmaz.
 Bu koşunun okunabilir raporu ve JSON özeti GitHub Release asset'lerine eklenir. Başka branch veya
@@ -146,7 +147,8 @@ process yaşında beş örnek alınır. Eşleştirilmiş process RSS ve cgroup m
 REST gate, yayınlanmış `rust-java-rest:4.5.0` source tag'ini kullanır. Native ABI `29` değilse test
 başlamaz. Tek bir minimal production image hazırlanır. Telemetri kapalı ve açık varyantlar aynı
 fiziksel CPU üzerinde sıralı çalışır. Matris; küçük JSON, raw JSON ve heavy JSON endpoint'lerini
-c64/c256 altında ölçer. Embedded telemetri yeni işletim sistemi thread'i ekleyemez.
+c64/c256 altında ölçer. Embedded telemetri yalnızca mimarinin gerektirdiği tek sınırlı exporter
+thread'ini ekleyebilir.
 
 İkinci gate, mesajları sabitlenen Glowroot wire şemasıyla doğrular. Collector durdurulduğunda
 business HTTP'nin çalışmaya devam ettiğini de kanıtlar. Son olarak aynı REST image, opsiyonel
@@ -188,7 +190,7 @@ Rust-Java REST production matrisi:
   -MaxWarmupRounds 8 `
   -MaxWarmupRpsSpreadPercent 8 `
   -MemoryLimit "128m" `
-  -AllowedThreadDelta 0 `
+  -AllowedThreadDelta 1 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate

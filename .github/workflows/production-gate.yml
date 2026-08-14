@@ -115,7 +115,7 @@ jobs:
             -MaxWarmupRounds 8 `
             -MaxWarmupRpsSpreadPercent 8 `
             -MemoryLimit "128m" `
-            -AllowedThreadDelta 0 `
+            -AllowedThreadDelta 1 `
             -AutoSelectCpuRoles `
             -AllowRunnerCollectorSiblingSharing `
             -FailOnGate

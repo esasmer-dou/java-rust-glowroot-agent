@@ -36,7 +36,7 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 | --- | --- | --- | ---: |
 | Rust-Java REST `4.5.0` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
 | Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.3.0` | Küçük standalone agent kütüphanesini yükler | `1` |
-| `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.3.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Yeni thread eklemez |
+| `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.3.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Aynı tek exporter kullanılır; bootstrap eklemez |
 
 Bootstrap JAR yalnızca `-javaagent:key=value` değerlerini property'lere aktarır. İçinde tek sınıf
 vardır. Native binary, transformer ve runtime dependency yoktur. Spring starter ayrı JAR olarak
@@ -563,7 +563,7 @@ Embedded REST matrisini çalıştırmak için aynı komuta şu parametreleri ekl
 -RequiredRestVersion "4.5.0" `
 -RequiredRestNativeAbi 29 `
 -MemoryLimit "128m" `
--AllowedThreadDelta 0
+-AllowedThreadDelta 1
 ```
 
 Tam kopyala-yapıştır komutları için [Doğrulama Kanıtı](docs/VALIDATION.tr.md) belgesine bakın.
