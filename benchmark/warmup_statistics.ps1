@@ -63,3 +63,13 @@ function Get-ReactorWarmupDecision {
                 -and $medianAbsoluteDeviation -le $MaximumMedianAbsoluteDeviationPercent
     }
 }
+
+function Get-ReactorWarmupVariantOrder([int] $Round, [int] $EndpointIndex) {
+    if ($Round -lt 1 -or $EndpointIndex -lt 0) {
+        throw "Warmup round and endpoint index must be non-negative and one-based/zero-based respectively."
+    }
+    if (($Round + $EndpointIndex) % 2 -eq 0) {
+        return @("baseline", "candidate")
+    }
+    return @("candidate", "baseline")
+}

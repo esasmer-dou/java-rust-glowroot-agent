@@ -38,4 +38,18 @@ try {
 }
 if (-not $insufficientFailed) { throw "An incomplete two-window sample must fail closed." }
 
+foreach ($endpointIndex in 0..2) {
+    $baselineFirst = 0
+    foreach ($round in 1..16) {
+        $order = @(Get-ReactorWarmupVariantOrder -Round $round -EndpointIndex $endpointIndex)
+        if ($order.Count -ne 2 -or $order[0] -eq $order[1]) {
+            throw "Warmup variant order must contain baseline and candidate exactly once."
+        }
+        if ($order[0] -eq "baseline") { $baselineFirst++ }
+    }
+    if ($baselineFirst -ne 8) {
+        throw "Endpoint $endpointIndex must start with each variant exactly eight times."
+    }
+}
+
 Write-Host "Warmup gate statistics: PASS"

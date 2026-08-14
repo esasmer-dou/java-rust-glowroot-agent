@@ -42,8 +42,10 @@ starter-only resident-memory certification. CI still verifies bootstrap argument
 executable-JAR startup path.
 
 Each configured endpoint receives exactly sixteen warmup rounds. Every round visits all endpoint
-classes in round-robin order. This gives each class the same process-age distribution and removes
-endpoint-order bias while warming shared HTTP, servlet, and JIT code. The normalized Theil-Sen trend over the final six rounds must not
+classes in round-robin order. In the production dual-slot gate, baseline and candidate requests also
+alternate within every endpoint round. Both JVMs therefore receive the same work at the same process
+age. This removes endpoint and variant-order bias while warming shared HTTP, servlet, and JIT code.
+The normalized Theil-Sen trend over the final six rounds must not
 exceed `3%`, and their median absolute deviation must not exceed `4%`. The robust slope rejects a
 sustained OpenJ9/JIT ramp without treating one or two temporary scheduler outliers as a trend. The
 previous/recent median shift and full min/max range remain diagnostic. Baseline and candidate always do

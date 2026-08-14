@@ -268,6 +268,31 @@ function Invoke-InterleavedWarmup([string] $Target) {
     return $samplesByEndpoint
 }
 
+function Invoke-PairedInterleavedWarmup {
+    $samplesByVariant = @{}
+    foreach ($variant in @("baseline", "candidate")) {
+        $samplesByVariant[$variant] = @{}
+        foreach ($endpoint in $endpoints) {
+            $samplesByVariant[$variant][$endpoint] = [Collections.Generic.List[double]]::new()
+        }
+    }
+    foreach ($round in 1..$MaxWarmupRounds) {
+        $endpointIndex = 0
+        foreach ($endpoint in $endpoints) {
+            $variants = @(Get-ReactorWarmupVariantOrder `
+                    -Round $round `
+                    -EndpointIndex $endpointIndex)
+            foreach ($variant in $variants) {
+                $target = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
+                $samplesByVariant[$variant][$endpoint].Add(
+                    (Invoke-Warmup $target $EndpointMap[$endpoint]))
+            }
+            $endpointIndex++
+        }
+    }
+    return $samplesByVariant
+}
+
 function Assert-StabilizedWarmup(
         [int] $Pair,
         [string] $Variant,
@@ -630,13 +655,15 @@ try {
         foreach ($variant in @("baseline", "candidate")) {
             $name = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
             Invoke-RouteSmoke $name
-            $warmupSamples = Invoke-InterleavedWarmup $name
+        }
+        $warmupSamples = Invoke-PairedInterleavedWarmup
+        foreach ($variant in @("baseline", "candidate")) {
             foreach ($endpoint in $endpoints) {
                 Assert-StabilizedWarmup `
                         -Pair $pair `
                         -Variant $variant `
                         -Endpoint $endpoint `
-                        -Samples @($warmupSamples[$endpoint])
+                        -Samples @($warmupSamples[$variant][$endpoint])
             }
         }
 
@@ -872,6 +899,7 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     warmup_stability = [ordered]@{
         fixed_rounds = $MaxWarmupRounds
         interleaved_rounds = $MaxWarmupRounds
+        variant_interleaved = -not $SequentialVariants
         stability_window_rounds = $MinWarmupRounds
         maximum_allowed_robust_trend_pct = $MaxWarmupRobustTrendPercent
         maximum_allowed_median_absolute_deviation_pct = $MaxWarmupMedianAbsoluteDeviationPercent
@@ -910,7 +938,7 @@ $lines.Add("Application: **$ApplicationKind**. Activation: **$activationDescript
 $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
-$lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process, fully interleaved across endpoint classes to remove process-age and endpoint-order bias. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend within the $MaxWarmupRobustTrendPercent% gate and at most $([math]::Round($observedMaxWarmupMad,3))% median absolute deviation within the $MaxWarmupMedianAbsoluteDeviationPercent% gate. Previous/recent median shift and range spread remain diagnostic at $([math]::Round($observedMaxWarmupMedianShift,3))% and $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
+$lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process, fully interleaved across endpoint classes$(if (-not $SequentialVariants) { ' and baseline/candidate variants' } else { '' }) to remove process-age and ordering bias. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend within the $MaxWarmupRobustTrendPercent% gate and at most $([math]::Round($observedMaxWarmupMad,3))% median absolute deviation within the $MaxWarmupMedianAbsoluteDeviationPercent% gate. Previous/recent median shift and range spread remain diagnostic at $([math]::Round($observedMaxWarmupMedianShift,3))% and $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
 $lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells and a $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin only for saturated embedded REST heavy-json c256+ cells. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")

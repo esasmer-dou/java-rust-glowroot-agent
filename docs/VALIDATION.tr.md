@@ -134,8 +134,9 @@ collector başka bir gruba sabitlenir. Bütün steal-time aralıkları `%1` içi
 CPU elle seçilirse eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
 Her uygulama süreci, endpoint başına tam on altı ısınma turu tamamlar. Her tur, tanımlı endpoint
-sınıflarını sırayla dolaşır. Böylece her sınıf aynı süreç yaşı dağılımında çalışır, endpoint sırası
-yanlılığı kalkar ve ortak HTTP, servlet ve JIT kodu hazırlanır. Son altı turun normalize edilmiş
+sınıflarını sırayla dolaşır. Production dual-slot gate, her endpoint turunda baseline ve candidate
+isteklerini de sırayla çalıştırır. Böylece iki JVM aynı işi aynı süreç yaşında alır. Endpoint ve
+varyant sırası yanlılığı kalkar; ortak HTTP, servlet ve JIT kodu hazırlanır. Son altı turun normalize edilmiş
 Theil-Sen eğilimi en fazla `%3` olabilir. Bu
 örneklerin medyan mutlak sapması da `%4` sınırını aşamaz. Dayanıklı eğim hesabı, devam eden OpenJ9
 interpreter/JIT ısınmasını reddeder; geçici bir veya iki scheduler aykırı değerini kalıcı eğilim

@@ -47,10 +47,10 @@ All notable changes to this project are recorded here.
   `3%` normalized Theil-Sen trend and at most `4%` median absolute deviation across the final six
   rounds. Sustained JIT ramp-up still fails; one or two temporary scheduler outliers remain
   diagnostic instead of being misclassified as a trend.
-- Interleaved all sixteen fixed rounds across endpoint classes. Every class now has the same
-  process-age distribution; shared HTTP, servlet, and JIT code warms without making the first
-  endpoint carry the cold-process bias. Exact-source evidence drove this change instead of weakening
-  the stability thresholds.
+- Interleaved all sixteen fixed rounds across endpoint classes and dual-slot baseline/candidate
+  variants. Both JVMs now receive identical warmup work at the same process age; shared HTTP,
+  servlet, and JIT code warms without endpoint or variant-order bias. Exact-source evidence drove
+  this change instead of weakening the stability thresholds.
 - Replaced the impossible zero-error requirement for the deliberately saturated embedded REST heavy JSON c256
   cell with a bounded `0.02` percentage-point non-inferiority margin. Normal cells remain zero-delta,
   and every baseline/candidate aggregate and peak error rate is capped at `0.05%`.

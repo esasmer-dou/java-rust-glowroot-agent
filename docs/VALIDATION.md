@@ -132,8 +132,10 @@ Every steal-time window must remain within `1%`. A manually configured single-lo
 keeps the paired SMT-sibling activity delta within `10%`.
 
 Each application process receives exactly sixteen warmup rounds per endpoint. Every round visits all
-configured endpoint classes in round-robin order. This gives every class the same process-age
-distribution, removes endpoint-order bias, and warms shared HTTP, servlet, and JIT code. The
+configured endpoint classes in round-robin order. The production dual-slot gate also alternates
+baseline and candidate requests within every endpoint round. Both JVMs receive the same work at the
+same process age. This removes endpoint and variant-order bias and warms shared HTTP, servlet, and
+JIT code. The
 normalized Theil-Sen trend across the final six
 rounds may not exceed `3%`, and their median absolute deviation may not exceed `4%`. This robust
 slope rejects a sustained OpenJ9 interpreter/JIT ramp without failing a release for one or two
