@@ -27,6 +27,9 @@ overhead.
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
+  -MaxNon2xxDeltaPercentagePoints 0 `
+  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+  -MaxAbsoluteNon2xxPercent 0.05 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
@@ -49,9 +52,11 @@ SMT sibling. These are host-quality checks, not product thresholds; rerun failed
 node rather than relaxing the limits.
 
 RPS, p99, and startup use the median of baseline/candidate pair deltas. This preserves each same-core
-comparison instead of subtracting unrelated group medians. Non-2xx responses have two mandatory
-guards: the paired-median delta may not increase, the request-weighted aggregate delta across all
-repeats may not increase, and candidate peak error rate may not exceed the baseline peak envelope.
+comparison instead of subtracting unrelated group medians. Non-2xx responses use a zero-delta gate
+for normal cells. Only the explicitly saturated embedded REST heavy JSON c256 cell receives a `0.02` percentage-
+point non-inferiority margin. The paired median, request-weighted aggregate, and peak envelope must
+all stay within the cell margin, while baseline and candidate aggregate/peak rates must remain at
+or below the absolute `0.05%` ceiling.
 The worst individual paired delta remains in the report as a noise/overload diagnostic, but cannot
 replace these population-level guards. Per-cell process RSS and cgroup maxima
 remain diagnostics because independent OpenJ9 JIT/GC residency is noisy. After the full workload,
@@ -81,6 +86,9 @@ thread because it shared the framework runtime.
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
+  -MaxNon2xxDeltaPercentagePoints 0 `
+  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+  -MaxAbsoluteNon2xxPercent 0.05 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 1 `
   -AutoSelectCpuRoles `

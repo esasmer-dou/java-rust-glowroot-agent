@@ -480,15 +480,17 @@ endpoint/concurrency cell must keep:
 
 - useful HTTP 200 RPS loss at or above `-2%`;
 - p99 regression at or below `+10%`;
-- non-2xx regression at `0` percentage points in paired median and request-weighted aggregate, with
-  candidate peak error rate no higher than baseline peak;
+- non-2xx regression at `0` percentage points for normal cells; the explicit saturated embedded REST
+  heavy JSON c256 cell has a `0.02` percentage-point non-inferiority margin. Baseline and candidate aggregate
+  and peak error rates must still remain at or below `0.05%`;
 - additional agent threads at most `1` for both embedded Rust-Java and standalone Spring.
 
 The stable release runs this full matrix separately for Spring Boot and Rust-Java REST. Both cover
 small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and c256 with six balanced paired
 runs. RPS, p99, and startup use each pair's delta before the median is calculated. Non-2xx uses the
-paired median, request-weighted total, and peak error envelope together. One saturated-run delta
-remains visible without replacing the overall error decision. After both
+paired median, request-weighted total, peak error envelope, and the absolute `0.05%` ceiling
+together. The bounded `0.02` percentage-point margin applies only to the saturated embedded REST heavy JSON
+c256 cell. One saturated-run delta remains visible without replacing the overall error decision. After both
 variants complete the same full workload, a controlled equal-process-age phase requires
 paired-median process RSS and cgroup deltas at or below `+3 MiB` for `micro`. Both runtimes may add
 one bounded exporter thread. `jvm`, `sql`, `full`, and `diagnostic` are separate temporary-profile
@@ -545,6 +547,9 @@ do not publish a local dirty native build.
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
+  -MaxNon2xxDeltaPercentagePoints 0 `
+  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+  -MaxAbsoluteNon2xxPercent 0.05 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate

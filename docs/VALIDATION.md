@@ -121,10 +121,11 @@ The matrix covers:
 - six paired baseline/candidate runs with alternating variant order.
 
 Every performance cell must keep useful HTTP 200 RPS loss within `2%`, p99 regression within `10%`,
-and additional threads at one or less. Non-2xx may not increase in the paired median or the
-request-weighted aggregate across all six repeats, and candidate peak error rate may not exceed the
-baseline peak envelope. A single-pair delta remains visible as a diagnostic, but does not replace
-those population-level decisions. Build work is
+and additional threads at one or less. Normal cells use a zero-delta non-2xx gate. The deliberately
+saturated embedded REST heavy JSON c256 cell uses a `0.02` percentage-point non-inferiority margin. Its paired
+median, request-weighted aggregate, and peak envelope must stay within that margin. Baseline and
+candidate aggregate and peak error rates must also stay at or below `0.05%`. A single-pair delta
+remains visible as a diagnostic, but does not replace those population-level decisions. Build work is
 finished before CPU selection. Linux then chooses the quietest physical CPU group, reserves all SMT
 siblings in that group for the application, and pins the load runner and collector to another group.
 Every steal-time window must remain within `1%`. A manually configured single-logical-CPU run also
@@ -168,6 +169,9 @@ Spring production matrix:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
+  -MaxNon2xxDeltaPercentagePoints 0 `
+  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+  -MaxAbsoluteNon2xxPercent 0.05 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
@@ -188,6 +192,9 @@ Rust-Java REST production matrix:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
+  -MaxNon2xxDeltaPercentagePoints 0 `
+  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+  -MaxAbsoluteNon2xxPercent 0.05 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 1 `
   -AutoSelectCpuRoles `

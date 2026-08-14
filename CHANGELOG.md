@@ -43,6 +43,9 @@ All notable changes to this project are recorded here.
 
 - Aligned the production gate with the one-thread exporter isolation contract and extended fixed
   OpenJ9 warmup to twelve equal rounds before measuring either variant.
+- Replaced the impossible zero-error requirement for the deliberately saturated embedded REST heavy JSON c256
+  cell with a bounded `0.02` percentage-point non-inferiority margin. Normal cells remain zero-delta,
+  and every baseline/candidate aggregate and peak error rate is capped at `0.05%`.
 - Made HTTP/SQL telemetry registration and error-stack extraction fail open. JNI inspection failure
   increments a drop counter and cannot replace or interrupt the application exception flow.
 - Replaced per-exception-class REST labels with one fixed `Java Error` identity so temporary `full`

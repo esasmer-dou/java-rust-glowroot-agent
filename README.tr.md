@@ -485,15 +485,17 @@ Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
 
 - başarılı HTTP 200 RPS kaybı en fazla `%2`;
 - p99 artışı en fazla `%10`;
-- eşleştirilmiş medyanda ve istek sayısıyla ağırlıklandırılmış toplamda non-2xx artışı `0` yüzde puanı;
-  adayın en yüksek hata oranı baseline'ın en yüksek oranını aşamaz;
+- normal hücrelerde non-2xx artışı `0` yüzde puanı; bilinçli olarak doygun çalıştırılan embedded REST
+  heavy JSON c256 hücresinde en fazla `0,02` yüzde puanı artış kabul edilir. Baseline ve candidate toplam ve en
+  yüksek hata oranları yine `%0,05` altında kalmalıdır;
 - İki çalışma şeklinde de agent'a ait ek thread sayısı en fazla `1`.
 
 Stable release bu tam matrisi Spring Boot ve Rust-Java REST için ayrı çalıştırır. İki matris de
 small JSON, önceden hazırlanmış raw JSON ve dynamic heavy JSON endpoint'lerini c64/c256 seviyesinde
 altı dengeli çiftle ölçer. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan
-hesaplanır. Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırılmış toplamı ve en
-yüksek hata oranını birlikte kullanır. Doygun bir koşudaki tek fark raporda görünür; genel hata
+hesaplanır. Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırılmış toplamı, en
+yüksek hata oranını ve mutlak `%0,05` sınırını birlikte kullanır. `0,02` yüzde puanlık sınırlı marj
+yalnız doygun embedded REST heavy JSON c256 hücresinde geçerlidir. Doygun bir koşudaki tek fark raporda görünür; genel hata
 kararının yerine geçmez. Aynı tam
 yükten sonra eşit process yaşında ölçülen RSS ve cgroup medyan farkları en fazla
 `micro` için `+3 MiB` olabilir. İki runtime da yalnız tek sınırlı exporter thread'i ekleyebilir.
@@ -551,6 +553,9 @@ native build yayınlamayın.
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
+  -MaxNon2xxDeltaPercentagePoints 0 `
+  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+  -MaxAbsoluteNon2xxPercent 0.05 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate

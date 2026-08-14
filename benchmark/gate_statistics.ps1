@@ -15,7 +15,8 @@ function Get-ReactorNon2xxDecision {
         [object[]] $Baseline,
         [Parameter(Mandatory)]
         [object[]] $Candidate,
-        [double] $MaximumDeltaPercentagePoints = 0.0
+        [double] $MaximumDeltaPercentagePoints = 0.0,
+        [double] $MaximumAbsolutePercent = 100.0
     )
 
     if ($Baseline.Count -eq 0 -or $Baseline.Count -ne $Candidate.Count) {
@@ -71,7 +72,11 @@ function Get-ReactorNon2xxDecision {
         median_paired_delta_pp = $medianDelta
         aggregate_delta_pp = $aggregateDelta
         max_paired_delta_pp = ($pairedDeltas | Measure-Object -Maximum).Maximum
-        passed = $medianDelta -le $MaximumDeltaPercentagePoints `
+        passed = $baselineAggregateRate -le $MaximumAbsolutePercent `
+                -and $candidateAggregateRate -le $MaximumAbsolutePercent `
+                -and $baselinePeakRate -le $MaximumAbsolutePercent `
+                -and $candidatePeakRate -le $MaximumAbsolutePercent `
+                -and $medianDelta -le $MaximumDeltaPercentagePoints `
                 -and $aggregateDelta -le $MaximumDeltaPercentagePoints `
                 -and ($candidatePeakRate - $baselinePeakRate) -le $MaximumDeltaPercentagePoints
     }

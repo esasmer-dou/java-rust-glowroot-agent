@@ -31,6 +31,20 @@ $peakRegression = Get-ReactorNon2xxDecision `
         -Candidate @(Sample 1 100000 200; Sample 2 100000 0; Sample 3 100000 0)
 Assert-Equal $false $peakRegression.passed "A new worst-case error envelope must fail."
 
+$boundedSaturation = Get-ReactorNon2xxDecision `
+        -Baseline @(Sample 1 100000 0; Sample 2 100000 0; Sample 3 100000 0) `
+        -Candidate @(Sample 1 100000 0; Sample 2 100000 12; Sample 3 100000 0) `
+        -MaximumDeltaPercentagePoints 0.02 `
+        -MaximumAbsolutePercent 0.05
+Assert-Equal $true $boundedSaturation.passed "A bounded saturated-cell reject must pass its explicit margin."
+
+$absoluteRegression = Get-ReactorNon2xxDecision `
+        -Baseline @(Sample 1 100000 60; Sample 2 100000 0; Sample 3 100000 0) `
+        -Candidate @(Sample 1 100000 50; Sample 2 100000 0; Sample 3 100000 0) `
+        -MaximumDeltaPercentagePoints 0.02 `
+        -MaximumAbsolutePercent 0.05
+Assert-Equal $false $absoluteRegression.passed "An unhealthy absolute error peak must fail even when candidate improves."
+
 $mismatchFailed = $false
 try {
     Get-ReactorNon2xxDecision `

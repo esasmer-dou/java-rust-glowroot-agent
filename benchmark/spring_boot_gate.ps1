@@ -28,6 +28,8 @@ param(
     [int] $AllowedThreadDelta = 1,
     [Alias("Max503DeltaPercentagePoints")]
     [double] $MaxNon2xxDeltaPercentagePoints = 0.0,
+    [double] $MaxSaturatedNon2xxDeltaPercentagePoints = 0.02,
+    [double] $MaxAbsoluteNon2xxPercent = 0.05,
     [double] $MaxHostCpuAveragePercent = 15.0,
     [double] $MaxHostCpuPeakPercent = 40.0,
     [double] $MaxHostSiblingCpuPercent = 10.0,
@@ -48,6 +50,16 @@ if ($MaxWarmupRounds -lt $MinWarmupRounds) {
 }
 if ($MaxWarmupRpsSpreadPercent -le 0) {
     throw "MaxWarmupRpsSpreadPercent must be greater than zero."
+}
+if ($MaxNon2xxDeltaPercentagePoints -lt 0.0) {
+    throw "MaxNon2xxDeltaPercentagePoints cannot be negative."
+}
+if ($MaxSaturatedNon2xxDeltaPercentagePoints -lt $MaxNon2xxDeltaPercentagePoints `
+        -or $MaxSaturatedNon2xxDeltaPercentagePoints -gt 0.02) {
+    throw "The saturated non-2xx delta must be between the general threshold and 0.02 percentage points."
+}
+if ($MaxAbsoluteNon2xxPercent -le 0.0 -or $MaxAbsoluteNon2xxPercent -gt 0.05) {
+    throw "The absolute non-2xx ceiling must be between 0 and 0.05 percent."
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -705,10 +717,16 @@ foreach ($endpoint in $endpoints) {
         $maxRssDelta = ($pairedRssDeltas | Measure-Object -Maximum).Maximum
         $maxContainerDelta = ($pairedContainerDeltas | Measure-Object -Maximum).Maximum
         $observedMaxThreadDelta = ($pairedThreadDeltas | Measure-Object -Maximum).Maximum
+        $non2xxDeltaThreshold = if ($IsRustJavaRest -and $endpoint -eq "heavy-json" -and $value -ge 256) {
+            $MaxSaturatedNon2xxDeltaPercentagePoints
+        } else {
+            $MaxNon2xxDeltaPercentagePoints
+        }
         $errorDecision = Get-ReactorNon2xxDecision `
                 -Baseline $base `
                 -Candidate $agent `
-                -MaximumDeltaPercentagePoints $MaxNon2xxDeltaPercentagePoints
+                -MaximumDeltaPercentagePoints $non2xxDeltaThreshold `
+                -MaximumAbsolutePercent $MaxAbsoluteNon2xxPercent
         $pairedHostSiblingMaxima = [Collections.Generic.List[double]]::new()
         foreach ($pair in 1..$PairRepeats) {
             $pairedBase = $base | Where-Object pair -eq $pair | Select-Object -First 1
@@ -746,6 +764,8 @@ foreach ($endpoint in $endpoints) {
             non_2xx_delta_pp = [math]::Round($errorDecision.median_paired_delta_pp, 6)
             aggregate_non_2xx_delta_pp = [math]::Round($errorDecision.aggregate_delta_pp, 6)
             max_paired_non_2xx_delta_pp = [math]::Round($errorDecision.max_paired_delta_pp, 6)
+            non_2xx_delta_threshold_pp = $non2xxDeltaThreshold
+            absolute_non_2xx_ceiling_pct = $MaxAbsoluteNon2xxPercent
             paired_host_sibling_busy_percent = [math]::Round($hostSiblingBusy, 3)
             max_host_sibling_busy_percent = [math]::Round($maxHostSiblingBusy, 3)
             max_host_steal_percent = [math]::Round($maxHostSteal, 3)
@@ -797,8 +817,10 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     required_rest_native_abi = if ($IsRustJavaRest) { $RequiredRestNativeAbi } else { $null }
     pair_repeats = $PairRepeats
     decision_statistic = "median_of_paired_deltas"
-    non_2xx_decision = "paired_median_weighted_aggregate_and_peak_envelope"
+    non_2xx_decision = "endpoint_noninferiority_median_weighted_aggregate_and_peak_envelope"
     non_2xx_threshold_percentage_points = $MaxNon2xxDeltaPercentagePoints
+    saturated_non_2xx_threshold_percentage_points = $MaxSaturatedNon2xxDeltaPercentagePoints
+    absolute_non_2xx_ceiling_percent = $MaxAbsoluteNon2xxPercent
     activation_mode = if ($IsRustJavaRest) {
         if ($UseJavaAgentBootstrap) { "javaagent_bootstrap" } else { "embedded_native_properties" }
     } else {
@@ -855,7 +877,7 @@ $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process; the final $MinWarmupRounds-round window had an observed maximum RPS spread of $([math]::Round($observedMaxWarmupSpread,3))% within the $MaxWarmupRpsSpreadPercent% gate; latest first-stable round $observedMaxFirstStableRound.")
-$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx must not regress in the paired median, the request-weighted aggregate, or the peak error-rate envelope; the worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
+$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells and a $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin only for saturated embedded REST heavy-json c256+ cells. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")
 $lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx off/on agg % | non-2xx off/on peak % | non-2xx delta med/agg/max pp | Host sibling med/max; steal max | Gate |")

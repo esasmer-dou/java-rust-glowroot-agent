@@ -123,9 +123,11 @@ Matris şu alanları kapsar:
 - sırası değiştirilen altı baseline/candidate çifti.
 
 Her performans hücresinde başarılı HTTP 200 RPS kaybı en fazla `%2`, p99 artışı en fazla `%10` ve
-yeni thread sayısı en fazla bir olmalıdır. Non-2xx oranı eşleştirilmiş medyanda ve altı tekrarın istek
-sayısıyla ağırlıklandırılmış toplamında artmamalıdır. Adayın en yüksek hata oranı da baseline'ın en
-yüksek oranını aşmamalıdır. Tek bir eşleşmedeki fark tanı amacıyla raporda kalır; bu genel kararların
+yeni thread sayısı en fazla bir olmalıdır. Normal hücrelerde non-2xx artış sınırı sıfırdır. Bilinçli
+olarak doygun çalıştırılan embedded REST heavy JSON c256 hücresinde `0,02` yüzde puanlık non-inferiority marjı
+kullanılır. Eşleştirilmiş medyan, istek sayısıyla ağırlıklandırılmış toplam ve en yüksek hata oranı
+bu marj içinde kalmalıdır. Baseline ve candidate toplam ve en yüksek hata oranları ayrıca `%0,05`
+sınırını aşmamalıdır. Tek bir eşleşmedeki fark tanı amacıyla raporda kalır; bu genel kararların
 yerine geçmez. Build bittikten sonra Linux
 en sakin fiziksel CPU grubunu seçer. Bu grubun bütün SMT kardeşleri uygulamaya ayrılır. Load runner ve
 collector başka bir gruba sabitlenir. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal
@@ -169,6 +171,9 @@ Spring production matrisi:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
+  -MaxNon2xxDeltaPercentagePoints 0 `
+  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+  -MaxAbsoluteNon2xxPercent 0.05 `
   -AutoSelectCpuRoles `
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
@@ -189,6 +194,9 @@ Rust-Java REST production matrisi:
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 12 `
   -MaxWarmupRpsSpreadPercent 8 `
+  -MaxNon2xxDeltaPercentagePoints 0 `
+  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+  -MaxAbsoluteNon2xxPercent 0.05 `
   -MemoryLimit "128m" `
   -AllowedThreadDelta 1 `
   -AutoSelectCpuRoles `
