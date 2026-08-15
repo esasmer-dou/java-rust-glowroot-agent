@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       qualification_depth:
-        description: Release uses three independent JVM pairs; extended uses six for diagnostics.
+        description: Release runs three to six adaptive pairs; extended always runs all six.
         required: true
         default: release
         type: choice
