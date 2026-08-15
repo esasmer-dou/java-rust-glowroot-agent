@@ -275,6 +275,8 @@ jobs:
             release-assets/rust_glowroot_agent-windows-x64.dll
           cp spring-boot-starter/src/main/resources/native/linux-x64/librust_glowroot_agent.so \
             release-assets/librust_glowroot_agent-linux-x64.so
+          cp spring-boot-starter/src/main/resources/native/native-provenance.properties \
+            release-assets/native-provenance.properties
           SPRING_GATE_DIR="${RUNNER_TEMP}/java-rust-glowroot-spring-gate"
           REST_GATE_DIR="${RUNNER_TEMP}/java-rust-glowroot-rest-gate"
           cp "$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/REPORT.md' -type f -print -quit)" \
@@ -296,6 +298,7 @@ jobs:
           cp "$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/gate-summary.json' -type f -print -quit)" \
             release-assets/rust-java-rest-protocol-gate-summary.json
           (cd release-assets && sha256sum ./* > SHA256SUMS)
+          test -s release-assets/native-provenance.properties
 
       - name: Create or update GitHub release
         shell: bash
