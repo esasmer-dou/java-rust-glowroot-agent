@@ -56,7 +56,13 @@ if ($null -eq $memTotalLine) { throw "Cannot read MemTotal from /proc/meminfo." 
 $hostMemoryGiB = [math]::Round(([double] $Matches[1] / 1024.0 / 1024.0), 2)
 Add-Check "host_memory" ($hostMemoryGiB -ge $MinMemoryGiB) "$hostMemoryGiB GiB" ">= $MinMemoryGiB GiB"
 
-$logicalCpu = [Environment]::ProcessorCount
+$onlineCpuPath = "/sys/devices/system/cpu/online"
+$logicalCpu = if (Test-Path -LiteralPath $onlineCpuPath -PathType Leaf) {
+    @(ConvertFrom-ReactorCpuSet -CpuSet (Get-Content -Raw -LiteralPath $onlineCpuPath)).Count
+} else {
+    [Environment]::ProcessorCount
+}
+$processAvailableCpu = [Environment]::ProcessorCount
 Add-Check "host_logical_cpu" ($logicalCpu -ge $MinLogicalCpu) "$logicalCpu" ">= $MinLogicalCpu"
 
 $physicalGroups = [Collections.Generic.HashSet[string]]::new()
@@ -68,6 +74,7 @@ Add-Check "physical_cpu_groups" ($physicalGroups.Count -ge 4) "$($physicalGroups
 
 $configuredCpuRoles = $null
 $cpuRoleError = ""
+$processCpuSet = ""
 try {
     $configuredCpuRoles = Get-ReactorConfiguredBenchmarkCpuRoles
 } catch {
@@ -80,6 +87,18 @@ if ($RunnerClass -eq "reactor-performance-native-linux") {
           else { "app=$($configuredCpuRoles.application) runner=$($configuredCpuRoles.runner) collector=$($configuredCpuRoles.collector) orchestrator=$($configuredCpuRoles.orchestrator)" }) `
         "all calibrated CPU roles configured"
     if ($null -ne $configuredCpuRoles -and [string]::IsNullOrWhiteSpace($cpuRoleError)) {
+        $allowedCpuLine = Get-Content -LiteralPath "/proc/self/status" |
+                Where-Object { $_ -match '^Cpus_allowed_list:\s+(.+)$' } |
+                Select-Object -First 1
+        $processCpuSet = if ($null -ne $allowedCpuLine `
+                -and "$allowedCpuLine" -match '^Cpus_allowed_list:\s+(.+)$') {
+            ConvertTo-ReactorNormalizedCpuSet -CpuSet $Matches[1].Trim()
+        } else { "" }
+        Add-Check "runner_process_affinity" `
+            ($processCpuSet -eq $configuredCpuRoles.orchestrator) `
+            $(if ([string]::IsNullOrWhiteSpace($processCpuSet)) { "not observable" } else { $processCpuSet }) `
+            $configuredCpuRoles.orchestrator
+
         $applicationCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $configuredCpuRoles.application)
         $requiredApplicationCpus = @(Get-ReactorLinuxPhysicalCpuSet -CpuSet $configuredCpuRoles.application)
         $completeApplicationGroup = ($applicationCpus -join ",") -eq ($requiredApplicationCpus -join ",")
@@ -199,6 +218,8 @@ $result = [ordered]@{
         "unknown"
     }
     logical_cpu = $logicalCpu
+    process_available_cpu = $processAvailableCpu
+    process_cpu_set = $processCpuSet
     physical_cpu_groups = $physicalGroups.Count
     host_memory_gib = $hostMemoryGiB
     docker_cpu = $dockerCpu
