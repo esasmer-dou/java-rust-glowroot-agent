@@ -148,8 +148,10 @@ kullanılır. Eşleştirilmiş medyan, istek sayısıyla ağırlıklandırılmı
 bu marj içinde kalmalıdır. Baseline ve candidate toplam ve en yüksek hata oranları ayrıca `%0,05`
 sınırını aşmamalıdır. Tek bir eşleşmedeki fark tanı amacıyla raporda kalır; bu genel kararların
 yerine geçmez. Build bittikten sonra kalibre edilmiş runner, servis ortamında tanımlanan sabit
-uygulama, yük üretici ve collector CPU rollerini kullanır. Üç rol ayrı fiziksel gruplarda çalışır.
-Uygulama rolü, aynı fiziksel gruptaki bütün SMT kardeşlerini ayırmak zorundadır. Kalibre edilmemiş runner en sakin grubu seçen eski yöntemi
+uygulama, yük üretici, collector ve benchmark orchestrator CPU rollerini kullanır. Dört rol ayrı
+fiziksel gruplarda çalışır. Uygulama, yük üretici ve orchestrator rolleri kendi gruplarındaki bütün
+SMT kardeşlerini ayırır. Böylece Docker ve metrik sorguları iki `wrk` thread'inin CPU'sunu kullanmaz.
+Kalibre edilmemiş runner en sakin grubu seçen eski yöntemi
 kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal CPU elle seçilirse
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 

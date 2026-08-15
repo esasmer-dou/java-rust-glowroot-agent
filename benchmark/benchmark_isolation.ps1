@@ -41,6 +41,7 @@ function Get-ReactorConfiguredBenchmarkCpuRoles {
         application = $env:REACTOR_BENCHMARK_APPLICATION_CPU_SET
         runner = $env:REACTOR_BENCHMARK_RUNNER_CPU_SET
         collector = $env:REACTOR_BENCHMARK_COLLECTOR_CPU_SET
+        orchestrator = $env:REACTOR_BENCHMARK_ORCHESTRATOR_CPU_SET
     }
     $present = @($configured.GetEnumerator() | Where-Object {
             -not [string]::IsNullOrWhiteSpace("$($_.Value)")
@@ -52,12 +53,13 @@ function Get-ReactorConfiguredBenchmarkCpuRoles {
         $missing = @($configured.GetEnumerator() | Where-Object {
                 [string]::IsNullOrWhiteSpace("$($_.Value)")
             } | ForEach-Object { $_.Key }) -join ", "
-        throw "Benchmark CPU role configuration is partial. Configure application, runner, and collector together. Missing: $missing."
+        throw "Benchmark CPU role configuration is partial. Configure application, runner, collector, and orchestrator together. Missing: $missing."
     }
 
     $application = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.application
     $runner = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.runner
     $collector = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.collector
+    $orchestrator = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.orchestrator
     if (@(ConvertFrom-ReactorCpuSet -CpuSet $collector).Count -ne 1) {
         throw "REACTOR_BENCHMARK_COLLECTOR_CPU_SET must contain exactly one logical CPU."
     }
@@ -66,6 +68,7 @@ function Get-ReactorConfiguredBenchmarkCpuRoles {
         application = $application
         runner = $runner
         collector = $collector
+        orchestrator = $orchestrator
         source = "environment"
     }
 }
@@ -160,6 +163,13 @@ function Select-ReactorBenchmarkCpuRoles {
         if (($runnerCpus -join ",") -ne ($physicalRunnerCpus -join ",")) {
             throw "REACTOR_BENCHMARK_RUNNER_CPU_SET must reserve every SMT sibling for the two wrk threads. Configured=$($runnerCpus -join ',') Required=$($physicalRunnerCpus -join ',')."
         }
+        $orchestratorCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $configured.orchestrator)
+        $physicalOrchestratorCpus = @(
+            Get-ReactorLinuxPhysicalCpuSet -CpuSet $configured.orchestrator
+        )
+        if (($orchestratorCpus -join ",") -ne ($physicalOrchestratorCpus -join ",")) {
+            throw "REACTOR_BENCHMARK_ORCHESTRATOR_CPU_SET must reserve every SMT sibling. Configured=$($orchestratorCpus -join ',') Required=$($physicalOrchestratorCpus -join ',')."
+        }
 
         $before = Get-ReactorLinuxCpuSnapshot
         Start-Sleep -Seconds $SampleSeconds
@@ -168,13 +178,14 @@ function Select-ReactorBenchmarkCpuRoles {
         $topologyPath = "/sys/devices/system/cpu/cpu$($applicationCpus[0])/topology/thread_siblings_list"
         $applicationGroup = (Get-Content -Raw -LiteralPath $topologyPath).Trim()
         Write-Host (("CPU roles selected from calibrated runner configuration: app={0} group={1} " +
-                    "busy={2:N2}% steal={3:N2}%; runner={4} collector={5}") -f `
+                    "busy={2:N2}% steal={3:N2}%; runner={4} collector={5} orchestrator={6}") -f `
                 $configured.application, $applicationGroup, $window.busy_percent, $window.steal_percent, `
-                $configured.runner, $configured.collector)
+                $configured.runner, $configured.collector, $configured.orchestrator)
         return [pscustomobject]@{
             application = $configured.application
             runner = $configured.runner
             collector = $configured.collector
+            orchestrator = $configured.orchestrator
             application_group = $applicationGroup
             observed_busy_percent = [math]::Round($window.busy_percent, 3)
             observed_steal_percent = [math]::Round($window.steal_percent, 3)
@@ -194,8 +205,8 @@ function Select-ReactorBenchmarkCpuRoles {
         }
         $groups[$group].Add($cpu)
     }
-    if ($groups.Count -lt 3) {
-        throw "At least three physical CPU groups are required for application, load-runner, and collector isolation."
+    if ($groups.Count -lt 4) {
+        throw "At least four physical CPU groups are required for application, load-runner, collector, and orchestrator isolation."
     }
 
     $before = Get-ReactorLinuxCpuSnapshot
@@ -220,6 +231,7 @@ function Select-ReactorBenchmarkCpuRoles {
     $application = $ranked[0]
     $load = $ranked[1]
     $collector = $ranked[2]
+    $orchestrator = $ranked[3]
     # Reserve the complete SMT sibling group for the application. Pinning only one logical CPU
     # leaves its sibling available to unrelated host work, which can steal execution resources from
     # the same physical core and create false A/B regressions. --cpus still enforces the requested
@@ -229,15 +241,19 @@ function Select-ReactorBenchmarkCpuRoles {
     # forcing both threads onto one logical CPU and measuring load-generator saturation.
     $runnerCpuSet = $load.cpus -join ","
     $collectorCpu = $collector.logical[0].cpu
+    $orchestratorCpuSet = $orchestrator.cpus -join ","
 
     Write-Host (("CPU roles selected after build: app={0} group={1} busy={2:N2}% steal={3:N2}%; " +
-            "runner={4} runner-group={5}; collector={6} collector-group={7}") -f `
+            "runner={4} runner-group={5}; collector={6} collector-group={7}; " +
+            "orchestrator={8} orchestrator-group={9}") -f `
             $applicationCpuSet, $application.group, $application.busy_percent, $application.steal_percent, `
-            $runnerCpuSet, $load.group, $collectorCpu, $collector.group)
+            $runnerCpuSet, $load.group, $collectorCpu, $collector.group, `
+            $orchestratorCpuSet, $orchestrator.group)
     return [pscustomobject]@{
         application = $applicationCpuSet
         runner = $runnerCpuSet
         collector = "$collectorCpu"
+        orchestrator = $orchestratorCpuSet
         application_group = "$($application.group)"
         observed_busy_percent = [math]::Round($application.busy_percent, 3)
         observed_steal_percent = [math]::Round($application.steal_percent, 3)
@@ -284,6 +300,7 @@ function Assert-ReactorBenchmarkCpuIsolation {
         [string] $SlotCCpuSet = "",
         [string] $RunnerCpuSet,
         [string] $CollectorCpuSet,
+        [string] $OrchestratorCpuSet,
         [switch] $AllowRunnerCollectorSiblingSharing,
         [switch] $AllowSharedApplicationSlots
     )
@@ -300,6 +317,7 @@ function Assert-ReactorBenchmarkCpuIsolation {
     }
     $roles["load-runner"] = $RunnerCpuSet
     $roles["collector"] = $CollectorCpuSet
+    $roles["benchmark-orchestrator"] = $OrchestratorCpuSet
     $physicalCoreOwners = @{}
     $logicalCpuOwners = @{}
     foreach ($entry in $roles.GetEnumerator()) {
@@ -307,7 +325,8 @@ function Assert-ReactorBenchmarkCpuIsolation {
         if ($roleCpus.Count -eq 0) {
             throw "CPU isolation requires an explicit non-empty CPU set for $($entry.Key)."
         }
-        if ($entry.Key -like "application-slot-*" -or $entry.Key -eq "load-runner") {
+        if ($entry.Key -like "application-slot-*" -or $entry.Key -eq "load-runner" `
+                -or $entry.Key -eq "benchmark-orchestrator") {
             $requiredCpus = [System.Collections.Generic.HashSet[int]]::new()
             foreach ($cpu in $roleCpus) {
                 if (-not $topology.ContainsKey($cpu)) {
@@ -356,7 +375,7 @@ function Assert-ReactorBenchmarkCpuIsolation {
     } else {
         " A=$SlotACpuSet B=$SlotBCpuSet"
     }
-    Write-Host "CPU isolation verified:$applicationMessage$slotCMessage runner=$RunnerCpuSet collector=$CollectorCpuSet$sharedMessage"
+    Write-Host "CPU isolation verified:$applicationMessage$slotCMessage runner=$RunnerCpuSet collector=$CollectorCpuSet orchestrator=$OrchestratorCpuSet$sharedMessage"
 }
 
 function Get-ReactorContainerNetworkIp {

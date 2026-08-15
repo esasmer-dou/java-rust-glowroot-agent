@@ -77,7 +77,7 @@ if ($RunnerClass -eq "reactor-performance-native-linux") {
     Add-Check "calibrated_cpu_roles" ($null -ne $configuredCpuRoles -and [string]::IsNullOrWhiteSpace($cpuRoleError)) `
         $(if (-not [string]::IsNullOrWhiteSpace($cpuRoleError)) { $cpuRoleError } `
           elseif ($null -eq $configuredCpuRoles) { "not configured" } `
-          else { "app=$($configuredCpuRoles.application) runner=$($configuredCpuRoles.runner) collector=$($configuredCpuRoles.collector)" }) `
+          else { "app=$($configuredCpuRoles.application) runner=$($configuredCpuRoles.runner) collector=$($configuredCpuRoles.collector) orchestrator=$($configuredCpuRoles.orchestrator)" }) `
         "all calibrated CPU roles configured"
     if ($null -ne $configuredCpuRoles -and [string]::IsNullOrWhiteSpace($cpuRoleError)) {
         $applicationCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $configuredCpuRoles.application)
@@ -94,26 +94,40 @@ if ($RunnerClass -eq "reactor-performance-native-linux") {
             "configured=$($runnerCpus -join ','); required=$($requiredRunnerCpus -join ',')" `
             "every SMT sibling reserved for the two wrk threads"
 
+        $orchestratorCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $configuredCpuRoles.orchestrator)
+        $requiredOrchestratorCpus = @(
+            Get-ReactorLinuxPhysicalCpuSet -CpuSet $configuredCpuRoles.orchestrator
+        )
+        $completeOrchestratorGroup = `
+            ($orchestratorCpus -join ",") -eq ($requiredOrchestratorCpus -join ",")
+        Add-Check "orchestrator_smt_group_complete" $completeOrchestratorGroup `
+            "configured=$($orchestratorCpus -join ','); required=$($requiredOrchestratorCpus -join ',')" `
+            "every SMT sibling reserved for benchmark orchestration"
+
         $runnerCpu = $runnerCpus[0]
         $collectorCpu = [int] $configuredCpuRoles.collector
+        $orchestratorCpu = $orchestratorCpus[0]
         $runnerTopology = "/sys/devices/system/cpu/cpu$runnerCpu/topology/thread_siblings_list"
         $collectorTopology = "/sys/devices/system/cpu/cpu$collectorCpu/topology/thread_siblings_list"
+        $orchestratorTopology = `
+            "/sys/devices/system/cpu/cpu$orchestratorCpu/topology/thread_siblings_list"
         $infrastructureCpusAvailable = (Test-Path -LiteralPath $runnerTopology -PathType Leaf) `
-            -and (Test-Path -LiteralPath $collectorTopology -PathType Leaf)
+            -and (Test-Path -LiteralPath $collectorTopology -PathType Leaf) `
+            -and (Test-Path -LiteralPath $orchestratorTopology -PathType Leaf)
         Add-Check "infrastructure_cpus_available" $infrastructureCpusAvailable `
-            "runner=$($runnerCpus -join ',') collector=$collectorCpu" "configured CPU roles available"
+            "runner=$($runnerCpus -join ',') collector=$collectorCpu orchestrator=$($orchestratorCpus -join ',')" `
+            "configured CPU roles available"
         if ($infrastructureCpusAvailable) {
             $runnerGroup = (Get-Content -Raw -LiteralPath $runnerTopology).Trim()
             $collectorGroup = (Get-Content -Raw -LiteralPath $collectorTopology).Trim()
+            $orchestratorGroup = (Get-Content -Raw -LiteralPath $orchestratorTopology).Trim()
             $applicationGroup = (Get-Content -Raw -LiteralPath `
                 "/sys/devices/system/cpu/cpu$($applicationCpus[0])/topology/thread_siblings_list").Trim()
-            $infrastructureGroupValid = $runnerCpu -ne $collectorCpu `
-                -and $runnerGroup -ne $collectorGroup `
-                -and $runnerGroup -ne $applicationGroup `
-                -and $collectorGroup -ne $applicationGroup
+            $roleGroups = @($applicationGroup, $runnerGroup, $collectorGroup, $orchestratorGroup)
+            $infrastructureGroupValid = @($roleGroups | Sort-Object -Unique).Count -eq 4
             Add-Check "cpu_role_group_isolation" $infrastructureGroupValid `
-                "application=$applicationGroup runner=$runnerGroup collector=$collectorGroup" `
-                "separate physical groups for application, runner, and collector"
+                "application=$applicationGroup runner=$runnerGroup collector=$collectorGroup orchestrator=$orchestratorGroup" `
+                "separate physical groups for application, runner, collector, and orchestrator"
         }
     }
 }

@@ -48,6 +48,19 @@ to at most six pairs. Choose `extended` to require all six pairs for a benchmark
 investigation. Creating a tag reuses successful exact-commit evidence and does not run the matrix
 again.
 
+The dedicated runner service must configure four topology-calibrated roles. Values below describe
+the current eight-logical-CPU runner; a different host must use four distinct physical groups:
+
+```properties
+REACTOR_BENCHMARK_APPLICATION_CPU_SET=4,5
+REACTOR_BENCHMARK_RUNNER_CPU_SET=0,1
+REACTOR_BENCHMARK_COLLECTOR_CPU_SET=2
+REACTOR_BENCHMARK_ORCHESTRATOR_CPU_SET=6,7
+```
+
+The runner service itself is pinned to the orchestrator group. Preflight fails closed when any role
+is missing, overlaps another physical group, or does not reserve the required SMT siblings.
+
 For development-only feedback, run a short c64 small/raw JSON matrix locally:
 
 ```powershell
@@ -125,7 +138,8 @@ diagnostic. Baseline and candidate always do
 the same warmup work. Cells and variant order are randomized. On Linux, `-AutoSelectCpuRoles` samples physical
 CPU groups after the build, chooses the
 quietest group, reserves all of that group's SMT siblings for the application, and pins the load
-runner and collector to another group. Baseline and candidate then occupy the same reserved group in
+runner, collector, and benchmark orchestrator to three other physical groups. The orchestrator never
+shares the two-thread `wrk` group. Baseline and candidate then occupy the same reserved group in
 alternating order. A post-build host preflight rejects a noisy core or excessive steal time instead
 of publishing misleading evidence. Manual single-logical-CPU runs still measure the otherwise-idle
 SMT sibling. These are host-quality checks, not product thresholds; rerun failed evidence on a quiet

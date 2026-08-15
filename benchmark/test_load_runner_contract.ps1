@@ -33,6 +33,8 @@ $earlyDecision = Get-FunctionTextUntilMarker `
         "`nPrepare-Build"
 
 Assert-Contains $gate 'function Start-LoadRunner' "The gate must start one persistent load runner."
+Assert-Contains $gate 'Set-ReactorCurrentProcessCpuAffinity -CpuSet \$OrchestratorCpuSet' `
+        "Benchmark orchestration must not share the wrk CPU set."
 Assert-Contains $warmup '@\("exec", \$LoadRunner, "wrk"' `
         "Warmup must use docker exec, not docker run."
 if ($warmup -match 'docker\s+run|@\("run"') {
@@ -61,6 +63,7 @@ if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.maximum_pair_repeats == 6')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "strict_early_pass"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "maximum_pairs"')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.cpu_roles\.orchestrator')).Count -ne 3 -or
         ([regex]::Matches($release, '\.warmup_stability\.fixed_rounds == 6')).Count -ne 2 -or
         ([regex]::Matches(
             $release,

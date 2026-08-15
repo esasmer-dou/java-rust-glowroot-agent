@@ -145,9 +145,11 @@ saturated embedded REST heavy JSON c256 cell uses a `0.02` percentage-point non-
 median, request-weighted aggregate, and peak envelope must stay within that margin. Baseline and
 candidate aggregate and peak error rates must also stay at or below `0.05%`. A single-pair delta
 remains visible as a diagnostic, but does not replace those population-level decisions. Build work is
-finished before CPU selection. A calibrated runner uses deterministic application, load-runner, and
-collector CPU roles from its service environment. All three roles use separate physical groups, and
-the application role must reserve every SMT sibling in its group. A runner without calibrated roles falls back to the quietest-group
+finished before CPU selection. A calibrated runner uses deterministic application, load-runner,
+collector, and benchmark-orchestrator CPU roles from its service environment. All four roles use
+separate physical groups. The application, load-runner, and orchestrator roles reserve every SMT
+sibling in their groups. This prevents Docker/metric polling from stealing CPU from the two `wrk`
+threads. A runner without calibrated roles falls back to the quietest-group
 selection. Every steal-time window must remain within `1%`. A manually configured
 single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 

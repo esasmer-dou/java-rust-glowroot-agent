@@ -25,7 +25,8 @@ function Assert-Throws([scriptblock] $Action, [string] $MessagePattern, [string]
 $environmentNames = @(
     "REACTOR_BENCHMARK_APPLICATION_CPU_SET",
     "REACTOR_BENCHMARK_RUNNER_CPU_SET",
-    "REACTOR_BENCHMARK_COLLECTOR_CPU_SET"
+    "REACTOR_BENCHMARK_COLLECTOR_CPU_SET",
+    "REACTOR_BENCHMARK_ORCHESTRATOR_CPU_SET"
 )
 $original = @{}
 foreach ($name in $environmentNames) {
@@ -45,10 +46,15 @@ try {
 
     [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_RUNNER_CPU_SET", "4,5", "Process")
     [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_COLLECTOR_CPU_SET", "0", "Process")
+    Assert-Throws { Get-ReactorConfiguredBenchmarkCpuRoles } "configuration is partial" `
+        "The orchestrator CPU role must be explicit."
+
+    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_ORCHESTRATOR_CPU_SET", "2,3", "Process")
     $configured = Get-ReactorConfiguredBenchmarkCpuRoles
     Assert-Equal "6,7" $configured.application "Application CPU set must remain normalized."
     Assert-Equal "4,5" $configured.runner "Runner CPU set must remain normalized."
     Assert-Equal "0" $configured.collector "Collector CPU set must remain normalized."
+    Assert-Equal "2,3" $configured.orchestrator "Orchestrator CPU set must remain normalized."
     Assert-Equal "environment" $configured.source "Configured CPU role source must be observable."
 
     [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_APPLICATION_CPU_SET", "7,6", "Process")
