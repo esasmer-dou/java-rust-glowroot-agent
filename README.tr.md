@@ -5,9 +5,10 @@
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-Rust-Java REST ve Spring Boot MVC uygulamaları için sınırlı kaynak kullanan Rust tabanlı telemetri
-çözümüdür. HTTP toplamlarını, hataları, isteğe bağlı sınırlı trace verisini, process ölçümlerini ve
-native Dubbo/Redis sürelerini mevcut Glowroot Central collector'a gönderir.
+Rust-Java REST ve Spring Boot uygulamaları için sınırlı kaynak kullanan Rust tabanlı telemetri
+çözümüdür. HTTP toplamlarını, hataları, isteğe bağlı sınırlı trace verisini, process/JVM ölçümlerini,
+açık SQL sürelerini ve native Dubbo/Redis sürelerini mevcut Glowroot Central collector'a gönderir.
+HTTP verisi yalnız uygulamada uygun bir HTTP adaptörü varsa toplanır.
 
 Controller, handler, service, validation ve veritabanı kodunuz değişmez. Agent bytecode weaving
 yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
@@ -18,7 +19,7 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 - [Hangi Verileri Alırsınız?](#hangi-verileri-alırsınız)
 - [İş Yükü Nerede Çalışır?](#iş-yükü-nerede-çalışır)
 - [Rust-Java REST Kurulumu](#rust-java-rest-kurulumu)
-- [Spring Boot MVC Kurulumu](#spring-boot-mvc-kurulumu)
+- [Spring Boot Kurulumu](#spring-boot-kurulumu)
 - [Kubernetes](#kubernetes)
 - [Ayarlar](#ayarlar)
 - [Çalışma Profilleri](#çalışma-profilleri)
@@ -35,7 +36,7 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 | Uygulama | Uygulamaya eklenecek paket | Native çalışma şekli | Ek telemetri thread'i |
 | --- | --- | --- | ---: |
 | Rust-Java REST `4.5.0` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
-| Spring Boot MVC `3.x` | `java-rust-glowroot-spring-boot-starter:0.3.0` | Küçük standalone agent kütüphanesini yükler | `1` |
+| Spring Boot `3.x`, web veya web olmayan | `java-rust-glowroot-spring-boot-starter:0.3.0` | Küçük standalone agent kütüphanesini yükler | `1` |
 | `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.3.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Aynı tek exporter kullanılır; bootstrap eklemez |
 
 Bootstrap JAR yalnızca `-javaagent:key=value` değerlerini property'lere aktarır. İçinde tek sınıf
@@ -60,7 +61,7 @@ Mevcut Glowroot collector, kullanıcı arayüzü ve veritabanı değişmez.
 | Process ölçümleri | Her gönderim aralığında RSS ve thread sayısı |
 | JVM ölçümleri | İsteğe bağlı heap, non-heap, memory pool, GC sayısı ve GC süresi |
 | SQL toplamları | İsteğe bağlı ve açıkça işaretlenen sınırlı SQL süreleri; JDBC proxy veya bytecode weaving yoktur |
-| Hata stack bilgisi | Hatalı Spring MVC ve Rust-Java REST çağrıları için isteğe bağlı sınırlı stack kaydı |
+| Hata stack bilgisi | Hatalı HTTP çağrıları ve açık SQL işlemleri için isteğe bağlı sınırlı stack kaydı |
 | İstek üzerine tanılama | Kısa süreli `diagnostic` profilinde thread dump, heap histogram veya heap dump |
 | Gönderim sağlığı | Bağlantı, reconnect, hata, drop ve son hata sayaçları |
 
@@ -77,8 +78,12 @@ ileten sabit maliyetli sınırdır.
 | JVM ölçümleri | Rust | İzole exporter, JNI global referanslarını bulur ve sahiplenir; seçilen MXBean metotlarını çağırır, değerleri toplar ve gauge mesajını üretir |
 | Tanılama | Rust | Komut kuyruğu, JNI çağrısı, sınırlı yürütme, dosya yazma, atomik yayın, hata temizliği ve sayaçlar Rust'ta kalır |
 | Profil yaşam döngüsü | Rust | İsteğe bağlı state ayrılır, emekliye alınır, bırakılır ve gerekirse Hyper ile uygulama worker'larından uzakta trim edilir |
-| Spring MVC sınırı | Java, yalnız sabit maliyetli geçiş | Eşleşen route, HTTP status, async tamamlanma, zaman ve gerekirse `Throwable` referansını Rust'a verir |
+| İsteğe bağlı Spring MVC sınırı | Java, yalnız sabit maliyetli geçiş | Eşleşen route, HTTP status, async tamamlanma, zaman ve gerekirse `Throwable` referansını Rust'a verir |
 | JVM iç işlemleri | JVM, Rust tarafından çağrılır | Veri JVM içinde olduğu için MXBean ve dump API'leri JVM'de çalışır; Java yardımcı sınıfı, polling thread'i, cache veya direct-buffer callback'i yoktur |
+
+Native yaşam döngüsü Spring Web'e bağlı değildir. Veritabanı worker'ı, Kafka uygulaması, scheduler
+veya komut satırı Spring Boot servisi; MVC, Servlet container ya da Java telemetri executor'ı
+eklemeden process ve seçilen profile ait JVM/SQL verisini gönderebilir.
 
 Rust-Java REST HTTP telemetrisi doğrudan Rust server içinde kaydedilir. Spring MVC'de son eşleşen
 controller route'u socket katmanından öğrenilemez. Küçük Spring adaptörünü de Rust'a taşımak, request
@@ -87,8 +92,9 @@ artırır. Bu nedenle performans sözleşmesini korumak için bilinçli olarak k
 
 Bu agent, bütün Glowroot özelliklerinin küçük bir kopyası değildir. Rastgele Java metotlarını
 işaretlemez. Her JDBC nesnesini proxy ile sarmaz. Profiler, log toplama ve uzaktan enstrümantasyon
-eklemez. Bu özellikler gerekiyorsa tam Glowroot agent kullanın. `0.3.0` sürümü Spring WebFlux
-desteklemez. Spring adaptörü Servlet MVC içindir.
+eklemez. Bu özellikler gerekiyorsa tam Glowroot agent kullanın. `0.3.0` sürümü Spring WebFlux HTTP
+isteklerini izlemez. İsteğe bağlı HTTP adaptörü Servlet MVC içindir. Web'den bağımsız runtime bir
+WebFlux uygulamasında yine çalışır; yalnız WebFlux route verisini toplamaz.
 
 ## Rust-Java REST Kurulumu
 
@@ -131,7 +137,7 @@ java \
   -jar catalog-api.jar
 ```
 
-## Spring Boot MVC Kurulumu
+## Spring Boot Kurulumu
 
 ### 1. Starter paketini ekleyin
 
@@ -160,13 +166,48 @@ Mevcut Spring Boot uygulamasını başlatın:
 java -jar orders-api.jar
 ```
 
-Spring auto-configuration tek bir MVC interceptor ekler. Spring'in seçtiği `/orders/{id}` gibi
-normalize edilmiş endpoint kalıbını handler tamamlandıktan sonra okur. Servlet filter eklemez.
-Uygulama sınıflarını taramaz ve Java worker pool oluşturmaz. Örneklenmeyen normal bir başarılı istek
-için agent request nesnesi ayırmaz. Örneklenen, yavaş, hatalı ve async isteklerde Spring MVC'nin
-completion akışını kullanır. Handler'ın ürettiği durum kodları ve yakalanmamış hatalar tam sayılır.
+Servlet MVC uygulamasında Spring auto-configuration tek bir MVC interceptor ekler. Spring'in seçtiği
+`/orders/{id}` gibi normalize edilmiş endpoint kalıbını handler tamamlandıktan sonra okur. Servlet
+filter eklemez. Uygulama sınıflarını taramaz ve Java worker pool oluşturmaz. Örneklenmeyen normal bir
+başarılı istek için agent request nesnesi ayırmaz. Örneklenen, yavaş, hatalı ve async isteklerde Spring
+MVC'nin completion akışını kullanır. Handler'ın ürettiği durum kodları ve yakalanmamış hatalar tam
+sayılır.
 
-### 2. İsteğe bağlı erken başlangıç bootstrap'ı
+### 2. Web olmayan uygulamalar
+
+Aynı starter'ı scheduler, Kafka worker, batch process veya yalnız veritabanı kullanan Spring Boot
+uygulamasına ekleyin. `spring-webmvc`, Tomcat veya Servlet API eklemeyin. Starter'ın MVC yüzeyi
+isteğe bağlıdır. Native çekirdek bu bağımlılıklar olmadan başlar.
+
+```properties
+spring.main.web-application-type=none
+reactor.glowroot.enabled=true
+reactor.glowroot.profile=jvm
+reactor.glowroot.collector.address=http://glowroot-collector:8181
+reactor.glowroot.agent.id=invoice-worker::pod-1
+reactor.glowroot.application.name=invoice-worker
+```
+
+| Profil | Web sunucusu olmadan alınan veri |
+| --- | --- |
+| `micro` | Process RSS, işletim sistemi thread sayısı, exporter/reconnect/drop durumu |
+| `jvm` | `micro` verisine ek olarak heap, non-heap, memory pool, GC sayısı ve GC süresi |
+| `sql` | `micro` verisine ek olarak açıkça kaydedilen SQL süre, hata ve satır toplamları |
+| `full` | JVM ölçümleri, açık SQL ölçümleri ve sınırlı hata stack bilgisi |
+| `diagnostic` | `full` verisine ek olarak yetkili thread dump, heap histogram ve heap dump komutları |
+
+Starter, Kafka topic veya scheduler job adını tahmin etmez. Her Java metoduna bytecode weaving de
+uygulamaz. Bu nedenle `0.3.0` sürümünde Kafka veya scheduler business işlem süresi otomatik
+toplanmaz. Process ve JVM verisi otomatik alınır. Veritabanı süresini aşağıdaki tekrar kullanılabilen
+`SqlStatement` API'si ile açıkça kaydedebilirsiniz. Böylece hot path öngörülebilir kalır ve ek bir
+framework-specific Java agent katmanı oluşmaz.
+
+`reactor.glowroot.spring.enabled=false` yalnız isteğe bağlı MVC interceptor'ını kapatır. Web
+uygulamasında HTTP verisini kapatıp process/JVM/SQL verisini açık bırakmak için kullanabilirsiniz.
+Native runtime'ı ve exporter thread'ini tamamen kapatmak için `reactor.glowroot.enabled=false`
+kullanın.
+
+### 3. İsteğe bağlı erken başlangıç bootstrap'ı
 
 Deployment standardınız `-javaagent` bekliyorsa veya process başlangıç bilgisini Spring'den önce
 almak istiyorsanız bootstrap paketini de ekleyin:
@@ -278,7 +319,7 @@ tire yerine alt çizgi kullanın. Örnek: `reactor.glowroot.max-export-bytes`,
 | `reactor.glowroot.error.max-bytes` | `4096` | 256-8192 | Bir hatanın en fazla UTF-8 ayrıntı boyutu |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Bellekte tutulacak en fazla endpoint sayısı |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Tek collector mesajının en büyük boyutu |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Starter varsa Spring MVC interceptor'ını açar |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Yalnız isteğe bağlı Spring MVC interceptor'ını açar; native çekirdeği `reactor.glowroot.enabled` yönetir |
 | `reactor.glowroot.spring.order` | `-2147483548` | integer | MVC interceptor sırası; eski `interceptor-order` ve `filter-order` adları da çalışır |
 | `reactor.glowroot.native.extract-dir` | kullanıcı home dizini | dizin | Spring standalone native çıkarma dizini |
 | `reactor.glowroot.native.path` | boş | mevcut DLL/SO yolu | Geliştirme ve staging override değeri; production'da paketli binary kullanın |
@@ -291,7 +332,7 @@ yoktur.
 Uygulamayı `micro` ile başlatın. Daha fazla bilgi gerektiğinde yalnız bir pod'un profilini yükseltin.
 İnceleme bitince tekrar `micro` profiline dönün.
 
-| Profil | Sürekli açık HTTP/Dubbo/Redis toplamlarına eklenen veri | Uygun kullanım |
+| Profil | Sürekli process ölçümlerine ve varsa HTTP/Dubbo/Redis toplamlarına eklenen veri | Uygun kullanım |
 | --- | --- | --- |
 | `micro` | Ek veri yoktur | Normal production trafiği ve en düşük sabit bellek kullanımı |
 | `jvm` | Heap, non-heap, memory pool, GC sayısı ve GC süresi | Kısa JVM bellek veya GC incelemesi |
@@ -516,7 +557,7 @@ uyumluluk ayrıntıları için [0.3.0 sürüm notlarını](docs/releases/0.3.0.t
 | Java | `21` | Ana test JVM'i Semeru OpenJ9'dur |
 | Rust-Java REST | `4.5.0` | REST ABI `29`, Glowroot ABI `3` |
 | Agent bootstrap | `0.3.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
-| Spring Boot starter | `0.3.0` | Spring Boot `3.x`, Servlet MVC |
+| Spring Boot starter | `0.3.0` | Spring Boot `3.x`; web'den bağımsız çekirdek ve isteğe bağlı Servlet MVC adaptörü |
 | Standalone native kaynak | `rust-spring v4.5.0` | Glowroot ABI `3`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |

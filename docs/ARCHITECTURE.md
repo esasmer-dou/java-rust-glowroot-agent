@@ -113,11 +113,17 @@ profile's contract.
 
 ## Spring Boot Boundary
 
-Spring Boot Servlet MVC uses two deliberately separate artifacts. The bootstrap JAR contains one
-premain class and only maps bounded arguments to properties. The starter stays in Spring Boot's
-application classloader, registers one MVC interceptor, and owns the standalone native binary. This
-split avoids the parent/child classloader failure caused by putting Spring MVC classes in a
-`-javaagent` JAR used with an executable Spring Boot archive.
+Spring Boot support has two separate auto-configuration layers. The web-independent core owns the
+process-scoped `NativeTelemetry` lifecycle and standalone native binary. It has no Servlet or Spring
+MVC condition and therefore starts in database workers, Kafka applications, schedulers, batch jobs,
+and command-line services. The optional MVC layer is the only layer guarded by Servlet web-application
+and MVC class conditions. It registers one interceptor when those conditions are present.
+
+Packaging still uses two deliberately separate artifacts. The bootstrap JAR contains one premain
+class and only maps bounded arguments to properties. The starter stays in Spring Boot's application
+classloader and owns the core plus optional adapter. This split avoids the parent/child classloader
+failure caused by putting Spring classes in a `-javaagent` JAR used with an executable Spring Boot
+archive. MVC, Tomcat, and Servlet dependencies are not transitively added to a non-web application.
 
 Successful requests are sampled in Java before JNI. Mapped MVC handler `5xx` responses remain exact.
 The interceptor resolves Spring's normalized route pattern after dispatch only for a sampled, slow,
@@ -135,10 +141,16 @@ a Rust start call would add JNI to every request; replacing it with JVMTI weavin
 full-agent footprint. Both are rejected by the hot-path contract.
 
 The adapter does not use bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty, or a general-purpose
-event bus. Version `0.3.0` supports Servlet MVC, not WebFlux. Use the full Glowroot agent when
-Spring-specific arbitrary method weaving, automatic JDBC proxying, arbitrary JMX discovery, or
-profiling is required. The bounded runtime profiles add only explicit SQL slots, selected JVM
-memory/GC gauges, bounded error stacks, and authorized on-demand diagnostics.
+event bus. Version `0.3.0` supports Servlet MVC HTTP interception, not WebFlux HTTP interception. Use
+the full Glowroot agent when Spring-specific arbitrary method weaving, automatic JDBC proxying,
+arbitrary JMX discovery, or profiling is required. The bounded runtime profiles add only explicit
+SQL slots, selected JVM memory/GC gauges, bounded error stacks, and authorized on-demand diagnostics.
+
+Without MVC, the same native exporter still records process RSS/thread gauges and exporter health.
+The `jvm` profile adds JVM memory/GC gauges; `sql` and `full` accept explicit reusable SQL statement
+events; `diagnostic` accepts bounded authorized dump commands. Kafka record and scheduler job names
+are not inferred or woven in `0.3.0`. This is deliberate: automatic arbitrary-method instrumentation
+would reintroduce transformer, class metadata, allocation, and Java-agent costs.
 
 ## Dynamic Profile Lifecycle
 

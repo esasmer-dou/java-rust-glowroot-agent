@@ -13,7 +13,7 @@
 
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
   <name>java-rust-glowroot-spring-boot-starter</name>
-  <description>Opt-in Spring MVC adapter and standalone native runtime for java-rust-glowroot-agent.</description>
+  <description>Opt-in Spring Boot native telemetry runtime with an optional Servlet MVC adapter.</description>
 
   <dependencies>
     <dependency>

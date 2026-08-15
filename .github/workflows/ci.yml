@@ -57,6 +57,10 @@ jobs:
           test "$(jar tf "$STARTER" | grep -c '^native/native-provenance.properties$')" = "1"
           test "$(jar tf "$STARTER" | grep -c '^native/windows-x64/rust_glowroot_agent.dll$')" = "1"
           test "$(jar tf "$STARTER" | grep -c '^native/linux-x64/librust_glowroot_agent.so$')" = "1"
+          unzip -p "$STARTER" META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports \
+            | grep -qx 'com.reactor.glowroot.agent.spring.RustGlowrootSpringAutoConfiguration'
+          unzip -p "$STARTER" META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports \
+            | grep -qx 'com.reactor.glowroot.agent.spring.RustGlowrootMvcAutoConfiguration'
 
       - name: Verify executable Spring Boot integration
         shell: bash
@@ -81,3 +85,7 @@ jobs:
           done
           cat target/spring-smoke.log
           exit 1
+
+      - name: Verify Spring Boot non-web integration
+        shell: pwsh
+        run: ./benchmark/non_web_gate.ps1 -SkipAgentBuild

@@ -7,7 +7,8 @@
 Version `0.3.0` has two intentionally different packaging shapes:
 
 - Rust-Java REST uses the exporter included in the framework's native library.
-- Spring Boot MVC loads the standalone Rust exporter library.
+- Spring Boot, with or without a web server, loads the standalone Rust exporter library. Servlet MVC
+  adds only the optional HTTP interceptor.
 
 Both paths isolate telemetry from application and Hyper workers on one bounded thread with a
 `256 KiB` stack and one reused HTTP/2 collector connection.
@@ -88,7 +89,8 @@ native artifacts before ABI `3` can be published.
 | Gate | Result | Contract |
 | --- | --- | --- |
 | Bootstrap JAR surface | PASS | One application class, no runtime dependency, no native binary, no transformer |
-| Spring starter correctness | PASS | Route, mapped status, exact failure, bounded route cache, and async completion tests |
+| Spring starter correctness | PASS | Web-independent lifecycle plus route, mapped status, exact failure, bounded route cache, and async completion tests |
+| Spring non-web integration | PASS | Real `WebApplicationType.NONE` executable starts JVM telemetry with no MVC bean or web runtime dependency |
 | Upstream Glowroot protocol | PASS | Init, aggregate, gauge, trace, and HdrHistogram payloads parsed by the pinned upstream schema |
 | Collector unavailable | PASS | Business HTTP remains available; backlog and reconnect behavior stay bounded |
 | Embedded agent-owned budget | PASS | `358,531` calculated bytes; hard state/reserve limit `384 KiB` |
@@ -261,6 +263,8 @@ regression and must be rerun on a quiet node.
 - Standalone Glowroot runtime: `28` tests and Clippy with warnings denied.
 - Java reactor: `15` tests, packaged-native verification, and OpenJ9 JNI integration.
 - Executable Spring Boot smoke: starter plus optional one-class `-javaagent` bootstrap.
+- Executable non-web Spring Boot smoke: `WebApplicationType.NONE`, active native JVM probe, no MVC
+  beans, and no Spring Web/Tomcat/Servlet runtime dependency.
 - Native build matrix: Windows x64 and Linux glibc x64 for full and standalone runtimes.
 - Native toolchain: Rust `1.91.0`; Java toolchain: Semeru OpenJ9 `21`.
 - Glowroot wire reference: upstream revision `622dc6f800228cccc6fa37b0ed9e779446d7c41e`.

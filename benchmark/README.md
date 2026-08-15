@@ -55,13 +55,26 @@ Use `spring-boot` or `all` when needed. The generated evidence explicitly contai
 aggregate, gauge, and trace payloads, including transaction-count versus histogram-count equality.
 The footprint gate runs the same application image with the agent disabled and enabled.
 
-## Spring Boot MVC Gate
+## Spring Boot Gate
 
 The Spring gate builds one executable Spring Boot image and runs it with the starter present in both
 variants. Baseline keeps telemetry disabled. Candidate enables the MVC interceptor and standalone
 Rust exporter through system properties. This is the recommended strict-memory production path.
 The same-image design prevents application dependencies or JVM flags from being mistaken for agent
 overhead.
+
+The separate non-web correctness gate builds a real `WebApplicationType.NONE` executable with only
+`spring-boot-starter` and the Glowroot starter. It fails if the runtime dependency graph contains
+Spring Web MVC, Tomcat, or the Servlet API; it also fails unless the native JVM probe starts and MVC
+beans remain absent:
+
+```powershell
+./benchmark/non_web_gate.ps1
+```
+
+This is a functional and dependency-surface gate, not an HTTP performance benchmark. The randomized
+Spring matrix still measures the MVC hot path, while the non-web gate protects worker startup and
+classpath behavior.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `

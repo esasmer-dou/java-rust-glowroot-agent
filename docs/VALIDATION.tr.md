@@ -7,7 +7,8 @@
 `0.3.0` sürümünde iki farklı paketleme şekli vardır:
 
 - Rust-Java REST, framework native kütüphanesindeki exporter'ı kullanır.
-- Spring Boot MVC, standalone Rust exporter kütüphanesini yükler.
+- Spring Boot, web sunucusu olsa da olmasa da standalone Rust exporter kütüphanesini yükler. Servlet
+  MVC yalnız isteğe bağlı HTTP interceptor'ını ekler.
 
 İki yol da telemetriyi uygulama ve Hyper worker'larından ayırır. Bunun için `256 KiB` stack kullanan
 tek sınırlı thread ve tekrar kullanılan tek HTTP/2 collector bağlantısı açılır.
@@ -90,7 +91,8 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Gate | Sonuç | Sözleşme |
 | --- | --- | --- |
 | Bootstrap JAR yüzeyi | PASS | Tek application class; runtime dependency, native binary ve transformer yok |
-| Spring starter doğruluğu | PASS | Route, mapped status, tam hata, sınırlı route cache ve async completion testleri |
+| Spring starter doğruluğu | PASS | Web'den bağımsız yaşam döngüsü; route, mapped status, tam hata, sınırlı route cache ve async completion testleri |
+| Spring web olmayan entegrasyon | PASS | Gerçek `WebApplicationType.NONE` uygulaması MVC bean'i veya web runtime dependency'si olmadan JVM telemetrisini başlatır |
 | Upstream Glowroot protokolü | PASS | Init, aggregate, gauge, trace ve HdrHistogram mesajları sabitlenen upstream şema ile okundu |
 | Collector kapalı | PASS | Business HTTP çalışır; backlog ve reconnect davranışı sınırlı kalır |
 | Embedded agent-owned bütçe | PASS | Hesaplanan `358.531` byte; sert state/rezerv sınırı `384 KiB` |
@@ -261,6 +263,8 @@ regresyonu değildir. Sessiz bir node üzerinde yeniden çalıştırılmalıdır
 - Standalone Glowroot runtime: `28` test ve warning kabul etmeyen Clippy kontrolü.
 - Java reactor: `15` test, packaged-native doğrulaması ve OpenJ9 JNI entegrasyonu.
 - Executable Spring Boot smoke: starter ve isteğe bağlı tek sınıflı `-javaagent` bootstrap.
+- Executable web olmayan Spring Boot smoke: `WebApplicationType.NONE`, aktif native JVM probe, MVC
+  bean'i yoktur ve Spring Web/Tomcat/Servlet runtime dependency'si bulunmaz.
 - Native build matrisi: full ve standalone runtime için Windows x64 ve Linux glibc x64.
 - Native toolchain: Rust `1.91.0`; Java toolchain: Semeru OpenJ9 `21`.
 - Glowroot wire referansı: upstream `622dc6f800228cccc6fa37b0ed9e779446d7c41e` revision'ı.

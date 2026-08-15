@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.function.Function;
 
 /**
- * Immutable, bounded configuration shared by the Spring MVC adapter and native exporter.
+ * Immutable, bounded configuration shared by Spring Boot adapters and the native exporter.
  *
  * @param collectorAddress Glowroot Central gRPC over HTTP/2 endpoint
  * @param agentId unique agent or rollup identity

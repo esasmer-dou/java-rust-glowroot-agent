@@ -112,11 +112,17 @@ pod yeniden başlatılmalıdır; bu kullanım profil sözleşmesinin dışındad
 
 ## Spring Boot Sınırı
 
-Spring Boot Servlet MVC yolu bilinçli olarak iki ayrı artifact kullanır. Bootstrap JAR içinde yalnız
-bir premain sınıfı vardır. Sınırlı argümanları property'lere aktarır. Starter ise Spring Boot'un
-uygulama classloader'ında kalır, tek MVC interceptor ekler ve standalone native binary'yi taşır. Bu
-ayrım, Spring MVC sınıflarının executable Spring Boot JAR ile kullanılan `-javaagent` JAR içine
-konulması halinde oluşan parent/child classloader hatasını önler.
+Spring Boot desteği iki ayrı auto-configuration katmanından oluşur. Web'den bağımsız çekirdek,
+process-scoped `NativeTelemetry` yaşam döngüsünü ve standalone native binary'yi yönetir. Servlet veya
+Spring MVC koşulu yoktur. Bu nedenle veritabanı worker'ında, Kafka uygulamasında, scheduler'da, batch
+işinde ve komut satırı servisinde çalışır. İsteğe bağlı MVC katmanı ise yalnız Servlet web uygulaması
+ve MVC sınıfları varsa devreye girer. Tek bir interceptor ekler.
+
+Paketleme yine bilinçli olarak iki ayrı artifact kullanır. Bootstrap JAR içinde yalnız bir premain
+sınıfı vardır ve sınırlı argümanları property'lere aktarır. Starter, Spring Boot uygulama
+classloader'ında kalır; çekirdeği ve isteğe bağlı adaptörü taşır. Bu ayrım, Spring sınıfları executable
+Spring Boot JAR ile kullanılan `-javaagent` JAR içine konulduğunda oluşan parent/child classloader
+hatasını önler. Web olmayan uygulamaya MVC, Tomcat veya Servlet bağımlılığı transitif olarak eklenmez.
 
 Başarılı istekler JNI çağrısından önce Java tarafında örneklenir. Eşleşen MVC handler'larının `5xx`
 yanıtları tam sayılır. Interceptor, normalize edilmiş route kalıbını MVC dispatch tamamlandıktan sonra
@@ -134,9 +140,17 @@ başlangıç çağrısına çevirmek her request'e yeni JNI maliyeti ekler. JVMT
 footprint'ini geri getirir. Hot-path sözleşmesi nedeniyle iki seçenek de kullanılmaz.
 
 Adapter; bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty veya genel event bus kullanmaz. `0.3.0`
-sürümü Servlet MVC destekler, WebFlux desteklemez. Spring'e özel method, JDBC, JMX veya profiler
-instrumentation gerekiyorsa tam Glowroot agent kullanın. Sınırlı profiller yalnız açık SQL slotu,
-seçilmiş JVM bellek/GC ölçümü, sınırlı hata stack bilgisi ve yetkili tanılama işlemi ekler.
+sürümü Servlet MVC HTTP izlemeyi destekler, WebFlux HTTP izlemeyi desteklemez. Spring'e özel method,
+JDBC, JMX veya profiler instrumentation gerekiyorsa tam Glowroot agent kullanın. Sınırlı profiller
+yalnız açık SQL slotu, seçilmiş JVM bellek/GC ölçümü, sınırlı hata stack bilgisi ve yetkili tanılama
+işlemi ekler.
+
+MVC olmadığında aynı native exporter process RSS/thread ölçümlerini ve gönderim sağlığını toplamaya
+devam eder. `jvm` profili JVM bellek/GC ölçümlerini ekler. `sql` ve `full`, tekrar kullanılan açık SQL
+statement olaylarını kabul eder. `diagnostic`, sınırlı ve yetkili dump komutlarını kabul eder.
+`0.3.0` Kafka kaydı veya scheduler job adını kendiliğinden bulmaz ve metotları weave etmez. Bu sınır
+bilinçlidir. Otomatik ve genel metot instrumentation; transformer, class metadata, allocation ve Java
+agent maliyetini yeniden getirir.
 
 ## Dinamik Profil Yaşam Döngüsü
 

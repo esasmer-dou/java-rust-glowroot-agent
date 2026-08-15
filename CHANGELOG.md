@@ -17,6 +17,11 @@ All notable changes to this project are recorded here.
   timeouts, allocator trims, and JNI JVM-probe ownership.
 - Added `configuredProfile()` and `restoreConfiguredProfile()` so temporary incident profiles can
   return to the configured baseline without hard-coding `micro`.
+- Split Spring Boot auto-configuration into a web-independent native core and an optional Servlet
+  MVC adapter. Non-web workers collect process/JVM gauges, explicit SQL timings, and authorized
+  diagnostics without adding Spring Web, Tomcat, Servlet dependencies, or a Java telemetry worker.
+- Added an executable `WebApplicationType.NONE` gate that rejects MVC beans and web dependencies in
+  the non-web runtime graph.
 
 ### Changed
 
