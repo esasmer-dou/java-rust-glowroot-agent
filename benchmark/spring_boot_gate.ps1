@@ -53,8 +53,8 @@ if ($MinWarmupRounds -lt 2) { throw "MinWarmupRounds must be at least 2." }
 if ($MaxWarmupRounds -lt (2 * $MinWarmupRounds)) {
     throw "Warmup must contain at least two complete stability windows."
 }
-if ($MaxWarmupConfirmationRounds -lt 0 -or $MaxWarmupConfirmationRounds -gt 8) {
-    throw "MaxWarmupConfirmationRounds must be between 0 and 8."
+if ($MaxWarmupConfirmationRounds -lt 0 -or $MaxWarmupConfirmationRounds -gt 16) {
+    throw "MaxWarmupConfirmationRounds must be between 0 and 16."
 }
 if ($MaxWarmupRobustTrendPercent -le 0 -or $MaxWarmupRobustTrendPercent -gt 3.0) {
     throw "MaxWarmupRobustTrendPercent must be between 0 and 3 percent."

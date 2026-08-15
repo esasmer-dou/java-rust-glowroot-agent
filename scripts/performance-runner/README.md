@@ -99,7 +99,7 @@ The release workflow checks both the job labels and the uploaded preflight JSON.
 WSL host, containerized runner, undersized host, active swap, or second runner listener cannot
 produce accepted release evidence.
 
-The full matrix uses 16 fixed OpenJ9 warmup rounds. A still-improving process may receive up to eight
+The full matrix uses 16 fixed OpenJ9 warmup rounds. A still-improving process may receive up to sixteen
 extra interleaved confirmation rounds. RPS trend and dispersion thresholds are not relaxed. This
 bounded extension prevents an early JIT rejection without allowing an unstable process to pass.
 

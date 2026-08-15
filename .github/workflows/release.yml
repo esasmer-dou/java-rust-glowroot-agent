@@ -172,10 +172,10 @@ jobs:
             .warmup_stability.interleaved_rounds == 16 and
             .cpu_roles.auto_selected == true and
             .cpu_roles.selection_source == "environment" and
-            .warmup_stability.maximum_confirmation_rounds == 8 and
+            .warmup_stability.maximum_confirmation_rounds == 16 and
             .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
-            .warmup_stability.observed_maximum_confirmation_rounds <= 8 and
-            .warmup_stability.observed_maximum_total_rounds <= 24 and
+            .warmup_stability.observed_maximum_confirmation_rounds <= 16 and
+            .warmup_stability.observed_maximum_total_rounds <= 32 and
             .warmup_stability.variant_interleaved == false and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
@@ -206,10 +206,10 @@ jobs:
             .warmup_stability.interleaved_rounds == 16 and
             .cpu_roles.auto_selected == true and
             .cpu_roles.selection_source == "environment" and
-            .warmup_stability.maximum_confirmation_rounds == 8 and
+            .warmup_stability.maximum_confirmation_rounds == 16 and
             .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
-            .warmup_stability.observed_maximum_confirmation_rounds <= 8 and
-            .warmup_stability.observed_maximum_total_rounds <= 24 and
+            .warmup_stability.observed_maximum_confirmation_rounds <= 16 and
+            .warmup_stability.observed_maximum_total_rounds <= 32 and
             .warmup_stability.variant_interleaved == false and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and

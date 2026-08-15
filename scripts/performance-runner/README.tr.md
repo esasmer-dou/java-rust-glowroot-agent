@@ -99,7 +99,7 @@ Release workflow'u hem job etiketlerini hem de preflight JSON dosyasını kontro
 WSL, container içinde çalışan runner, yetersiz sunucu, kullanılan swap veya ikinci runner listener ile
 üretilen ölçüm release kanıtı sayılmaz.
 
-Tam matris 16 sabit OpenJ9 ısınma turu kullanır. JVM hâlâ hızlanıyorsa en fazla sekiz ek ve dönüşümlü
+Tam matris 16 sabit OpenJ9 ısınma turu kullanır. JVM hâlâ hızlanıyorsa en fazla on altı ek ve dönüşümlü
 doğrulama turu çalışır. RPS eğilimi ve dağılım eşikleri gevşetilmez. Bu sınırlı uzatma, JIT henüz
 tamamlanmadan erken ret verilmesini önler. Kararsız bir uygulamanın gate'i geçmesini sağlamaz.
 

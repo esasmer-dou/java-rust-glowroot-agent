@@ -148,7 +148,7 @@ kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantı
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
 Her uygulama süreci, endpoint başına on altı sabit ısınma turu tamamlar. Son karar JVM'in hâlâ
-hızlandığını gösteriyorsa en fazla sekiz ek ve tam matris doğrulama turu çalışır. Hiçbir eşik
+hızlandığını gösteriyorsa en fazla on altı ek ve tam matris doğrulama turu çalışır. Hiçbir eşik
 gevşetilmez. Her tur, tanımlı endpoint sınıflarını sırayla dolaşır. Release workflow'u kalibre edilmiş
 tek uygulama SMT grubunu kullanır. Baseline ve candidate ayrı süreçlerde çalışır. Her pair'de çalışma
 sırası ters çevrilir. Böylece iki JVM aynı işi aynı süreç yaşında alır ve aynı fiziksel CPU için

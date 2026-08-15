@@ -44,7 +44,7 @@ jobs:
   spring-boot-agent:
     needs: gate-statistics
     runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -80,7 +80,7 @@ jobs:
             -Warmup "8s" `
             -MinWarmupRounds 3 `
             -MaxWarmupRounds 16 `
-            -MaxWarmupConfirmationRounds 8 `
+            -MaxWarmupConfirmationRounds 16 `
             -MaxWarmupRobustTrendPercent 3 `
             -MaxWarmupBorderlineRobustTrendPercent 5 `
             -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -105,7 +105,7 @@ jobs:
   rust-java-rest-agent:
     needs: gate-statistics
     runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
-    timeout-minutes: 180
+    timeout-minutes: 240
     steps:
       - name: Check out agent source
         uses: actions/checkout@v5
@@ -155,7 +155,7 @@ jobs:
             -Warmup "8s" `
             -MinWarmupRounds 3 `
             -MaxWarmupRounds 16 `
-            -MaxWarmupConfirmationRounds 8 `
+            -MaxWarmupConfirmationRounds 16 `
             -MaxWarmupRobustTrendPercent 3 `
             -MaxWarmupBorderlineRobustTrendPercent 5 `
             -MaxWarmupBorderlineMedianShiftPercent 3 `

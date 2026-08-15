@@ -54,7 +54,7 @@ All notable changes to this project are recorded here.
   `3%`. Sustained JIT ramp-up still fails; a near-plateau outlier is not misclassified as a trend.
 - Interleaved all sixteen fixed rounds across endpoint classes. The calibrated one-slot release gate
   reverses baseline/candidate process order in alternating pairs; an explicit dual-slot gate can also
-  interleave variants. A process that is still improving can receive at most eight additional rounds.
+  interleave variants. A process that is still improving can receive at most sixteen additional rounds.
   Both JVMs receive identical work at the same process age, and the final six-round decision keeps
   the same strict trend and dispersion thresholds.
 - Replaced the impossible zero-error requirement for the deliberately saturated embedded REST heavy JSON c256

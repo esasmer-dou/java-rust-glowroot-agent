@@ -146,7 +146,7 @@ selection. Every steal-time window must remain within `1%`. A manually configure
 single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 
 Each application process receives sixteen fixed warmup rounds per endpoint. If the final decision
-still shows a JVM that is improving, the process may receive at most eight additional full-matrix
+still shows a JVM that is improving, the process may receive at most sixteen additional full-matrix
 interleaved confirmation rounds. No threshold is relaxed. Every round visits all configured endpoint
 classes in round-robin order. The release workflow uses one calibrated application SMT group, runs
 baseline and candidate as separate processes, and reverses their order in alternating pairs. Both
