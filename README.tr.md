@@ -533,7 +533,7 @@ Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
 
 Stable release bu tam matrisi Spring Boot ve Rust-Java REST için ayrı çalıştırır. İki matris de
 small JSON, önceden hazırlanmış raw JSON ve dynamic heavy JSON endpoint'lerini c64/c256 seviyesinde
-altı dengeli çiftle ölçer. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan
+üç bağımsız çiftle ölçer. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan
 hesaplanır. Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırılmış toplamı, en
 yüksek hata oranını ve mutlak `%0,05` sınırını birlikte kullanır. `0,02` yüzde puanlık sınırlı marj
 yalnız doygun embedded REST heavy JSON c256 hücresinde geçerlidir. Doygun bir koşudaki tek fark raporda görünür; genel hata
@@ -586,13 +586,15 @@ native build yayınlamayın.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 6 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
-  -Duration "15s" `
-  -Warmup "8s" `
+  -Duration "12s" `
+  -Warmup "5s" `
+  -PreWarmCycles 2 `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 16 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupConfirmationRounds 10 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -604,6 +606,11 @@ native build yayınlamayın.
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
+
+Bu komut normal release profilidir. Üç bağımsız JVM çifti kullanır. Dedicated tek runner üzerinde
+toplam hedef süre 30-45 dakikadır. Sonuç sınıra yakınsa GitHub **Production Gate** workflow'unda
+`extended` seçin. Bu seçenek altı çift çalıştırır. Aynı commit için başarılı gate kanıtı varsa release
+tag'i matrisi yeniden çalıştırmaz.
 
 Embedded REST matrisini çalıştırmak için aynı komuta şu parametreleri ekleyin:
 

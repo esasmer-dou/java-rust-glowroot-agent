@@ -97,9 +97,9 @@ native artifacts before ABI `3` can be published.
 | Embedded native attributed ceiling | PASS | `0.694 MiB`, including measured feature code pages; `0` additional threads |
 | Embedded observed resident maximum | PASS | smaps RSS maximum `+1.817 MiB`, below the `+3 MiB` boundary |
 | Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` |
-| Rust-Java REST performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, REST `4.5.0`, native ABI `29` |
+| Rust-Java REST performance matrix | RELEASE ENFORCED | Three independent paired runs, three endpoint classes, c64/c256, REST `4.5.0`, native ABI `29` |
 | Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, one failed transport attempt within the 75-second observation window, continued business HTTP availability, and optional `-javaagent` bootstrap must all pass |
-| Spring performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, exact-commit evidence |
+| Spring performance matrix | RELEASE ENFORCED | Three independent paired runs, three endpoint classes, c64/c256, exact-commit evidence |
 | Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
 
 The two production performance jobs run only on the
@@ -108,6 +108,11 @@ and release orchestration remain on GitHub-hosted Linux. Release validation read
 labels and each job's preflight JSON, so hosted Linux, WSL, and containerized runners cannot be used
 as performance evidence by accident. Use two separate runner hosts for parallel execution; use only
 one runner service per host.
+
+The workflow's `release` depth uses three independent JVM pairs and targets 30-45 minutes on the
+current single runner. `extended` uses six pairs only when a result is close to a boundary or the
+benchmark engine itself is under investigation. Tagging the already-qualified exact commit reuses
+the evidence; it does not launch the matrix again.
 
 Local Docker uses [`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) for fast
 c64 small/raw JSON feedback. Its output is diagnostic and never satisfies the exact-commit release
@@ -131,7 +136,7 @@ The matrix covers:
 - raw/precomputed JSON;
 - dynamic heavy JSON;
 - concurrency `64` and `256`;
-- six paired baseline/candidate runs with alternating variant order.
+- three independent paired baseline/candidate runs with alternating variant order.
 
 Every performance cell must keep useful HTTP 200 RPS loss within `2%`, p99 regression within `10%`,
 and additional threads at one or less. Normal cells use a zero-delta non-2xx gate. The deliberately
@@ -145,9 +150,10 @@ the application role must reserve every SMT sibling in its group. A runner witho
 selection. Every steal-time window must remain within `1%`. A manually configured
 single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 
-Each application process receives sixteen fixed warmup rounds per endpoint. If the final decision
-still shows a JVM that is improving, the process may receive at most sixteen additional full-matrix
-interleaved confirmation rounds. No threshold is relaxed. Every round visits all configured endpoint
+Each application process receives two equal pre-warm cycles and six measured warmup rounds per
+endpoint. If the final decision still shows a JVM that is improving, the process may receive at most
+ten additional full-matrix interleaved confirmation rounds. No threshold is relaxed. One persistent
+`wrk` container is reused for the entire gate. Every round visits all configured endpoint
 classes in round-robin order. The release workflow uses one calibrated application SMT group, runs
 baseline and candidate as separate processes, and reverses their order in alternating pairs. Both
 JVMs receive the same work at the same process age without competing for one physical core. A
@@ -186,13 +192,15 @@ Spring production matrix:
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 6 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
-  -Duration "15s" `
-  -Warmup "8s" `
+  -Duration "12s" `
+  -Warmup "5s" `
+  -PreWarmCycles 2 `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 16 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupConfirmationRounds 10 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -212,13 +220,15 @@ Rust-Java REST production matrix:
   -ApplicationKind rust-java-rest `
   -RequiredRestVersion "4.5.0" `
   -RequiredRestNativeAbi 29 `
-  -PairRepeats 6 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
-  -Duration "15s" `
-  -Warmup "8s" `
+  -Duration "12s" `
+  -Warmup "5s" `
+  -PreWarmCycles 2 `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 16 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupConfirmationRounds 10 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `

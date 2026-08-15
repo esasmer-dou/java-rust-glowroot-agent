@@ -42,6 +42,12 @@ Use **Production Gate** only for a release candidate. The release workflow still
 successful native-Linux evidence for the exact tag commit. Do not relabel a WSL/Docker Desktop host
 as `reactor-performance-native-linux`; its warmup trend and RSS evidence are not equivalent.
 
+Choose `release` in the workflow for the normal three-pair gate. On the current single dedicated
+runner, its target wall time is 30-45 minutes for both application kinds together. Choose `extended`
+only for a boundary result or a benchmark-engine investigation; it uses six independent pairs and
+may take roughly twice as long. Creating a tag reuses the successful exact-commit evidence and does
+not run the matrix again.
+
 For development-only feedback, run a short c64 small/raw JSON matrix locally:
 
 ```powershell
@@ -78,13 +84,15 @@ classpath behavior.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 6 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
-  -Duration "15s" `
-  -Warmup "8s" `
+  -Duration "12s" `
+  -Warmup "5s" `
+  -PreWarmCycles 2 `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 16 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupConfirmationRounds 10 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -102,10 +110,11 @@ starts OpenJ9's instrumentation subsystem and is reported separately; it does no
 starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
 executable-JAR startup path.
 
-Each configured endpoint receives exactly sixteen warmup rounds. Every round visits all endpoint
-classes in round-robin order. In the production dual-slot gate, baseline and candidate requests also
-alternate within every endpoint round. Both JVMs therefore receive the same work at the same process
-age. This removes endpoint and variant-order bias while warming shared HTTP, servlet, and JIT code.
+Each process first receives two equal pre-warm cycles. It then receives six measured warmup rounds.
+Every round visits all endpoint classes in round-robin order. If the final stability window fails,
+the gate adds at most ten full-matrix confirmation rounds without relaxing any threshold. Baseline
+and candidate therefore receive the same work at the same process age. One persistent `wrk`
+container is reused for the entire gate instead of creating a container for every sample.
 The normalized Theil-Sen trend over the final six rounds normally must not exceed `3%`. A trend in
 the `3-5%` boundary band passes only when the previous/recent three-round medians differ by no more
 than `3%`. Median absolute deviation must remain within `4%` in both cases. This rejects a sustained
@@ -151,13 +160,15 @@ thread because it shared the framework runtime.
   -ApplicationKind rust-java-rest `
   -RequiredRestVersion "4.5.0" `
   -RequiredRestNativeAbi 29 `
-  -PairRepeats 6 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
-  -Duration "15s" `
-  -Warmup "8s" `
+  -Duration "12s" `
+  -Warmup "5s" `
+  -PreWarmCycles 2 `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 16 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupConfirmationRounds 10 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `

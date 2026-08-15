@@ -99,9 +99,9 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Embedded native atfedilen üst sınır | PASS | Kod sayfaları dahil `0,694 MiB`; ek thread `0` |
 | Embedded resident maksimum | PASS | smaps RSS maksimumu `+1,817 MiB`; `+3 MiB` sınırının altında |
 | Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` revision'ından üretildi |
-| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256, REST `4.5.0` ve native ABI `29` |
+| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç bağımsız eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256, REST `4.5.0` ve native ABI `29` |
 | Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, 75 saniyelik gözlem içinde en az bir başarısız taşıma denemesi, business HTTP erişiminin devam etmesi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
-| Spring performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256 ve exact-commit kanıtı |
+| Spring performans matrisi | RELEASE ZORUNLULUĞU | Üç bağımsız eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256 ve exact-commit kanıtı |
 | Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
 
 İki production performans job'u yalnızca
@@ -110,6 +110,11 @@ package yayını ve release orkestrasyonu GitHub-hosted Linux üzerinde kalır. 
 job etiketlerini ve her job tarafından üretilen preflight JSON dosyasını okur. Böylece hosted Linux,
 WSL veya container içindeki bir runner yanlışlıkla performans kanıtı olarak kullanılamaz. Paralel
 çalışma için iki ayrı runner sunucusu kullanın. Her sunucuda yalnızca bir runner servisi çalıştırın.
+
+Workflow'daki `release` seçeneği üç bağımsız JVM çifti kullanır. Mevcut tek runner üzerinde hedef
+toplam süre 30-45 dakikadır. Sonuç sınıra yakınsa veya benchmark motoru inceleniyorsa `extended`
+seçeneğini kullanın. Bu seçenek altı çift çalıştırır. Aynı exact commit daha önce gate'i geçtiyse tag
+oluşturmak matrisi yeniden başlatmaz; mevcut kanıt kullanılır.
 
 Hızlı local kontrol için
 [`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) kullanılır. Bu kısa test c64
@@ -133,7 +138,7 @@ Matris şu alanları kapsar:
 - raw veya önceden hazırlanmış JSON;
 - dynamic heavy JSON;
 - `64` ve `256` concurrency;
-- sırası değiştirilen altı baseline/candidate çifti.
+- sırası değiştirilen üç bağımsız baseline/candidate çifti.
 
 Her performans hücresinde başarılı HTTP 200 RPS kaybı en fazla `%2`, p99 artışı en fazla `%10` ve
 yeni thread sayısı en fazla bir olmalıdır. Normal hücrelerde non-2xx artış sınırı sıfırdır. Bilinçli
@@ -147,9 +152,10 @@ Uygulama rolü, aynı fiziksel gruptaki bütün SMT kardeşlerini ayırmak zorun
 kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal CPU elle seçilirse
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
-Her uygulama süreci, endpoint başına on altı sabit ısınma turu tamamlar. Son karar JVM'in hâlâ
-hızlandığını gösteriyorsa en fazla on altı ek ve tam matris doğrulama turu çalışır. Hiçbir eşik
-gevşetilmez. Her tur, tanımlı endpoint sınıflarını sırayla dolaşır. Release workflow'u kalibre edilmiş
+Her uygulama süreci önce iki eşit ön ısınma döngüsü çalıştırır. Ardından endpoint başına altı ölçülen
+ısınma turu tamamlar. Son karar JVM'in hâlâ hızlandığını gösteriyorsa en fazla on ek ve tam matris
+doğrulama turu çalışır. Hiçbir eşik gevşetilmez. Gate boyunca aynı `wrk` container'ı kullanılır. Her
+tur, tanımlı endpoint sınıflarını sırayla dolaşır. Release workflow'u kalibre edilmiş
 tek uygulama SMT grubunu kullanır. Baseline ve candidate ayrı süreçlerde çalışır. Her pair'de çalışma
 sırası ters çevrilir. Böylece iki JVM aynı işi aynı süreç yaşında alır ve aynı fiziksel CPU için
 yarışmaz. Elle tanımlanan çift slotlu gate ise baseline ve candidate isteklerini endpoint turu içinde
@@ -186,13 +192,15 @@ Spring production matrisi:
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 6 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
-  -Duration "15s" `
-  -Warmup "8s" `
+  -Duration "12s" `
+  -Warmup "5s" `
+  -PreWarmCycles 2 `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 16 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupConfirmationRounds 10 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -212,13 +220,15 @@ Rust-Java REST production matrisi:
   -ApplicationKind rust-java-rest `
   -RequiredRestVersion "4.5.0" `
   -RequiredRestNativeAbi 29 `
-  -PairRepeats 6 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
-  -Duration "15s" `
-  -Warmup "8s" `
+  -Duration "12s" `
+  -Warmup "5s" `
+  -PreWarmCycles 2 `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 16 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupConfirmationRounds 10 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `

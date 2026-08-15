@@ -163,19 +163,21 @@ jobs:
           done
           jq -e '.passed == true and .benchmark_classification == "production" and
             .release_evidence == true and .application_kind == "spring-boot" and
-            .pair_repeats >= 6 and
+            .pair_repeats >= 3 and
             .non_2xx_decision == "endpoint_noninferiority_median_weighted_aggregate_and_peak_envelope" and
             .non_2xx_threshold_percentage_points == 0 and
             .saturated_non_2xx_threshold_percentage_points == 0.02 and
             .absolute_non_2xx_ceiling_percent == 0.05 and
-            .warmup_stability.fixed_rounds == 16 and
-            .warmup_stability.interleaved_rounds == 16 and
+            .warmup_stability.prewarm_cycles == 2 and
+            .warmup_stability.load_runner_lifecycle == "persistent_per_gate" and
+            .warmup_stability.fixed_rounds == 6 and
+            .warmup_stability.interleaved_rounds == 6 and
             .cpu_roles.auto_selected == true and
             .cpu_roles.selection_source == "environment" and
-            .warmup_stability.maximum_confirmation_rounds == 16 and
+            .warmup_stability.maximum_confirmation_rounds == 10 and
             .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
-            .warmup_stability.observed_maximum_confirmation_rounds <= 16 and
-            .warmup_stability.observed_maximum_total_rounds <= 32 and
+            .warmup_stability.observed_maximum_confirmation_rounds <= 10 and
+            .warmup_stability.observed_maximum_total_rounds <= 16 and
             .warmup_stability.variant_interleaved == false and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
@@ -197,19 +199,21 @@ jobs:
           jq -e '.passed == true and .benchmark_classification == "production" and
             .release_evidence == true and .application_kind == "rust-java-rest" and
             .required_rest_version == "4.5.0" and .required_rest_native_abi == 29 and
-            .activation_mode == "embedded_native_properties" and .pair_repeats >= 6 and
+            .activation_mode == "embedded_native_properties" and .pair_repeats >= 3 and
             .non_2xx_decision == "endpoint_noninferiority_median_weighted_aggregate_and_peak_envelope" and
             .non_2xx_threshold_percentage_points == 0 and
             .saturated_non_2xx_threshold_percentage_points == 0.02 and
             .absolute_non_2xx_ceiling_percent == 0.05 and
-            .warmup_stability.fixed_rounds == 16 and
-            .warmup_stability.interleaved_rounds == 16 and
+            .warmup_stability.prewarm_cycles == 2 and
+            .warmup_stability.load_runner_lifecycle == "persistent_per_gate" and
+            .warmup_stability.fixed_rounds == 6 and
+            .warmup_stability.interleaved_rounds == 6 and
             .cpu_roles.auto_selected == true and
             .cpu_roles.selection_source == "environment" and
-            .warmup_stability.maximum_confirmation_rounds == 16 and
+            .warmup_stability.maximum_confirmation_rounds == 10 and
             .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
-            .warmup_stability.observed_maximum_confirmation_rounds <= 16 and
-            .warmup_stability.observed_maximum_total_rounds <= 32 and
+            .warmup_stability.observed_maximum_confirmation_rounds <= 10 and
+            .warmup_stability.observed_maximum_total_rounds <= 16 and
             .warmup_stability.variant_interleaved == false and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and

@@ -9,6 +9,7 @@ param(
     [string] $EndpointClasses = "small-json,raw-json,heavy-json",
     [string] $Duration = "12s",
     [string] $Warmup = "5s",
+    [int] $PreWarmCycles = 2,
     [int] $MinWarmupRounds = 3,
     [int] $MaxWarmupRounds = 16,
     [int] $MaxWarmupConfirmationRounds = 4,
@@ -49,6 +50,9 @@ $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
 if ($PairRepeats -lt 3) { throw "PairRepeats must be at least 3." }
 if ($MaxMemoryRegressionMiB -gt 3.0) { throw "The agent memory gate cannot exceed 3 MiB." }
+if ($PreWarmCycles -lt 1 -or $PreWarmCycles -gt 8) {
+    throw "PreWarmCycles must be between 1 and 8."
+}
 if ($MinWarmupRounds -lt 2) { throw "MinWarmupRounds must be at least 2." }
 if ($MaxWarmupRounds -lt (2 * $MinWarmupRounds)) {
     throw "Warmup must contain at least two complete stability windows."
@@ -109,6 +113,7 @@ $WrkImage = "williamyeh/wrk:latest"
 $Baseline = if ($IsRustJavaRest) { "rest-glowroot-baseline" } else { "spring-glowroot-baseline" }
 $Candidate = if ($IsRustJavaRest) { "rest-glowroot-candidate" } else { "spring-glowroot-candidate" }
 $Collector = if ($IsRustJavaRest) { "rest-glowroot-collector" } else { "spring-glowroot-collector" }
+$LoadRunner = if ($IsRustJavaRest) { "rest-glowroot-load-runner" } else { "spring-glowroot-load-runner" }
 $ContainerCpuSets = @{}
 
 $EndpointMap = if ($IsRustJavaRest) {
@@ -245,6 +250,21 @@ function Ensure-Network {
     }
 }
 
+function Start-LoadRunner {
+    Remove-Container $LoadRunner
+    $args = @(
+        "run", "-d", "--name", $LoadRunner, "--network", $Network,
+        "--entrypoint", "sh"
+    )
+    if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
+    $args += @($WrkImage, "-c", "while :; do sleep 3600; done")
+    Invoke-Checked docker $args $ProjectRoot | Out-Null
+    $running = (& docker inspect -f "{{.State.Running}}" $LoadRunner 2>$null) -join ""
+    if ($LASTEXITCODE -ne 0 -or $running -ne "true") {
+        throw "Persistent wrk load runner did not start."
+    }
+}
+
 function Invoke-Curl([string] $Url, [string] $Method = "GET") {
     $args = @("run", "--rm", "--network", $Network, "--entrypoint", "curl")
     if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
@@ -254,9 +274,7 @@ function Invoke-Curl([string] $Url, [string] $Method = "GET") {
 }
 
 function Invoke-Warmup([string] $Target, [string] $Path) {
-    $args = @("run", "--rm", "--network", $Network)
-    if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
-    $args += @($WrkImage, "-t2", "-c32", "-d$Warmup", "http://${Target}:8080$Path")
+    $args = @("exec", $LoadRunner, "wrk", "-t2", "-c32", "-d$Warmup", "http://${Target}:8080$Path")
     $output = $null
     foreach ($attempt in 1..3) {
         $output = & docker @args 2>&1
@@ -271,6 +289,30 @@ function Invoke-Warmup([string] $Target, [string] $Path) {
         throw "Cannot parse warmup RPS for ${Target}${Path}:`n$text"
     }
     return [double] $Matches[1]
+}
+
+function Invoke-InterleavedPreWarm([string] $Target) {
+    foreach ($cycle in 1..$PreWarmCycles) {
+        foreach ($endpoint in $endpoints) {
+            [void](Invoke-Warmup $Target $EndpointMap[$endpoint])
+        }
+    }
+}
+
+function Invoke-PairedInterleavedPreWarm {
+    foreach ($cycle in 1..$PreWarmCycles) {
+        $endpointIndex = 0
+        foreach ($endpoint in $endpoints) {
+            $variants = @(Get-ReactorWarmupVariantOrder `
+                    -Round $cycle `
+                    -EndpointIndex $endpointIndex)
+            foreach ($variant in $variants) {
+                $target = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
+                [void](Invoke-Warmup $target $EndpointMap[$endpoint])
+            }
+            $endpointIndex++
+        }
+    }
 }
 
 function Invoke-InterleavedWarmup([string] $Target) {
@@ -535,8 +577,11 @@ function Prepare-SteadyMemoryMeasurement([string] $Name) {
 }
 
 function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] $Sequence) {
-    $runner = "spring-glowroot-wrk-$Sequence"
-    Remove-Container $runner
+    $resultFile = "/tmp/reactor-wrk-$Sequence.out"
+    $exitFile = "/tmp/reactor-wrk-$Sequence.exit"
+    $targetUrl = "http://${Target}:8080$Path"
+    & docker exec $LoadRunner sh -c "rm -f '$resultFile' '$exitFile'" *> $null
+    if ($LASTEXITCODE -ne 0) { throw "Cannot prepare persistent wrk load runner." }
     $hostBefore = if ($IsLinux) { Get-ReactorLinuxCpuSnapshot } else { $null }
     $targetCpuSet = if ($ContainerCpuSets.ContainsKey($Target)) {
         "$($ContainerCpuSets[$Target])"
@@ -548,18 +593,24 @@ function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] 
     $siblingCpus = if ($IsLinux) {
         @($physicalCpus | Where-Object { $applicationCpus -notcontains $_ })
     } else { @() }
-    $args = @("run", "-d", "--name", $runner, "--network", $Network)
-    if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
-    $args += @($WrkImage, "-t2", "-c$Concurrency", "-d$Duration", "--latency", "http://${Target}:8080$Path")
-    Invoke-Checked docker $args $ProjectRoot | Out-Null
+    $wrkCommand = "wrk -t2 -c$Concurrency -d$Duration --latency '$targetUrl' " +
+            "> '$resultFile' 2>&1; printf '%s' `$? > '$exitFile'"
+    & docker exec -d $LoadRunner sh -c $wrkCommand
+    if ($LASTEXITCODE -ne 0) { throw "Cannot start wrk measurement for ${Target}${Path}." }
     $maxRss = 0.0
     $maxContainer = 0.0
     $maxThreads = 0
-    while ((& docker inspect -f "{{.State.Running}}" $runner 2>$null) -eq "true") {
+    $deadline = (Get-Date).AddMinutes(2)
+    while ($true) {
         $sample = Get-ContainerMetrics $Target
         $maxRss = [math]::Max($maxRss, $sample.process_rss_mib)
         $maxContainer = [math]::Max($maxContainer, $sample.container_mib)
         $maxThreads = [math]::Max($maxThreads, $sample.threads)
+        & docker exec $LoadRunner sh -c "test -f '$exitFile'" *> $null
+        if ($LASTEXITCODE -eq 0) { break }
+        if ((Get-Date) -ge $deadline) {
+            throw "wrk measurement timed out for ${Target}${Path}."
+        }
         Start-Sleep -Milliseconds 250
     }
     $hostAfter = if ($IsLinux) { Get-ReactorLinuxCpuSnapshot } else { $null }
@@ -569,8 +620,10 @@ function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] 
     $hostSiblingBusyPercent = if ($siblingCpus.Count -gt 0) {
         (Get-ReactorLinuxCpuWindow -Before $hostBefore -After $hostAfter -Cpus $siblingCpus).busy_percent
     } else { 0.0 }
-    $output = (& docker logs $runner 2>&1) -join "`n"
-    Remove-Container $runner
+    $exitCode = ((& docker exec $LoadRunner cat $exitFile 2>&1) -join "").Trim()
+    $output = (& docker exec $LoadRunner cat $resultFile 2>&1) -join "`n"
+    & docker exec $LoadRunner sh -c "rm -f '$resultFile' '$exitFile'" *> $null
+    if ($exitCode -ne "0") { throw "wrk failed with exit code $exitCode for ${Target}${Path}:`n$output" }
     if ($output -notmatch 'Requests/sec:\s+([0-9.]+)') { throw "Cannot parse wrk RPS:`n$output" }
     $rps = [double]$Matches[1]
     if ($output -notmatch '(?m)^\s*([0-9]+) requests in ') { throw "Cannot parse wrk request count:`n$output" }
@@ -650,6 +703,7 @@ Assert-ReactorBenchmarkCpuIsolation -RunnerImage $RunnerImage `
         -AllowSharedApplicationSlots:$SequentialVariants `
         -AllowRunnerCollectorSiblingSharing:$AllowRunnerCollectorSiblingSharing
 Start-Collector
+Start-LoadRunner
 $records = [Collections.Generic.List[object]]::new()
 $startups = [Collections.Generic.List[object]]::new()
 $steadyMemory = [Collections.Generic.List[object]]::new()
@@ -676,6 +730,7 @@ try {
                     Assert-NativeTelemetryLoaded $name
                 }
                 Invoke-RouteSmoke $name
+                Invoke-InterleavedPreWarm $name
                 $warmupSamples = Invoke-InterleavedWarmup $name
                 $confirmationRoundsUsed = 0
                 while (-not (Test-WarmupStability -SamplesByEndpoint $warmupSamples) `
@@ -744,6 +799,7 @@ try {
             $name = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
             Invoke-RouteSmoke $name
         }
+        Invoke-PairedInterleavedPreWarm
         $warmupSamples = Invoke-PairedInterleavedWarmup
         $confirmationRoundsUsed = 0
         while (-not (Test-PairedWarmupStability -SamplesByVariant $warmupSamples) `
@@ -833,7 +889,7 @@ try {
             (Join-Path $Results "failure.json") -Encoding utf8
     throw
 } finally {
-    foreach ($name in @($Baseline, $Candidate, $Collector)) { Remove-Container $name }
+    foreach ($name in @($Baseline, $Candidate, $Collector, $LoadRunner)) { Remove-Container $name }
 }
 
 $summary = [Collections.Generic.List[object]]::new()
@@ -1005,6 +1061,9 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     startup_candidate_median_ms = [math]::Round($startupAgent, 2)
     startup_delta_pct = [math]::Round($startupDelta, 2)
     warmup_stability = [ordered]@{
+        prewarm_cycles = $PreWarmCycles
+        prewarm_duration_per_endpoint = $Warmup
+        load_runner_lifecycle = "persistent_per_gate"
         fixed_rounds = $MaxWarmupRounds
         interleaved_rounds = $MaxWarmupRounds
         maximum_confirmation_rounds = $MaxWarmupConfirmationRounds
@@ -1058,7 +1117,7 @@ $lines.Add("Benchmark classification: **$(if ($DevelopmentQuickMode) { 'developm
 $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
-$lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process, fully interleaved across endpoint classes$(if (-not $SequentialVariants) { ' and baseline/candidate variants' } else { '' }) to remove process-age and ordering bias. A failing fixed window receives at most $MaxWarmupConfirmationRounds additional full-matrix interleaved confirmation rounds without relaxing any threshold; this run used at most $observedMaxWarmupConfirmationRounds. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend against a $MaxWarmupRobustTrendPercent% primary gate. A trend up to $MaxWarmupBorderlineRobustTrendPercent% is accepted only when previous/recent window medians differ by at most $MaxWarmupBorderlineMedianShiftPercent%. Median absolute deviation must remain within $MaxWarmupMedianAbsoluteDeviationPercent%. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
+$lines.Add("Warmup stability: $PreWarmCycles equal pre-warm cycles plus $MaxWarmupRounds measured rounds per endpoint/process, fully interleaved across endpoint classes$(if (-not $SequentialVariants) { ' and baseline/candidate variants' } else { '' }). One persistent wrk container is reused for the whole gate. A failing measured window receives at most $MaxWarmupConfirmationRounds additional full-matrix interleaved confirmation rounds without relaxing any threshold; this run used at most $observedMaxWarmupConfirmationRounds. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend against a $MaxWarmupRobustTrendPercent% primary gate. A trend up to $MaxWarmupBorderlineRobustTrendPercent% is accepted only when previous/recent window medians differ by at most $MaxWarmupBorderlineMedianShiftPercent%. Median absolute deviation must remain within $MaxWarmupMedianAbsoluteDeviationPercent%. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
 $lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells and a $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin only for saturated embedded REST heavy-json c256+ cells. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory normalization: $(if ($IsRustJavaRest) { 'equal idle window' } else { 'benchmark-only explicit full GC followed by an equal idle window' }). This removes unrelated GC-phase noise without changing any RPS or p99 measurement. Paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")

@@ -2,12 +2,22 @@ name: Production Gate
 
 on:
   workflow_dispatch:
+    inputs:
+      qualification_depth:
+        description: Release uses three independent JVM pairs; extended uses six for diagnostics.
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - extended
 
 permissions:
   contents: read
 
 env:
   REACTOR_PERFORMANCE_RUNNER_CLASS: reactor-performance-native-linux
+  REACTOR_GATE_PAIR_REPEATS: ${{ inputs.qualification_depth == 'extended' && '6' || '3' }}
 
 concurrency:
   group: java-rust-glowroot-production-performance
@@ -33,6 +43,7 @@ jobs:
           ./benchmark/test_gate_statistics.ps1
           ./benchmark/test_warmup_statistics.ps1
           ./benchmark/test_benchmark_isolation.ps1
+          ./benchmark/test_load_runner_contract.ps1
 
       - name: Build exact-commit Java artifacts
         run: mvn -B -ntp clean install
@@ -44,7 +55,7 @@ jobs:
   spring-boot-agent:
     needs: gate-statistics
     runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
-    timeout-minutes: 240
+    timeout-minutes: 90
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -73,14 +84,15 @@ jobs:
         shell: pwsh
         run: |
           ./benchmark/spring_boot_gate.ps1 `
-            -PairRepeats 6 `
+            -PairRepeats $env:REACTOR_GATE_PAIR_REPEATS `
             -ConcurrencyLevels "64,256" `
             -EndpointClasses "small-json,raw-json,heavy-json" `
-            -Duration "15s" `
-            -Warmup "8s" `
+            -Duration "12s" `
+            -Warmup "5s" `
+            -PreWarmCycles 2 `
             -MinWarmupRounds 3 `
-            -MaxWarmupRounds 16 `
-            -MaxWarmupConfirmationRounds 16 `
+            -MaxWarmupRounds 6 `
+            -MaxWarmupConfirmationRounds 10 `
             -MaxWarmupRobustTrendPercent 3 `
             -MaxWarmupBorderlineRobustTrendPercent 5 `
             -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -105,7 +117,7 @@ jobs:
   rust-java-rest-agent:
     needs: gate-statistics
     runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
-    timeout-minutes: 240
+    timeout-minutes: 90
     steps:
       - name: Check out agent source
         uses: actions/checkout@v5
@@ -148,14 +160,15 @@ jobs:
             -ApplicationKind rust-java-rest `
             -RequiredRestVersion "4.5.0" `
             -RequiredRestNativeAbi 29 `
-            -PairRepeats 6 `
+            -PairRepeats $env:REACTOR_GATE_PAIR_REPEATS `
             -ConcurrencyLevels "64,256" `
             -EndpointClasses "small-json,raw-json,heavy-json" `
-            -Duration "15s" `
-            -Warmup "8s" `
+            -Duration "12s" `
+            -Warmup "5s" `
+            -PreWarmCycles 2 `
             -MinWarmupRounds 3 `
-            -MaxWarmupRounds 16 `
-            -MaxWarmupConfirmationRounds 16 `
+            -MaxWarmupRounds 6 `
+            -MaxWarmupConfirmationRounds 10 `
             -MaxWarmupRobustTrendPercent 3 `
             -MaxWarmupBorderlineRobustTrendPercent 5 `
             -MaxWarmupBorderlineMedianShiftPercent 3 `

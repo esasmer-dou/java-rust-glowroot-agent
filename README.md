@@ -523,7 +523,7 @@ endpoint/concurrency cell must keep:
 - additional agent threads at most `1` for both embedded Rust-Java and standalone Spring.
 
 The stable release runs this full matrix separately for Spring Boot and Rust-Java REST. Both cover
-small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and c256 with six balanced paired
+small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and c256 with three independent paired
 runs. RPS, p99, and startup use each pair's delta before the median is calculated. Non-2xx uses the
 paired median, request-weighted total, peak error envelope, and the absolute `0.05%` ceiling
 together. The bounded `0.02` percentage-point margin applies only to the saturated embedded REST heavy JSON
@@ -576,13 +576,15 @@ do not publish a local dirty native build.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 6 `
+  -PairRepeats 3 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
-  -Duration "15s" `
-  -Warmup "8s" `
+  -Duration "12s" `
+  -Warmup "5s" `
+  -PreWarmCycles 2 `
   -MinWarmupRounds 3 `
-  -MaxWarmupRounds 16 `
+  -MaxWarmupRounds 6 `
+  -MaxWarmupConfirmationRounds 10 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -594,6 +596,11 @@ do not publish a local dirty native build.
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
+
+This is the normal release profile. It uses three independent JVM pairs and normally targets a
+30-45 minute total wall time on the dedicated single-runner host. Select `extended` in the GitHub
+**Production Gate** workflow only for a boundary result; that mode uses six pairs. A release tag
+reuses the successful gate evidence for the same commit and does not rerun the matrix.
 
 Use the following additional parameters to reproduce the embedded REST matrix:
 
