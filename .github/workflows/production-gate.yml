@@ -53,7 +53,7 @@ jobs:
         run: ./benchmark/non_web_gate.ps1 -SkipAgentBuild
 
   spring-boot-agent:
-    needs: gate-statistics
+    needs: [gate-statistics, rust-java-rest-agent]
     runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
     timeout-minutes: 90
     steps:

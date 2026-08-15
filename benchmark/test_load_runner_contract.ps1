@@ -58,6 +58,8 @@ if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
 }
 Assert-Contains $workflow 'REACTOR_GATE_QUALIFICATION_DEPTH' `
         "Workflow must expose release and extended gate depths."
+Assert-Contains $workflow 'spring-boot-agent:\s+needs: \[gate-statistics, rust-java-rest-agent\]' `
+        "The production workflow must stop before Spring when the Rust-Java gate fails."
 if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.minimum_pair_repeats == 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.maximum_pair_repeats == 6')).Count -ne 2 -or

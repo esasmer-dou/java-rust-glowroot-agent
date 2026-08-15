@@ -48,6 +48,10 @@ to at most six pairs. Choose `extended` to require all six pairs for a benchmark
 investigation. Creating a tag reuses successful exact-commit evidence and does not run the matrix
 again.
 
+The workflow runs the Rust-Java matrix first. Spring starts only after Rust-Java passes. This is
+intentional fail-fast behavior on the single dedicated runner; a failed first runtime cannot consume
+another full matrix window.
+
 The dedicated runner service must configure four topology-calibrated roles. Values below describe
 the current eight-logical-CPU runner; a different host must use four distinct physical groups:
 
