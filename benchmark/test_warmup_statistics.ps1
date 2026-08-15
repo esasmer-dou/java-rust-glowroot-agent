@@ -40,6 +40,12 @@ Assert-Warmup $true `
 Assert-Warmup $false `
         @(18000.0, 20000.0, 22000.0, 22000.0, 20000.0, 18000.0) `
         "Repeated high dispersion must fail even when medians match."
+Assert-Warmup $false `
+        @(81421.66, 80864.75, 82219.98, 82966.04, 78501.34, 78451.49) `
+        "A late execution-level shift must not pass without confirmation."
+Assert-Warmup $true `
+        @(78501.34, 78451.49, 78510.0, 78490.0, 78520.0, 78480.0) `
+        "A confirmed stable execution level must pass without relaxing thresholds."
 
 $insufficientFailed = $false
 try {

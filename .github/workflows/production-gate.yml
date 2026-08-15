@@ -52,6 +52,7 @@ jobs:
             -Warmup "8s" `
             -MinWarmupRounds 3 `
             -MaxWarmupRounds 16 `
+            -MaxWarmupConfirmationRounds 4 `
             -MaxWarmupRobustTrendPercent 3 `
             -MaxWarmupBorderlineRobustTrendPercent 5 `
             -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -121,6 +122,7 @@ jobs:
             -Warmup "8s" `
             -MinWarmupRounds 3 `
             -MaxWarmupRounds 16 `
+            -MaxWarmupConfirmationRounds 4 `
             -MaxWarmupRobustTrendPercent 3 `
             -MaxWarmupBorderlineRobustTrendPercent 5 `
             -MaxWarmupBorderlineMedianShiftPercent 3 `
