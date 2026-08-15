@@ -60,6 +60,9 @@ All notable changes to this project are recorded here.
   mode cannot leave permanent route slots after returning to `micro`.
 - Made profile reclamation inspect pending retired state before waiting for a notification, allowing
   an exporter restart to complete a release whose earlier notification was already consumed.
+- Corrected the release fail-open gate to wait for the first real transport attempt under the
+  60-second export interval contract. A disconnected pre-export state no longer causes a false
+  failure, and release evidence must show a failed attempt within the bounded 75-second window.
 
 ### Compatibility
 

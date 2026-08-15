@@ -98,7 +98,7 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Embedded resident maksimum | PASS | smaps RSS maksimumu `+1,817 MiB`; `+3 MiB` sınırının altında |
 | Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` revision'ından üretildi |
 | Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256, REST `4.5.0` ve native ABI `29` |
-| Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, collector kesintisi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
+| Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, 75 saniyelik gözlem içinde en az bir başarısız taşıma denemesi, business HTTP erişiminin devam etmesi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
 | Spring performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256 ve exact-commit kanıtı |
 | Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
 
@@ -225,6 +225,11 @@ Protokol ve collector kapalı fail-open gate'i:
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
+
+Fail-open aşaması önce collector kapalıyken uygulamanın HTTP çağrılarının başarılı kaldığını kanıtlar.
+Ardından 60 saniyelik export aralığı sözleşmesi içinde ilk gerçek taşıma denemesini bekler. Deneme
+daha erken de yapılabilir. Gate, 75 saniye içinde `export_failure >= 1` olmasını zorunlu tutar.
+Henüz export denenmeden yalnız `connected=false` görülmesi release gate'ini geçirmez.
 
 Embedded exact-source footprint gate'i:
 

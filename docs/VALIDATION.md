@@ -96,7 +96,7 @@ native artifacts before ABI `3` can be published.
 | Embedded observed resident maximum | PASS | smaps RSS maximum `+1.817 MiB`, below the `+3 MiB` boundary |
 | Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` |
 | Rust-Java REST performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, REST `4.5.0`, native ABI `29` |
-| Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, collector outage, and optional `-javaagent` bootstrap must all pass |
+| Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, one failed transport attempt within the 75-second observation window, continued business HTTP availability, and optional `-javaagent` bootstrap must all pass |
 | Spring performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, exact-commit evidence |
 | Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
 
@@ -225,6 +225,11 @@ Protocol and collector-down fail-open gate:
   -AllowRunnerCollectorSiblingSharing `
   -FailOnGate
 ```
+
+The fail-open phase first proves that business HTTP remains successful while the collector is down.
+It then waits for the first real transport attempt under the 60-second export interval contract and
+requires `export_failure >= 1` within 75 seconds. The attempt may happen sooner. Merely seeing
+`connected=false` before an export attempt does not pass the release gate.
 
 Embedded exact-source footprint gate:
 

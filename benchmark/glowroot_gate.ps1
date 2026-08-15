@@ -83,6 +83,8 @@ $RunnerImage = "reactor-benchmark-runner:local"
 $CollectorContainer = "glowroot-mock-collector"
 $AppContainer = "glowroot-agent-smoke"
 $AgentId = "java-rust-glowroot-agent::benchmark"
+$FailOpenObservationTimeoutMs = 75000
+$ExportIntervalContractMs = 60000
 
 if (-not $ProtocolOnly -and -not $SkipHostPreflight) {
     Assert-ReactorHostBenchmarkReadiness `
@@ -368,9 +370,34 @@ function Invoke-FailOpenGate {
         if ($output -notmatch '(?m)^Status 200: [1-9][0-9]*$' -or $output -notmatch 'errors total: 0') {
             throw "Collector-down fail-open gate produced request errors."
         }
-        $diagnostics = Invoke-RunnerCurl "http://${AppContainer}:8080/diagnostics/glowroot"
-        $diagnostics | Set-Content -LiteralPath (Join-Path $ProtocolDir "fail-open-diagnostics.json") -Encoding utf8
-        $parsed = $diagnostics | ConvertFrom-Json
+        # The production interval contract is 60 seconds. Wait for the first real transport attempt
+        # instead of treating the pre-export disconnected state as a failed assertion.
+        $deadline = (Get-Date).AddMilliseconds($FailOpenObservationTimeoutMs)
+        $attempts = 0
+        $parsed = $null
+        $diagnostics = $null
+        $observation = [Diagnostics.Stopwatch]::StartNew()
+        do {
+            $attempts++
+            $diagnostics = Invoke-RunnerCurl "http://${AppContainer}:8080/diagnostics/glowroot"
+            $parsed = $diagnostics | ConvertFrom-Json
+            if (-not $parsed.connected -and $parsed.export_failure -ge 1) { break }
+            Start-Sleep -Seconds 5
+        } while ((Get-Date) -lt $deadline)
+        $observation.Stop()
+        $diagnostics | Set-Content `
+                -LiteralPath (Join-Path $ProtocolDir "fail-open-diagnostics.json") `
+                -Encoding utf8
+        [ordered]@{
+            attempts = $attempts
+            elapsed_ms = [math]::Round($observation.Elapsed.TotalMilliseconds, 2)
+            deadline_ms = $FailOpenObservationTimeoutMs
+            export_interval_contract_ms = $ExportIntervalContractMs
+            connected = [bool] $parsed.connected
+            export_failure = [int64] $parsed.export_failure
+        } | ConvertTo-Json -Depth 3 | Set-Content `
+                -LiteralPath (Join-Path $ProtocolDir "fail-open-observation.json") `
+                -Encoding utf8
         if ($parsed.connected -or $parsed.export_failure -lt 1) {
             throw "Collector-down diagnostics did not expose a failed, disconnected exporter."
         }
@@ -387,11 +414,19 @@ function Write-ProtocolGateReport {
             ConvertFrom-Json
     $failOpen = Get-Content -Raw -LiteralPath (Join-Path $ProtocolDir "fail-open-diagnostics.json") |
             ConvertFrom-Json
+    $failOpenObservation = Get-Content -Raw `
+            -LiteralPath (Join-Path $ProtocolDir "fail-open-observation.json") |
+            ConvertFrom-Json
     $javaAgent = Get-Content -Raw `
             -LiteralPath (Join-Path $ProtocolDir "javaagent-bootstrap-diagnostics.json") |
             ConvertFrom-Json
     $protocolPass = $protocol.healthy -and $protocol.validation_errors -eq 0
-    $failOpenPass = -not $failOpen.connected -and $failOpen.export_failure -ge 1
+    $failOpenPass = -not $failOpen.connected -and $failOpen.export_failure -ge 1 `
+            -and $failOpenObservation.attempts -ge 1 `
+            -and $failOpenObservation.export_failure -ge 1 `
+            -and $failOpenObservation.deadline_ms -eq $FailOpenObservationTimeoutMs `
+            -and $failOpenObservation.export_interval_contract_ms -eq $ExportIntervalContractMs `
+            -and $failOpenObservation.elapsed_ms -le $FailOpenObservationTimeoutMs
     $javaAgentPass = $javaAgent.enabled `
             -and $javaAgent.agent_id -eq "${AgentId}::javaagent-bootstrap" `
             -and $javaAgent.max_routes -eq 64 -and $javaAgent.trace_capacity -eq 8
@@ -405,6 +440,7 @@ function Write-ProtocolGateReport {
         javaagent_bootstrap_gate = if ($javaAgentPass) { "PASS" } else { "FAIL" }
         protocol = $protocol
         fail_open = $failOpen
+        fail_open_observation = $failOpenObservation
     } | ConvertTo-Json -Depth 8 |
             Set-Content -LiteralPath (Join-Path $ResultsDir "gate-summary.json") -Encoding utf8
 
@@ -413,6 +449,8 @@ function Write-ProtocolGateReport {
         ""
         "- Protocol gate: $(if ($protocolPass) { 'PASS' } else { 'FAIL' })"
         "- Collector-down fail-open gate: $(if ($failOpenPass) { 'PASS' } else { 'FAIL' })"
+        "- Fail-open transport observation: $($failOpenObservation.attempts) polls, " +
+                "$($failOpenObservation.elapsed_ms) ms, $($failOpenObservation.export_failure) export failures"
         "- Optional Java agent bootstrap gate: $(if ($javaAgentPass) { 'PASS' } else { 'FAIL' })"
         ""
         "Overall gate: **$(if ($passed) { 'PASS' } else { 'BLOCKED' })**"
@@ -439,13 +477,21 @@ function Write-GateReport {
             ConvertFrom-Json
     $failOpen = Get-Content -Raw -LiteralPath (Join-Path $ProtocolDir "fail-open-diagnostics.json") |
             ConvertFrom-Json
+    $failOpenObservation = Get-Content -Raw `
+            -LiteralPath (Join-Path $ProtocolDir "fail-open-observation.json") |
+            ConvertFrom-Json
     $javaAgent = Get-Content -Raw `
             -LiteralPath (Join-Path $ProtocolDir "javaagent-bootstrap-diagnostics.json") |
             ConvertFrom-Json
     $residentPass = @($comparisonRows | Where-Object gate -ne "PASS").Count -eq 0
     $startupPass = $startup.gate -eq "PASS"
     $protocolPass = $protocol.healthy -and $protocol.validation_errors -eq 0
-    $failOpenPass = -not $failOpen.connected -and $failOpen.export_failure -ge 1
+    $failOpenPass = -not $failOpen.connected -and $failOpen.export_failure -ge 1 `
+            -and $failOpenObservation.attempts -ge 1 `
+            -and $failOpenObservation.export_failure -ge 1 `
+            -and $failOpenObservation.deadline_ms -eq $FailOpenObservationTimeoutMs `
+            -and $failOpenObservation.export_interval_contract_ms -eq $ExportIntervalContractMs `
+            -and $failOpenObservation.elapsed_ms -le $FailOpenObservationTimeoutMs
     $javaAgentPass = $javaAgent.enabled `
             -and $javaAgent.agent_id -eq "${AgentId}::javaagent-bootstrap" `
             -and $javaAgent.max_routes -eq 64 -and $javaAgent.trace_capacity -eq 8
@@ -457,6 +503,7 @@ function Write-GateReport {
         protocol_gate = if ($protocolPass) { "PASS" } else { "FAIL" }
         fail_open_gate = if ($failOpenPass) { "PASS" } else { "FAIL" }
         javaagent_bootstrap_gate = if ($javaAgentPass) { "PASS" } else { "FAIL" }
+        fail_open_observation = $failOpenObservation
         resident_crossover_gate = if ($residentPass) { "PASS" } else { "BLOCKED" }
         startup_gate = $startup.gate
         endpoint_cells = $comparisonRows
@@ -482,6 +529,8 @@ function Write-GateReport {
     $lines.Add("")
     $lines.Add("- Protocol gate: $(if ($protocolPass) { 'PASS' } else { 'FAIL' })")
     $lines.Add("- Collector-down fail-open gate: $(if ($failOpenPass) { 'PASS' } else { 'FAIL' })")
+    $lines.Add("- Fail-open transport observation: $($failOpenObservation.attempts) polls, " +
+            "$($failOpenObservation.elapsed_ms) ms, $($failOpenObservation.export_failure) export failures")
     $lines.Add("- Optional Java agent bootstrap gate: $(if ($javaAgentPass) { 'PASS' } else { 'FAIL' })")
     $lines.Add("- Resident crossover gate: $(if ($residentPass) { 'PASS' } else { 'BLOCKED' })")
     $lines.Add("- Startup gate: $($startup.gate)")

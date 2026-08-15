@@ -193,7 +193,12 @@ jobs:
               .candidate_peak_non_2xx_pct <= .absolute_non_2xx_ceiling_pct)' \
             "$REST_SUMMARY" >/dev/null
           jq -e '.passed == true and .protocol_gate == "PASS" and
-            .fail_open_gate == "PASS" and .javaagent_bootstrap_gate == "PASS"' \
+            .fail_open_gate == "PASS" and .javaagent_bootstrap_gate == "PASS" and
+            .fail_open_observation.attempts >= 1 and
+            .fail_open_observation.export_failure >= 1 and
+            .fail_open_observation.deadline_ms == 75000 and
+            .fail_open_observation.export_interval_contract_ms == 60000 and
+            .fail_open_observation.elapsed_ms <= .fail_open_observation.deadline_ms' \
             "$REST_PROTOCOL_SUMMARY" >/dev/null
 
       - name: Remove incomplete Maven package versions

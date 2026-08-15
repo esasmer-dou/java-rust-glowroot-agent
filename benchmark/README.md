@@ -124,6 +124,12 @@ After that matrix, reuse its images for the protocol, collector-down, and option
   -FailOnGate
 ```
 
+The collector-down check keeps business HTTP traffic live, then waits for one real transport attempt.
+The production export interval contract is 60 seconds, so a disconnected state alone is not enough:
+the gate requires the failed attempt to be visible within 75 seconds. The exporter may attempt sooner.
+This wait is protocol evidence; it does not relax the RPS, p99, error-rate, or 3 MiB resident-memory
+thresholds.
+
 The older dual-resident crossover tool remains available for machines with enough isolated physical
 cores. It is diagnostic and is not the stable hosted-runner release gate:
 
