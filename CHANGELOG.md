@@ -63,6 +63,10 @@ All notable changes to this project are recorded here.
 - Corrected the release fail-open gate to wait for the first real transport attempt under the
   60-second export interval contract. A disconnected pre-export state no longer causes a false
   failure, and release evidence must show a failed attempt within the bounded 75-second window.
+- Moved the full performance matrix to the dedicated `reactor-performance-native-linux` runner
+  class while keeping GitHub Actions as the exact-commit orchestrator and release gatekeeper.
+  Release validation now rejects hosted, WSL, containerized, undersized, or multiply registered
+  runner evidence. Local Docker retains a short development-only A/B gate.
 
 ### Compatibility
 

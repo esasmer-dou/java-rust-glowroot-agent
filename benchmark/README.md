@@ -13,7 +13,7 @@ Fast local diagnosis and release evidence have different jobs:
 |---|---|---|
 | Unit and decision statistics | GitHub-hosted Linux | Clean, reproducible correctness checks |
 | Focused diagnosis | Local Docker/WSL | Short feedback while changing code or gate logic |
-| Full Spring and Rust-Java REST matrix | GitHub-hosted native Linux until a dedicated native runner is attached | Exact-commit release evidence on native Linux |
+| Full Spring and Rust-Java REST matrix | Dedicated `reactor-performance-native-linux` pool | Stable CPU topology, persistent caches, exact-commit release evidence |
 | Package and release | GitHub-hosted Linux | Provenance, hashes, Maven Packages, and GitHub Release |
 
 The local WSL runner is repository-scoped and accepts only jobs carrying `self-hosted`,
@@ -23,10 +23,33 @@ physical-core isolation. A production self-hosted runner must use the distinct
 `reactor-performance-native-linux` label, native Linux, at least eight dedicated logical CPUs,
 12 GiB available to Docker, PowerShell, Maven, Docker socket access, and stable CPU frequency.
 
+Production jobs no longer fall back to `ubuntu-latest`. The release workflow checks the actual job
+labels and uploaded runner preflight evidence before accepting a successful run. The preflight
+rejects WSL, containerized runners, used swap, insufficient CPU/RAM/disk, non-OpenJ9 Java, and more
+than one runner listener on the host. This keeps a fast runner from becoming an invalid benchmark.
+
+Install one runner per physical host. A pool of two hosts lets Spring and Rust-Java REST execute in
+parallel. A one-host pool remains valid but executes them serially. Never add two runner services to
+the same host merely to reduce elapsed time; simultaneous matrices would contaminate p99 and RSS.
+See [`scripts/performance-runner/README.md`](../scripts/performance-runner/README.md).
+
+Run **Production Runner Preflight** after installation. It validates the native host, Semeru,
+Maven, Docker, CPU topology, swap, and runner-service count in a short job before the full matrix is
+allowed to consume runner time.
+
 Use **Performance Runner Smoke** after changing the WSL runner installation and for fast feedback.
 Use **Production Gate** only for a release candidate. The release workflow still requires its
 successful native-Linux evidence for the exact tag commit. Do not relabel a WSL/Docker Desktop host
 as `reactor-performance-native-linux`; its warmup trend and RSS evidence are not equivalent.
+
+For development-only feedback, run a short c64 small/raw JSON matrix locally:
+
+```powershell
+./benchmark/local_docker_quick_gate.ps1 -ApplicationKind rust-java-rest
+```
+
+Use `spring-boot` or `all` when needed. The generated evidence explicitly contains
+`release_evidence=false`; GitHub release validation cannot consume it.
 
 `mock-collector` parses messages using Glowroot's current protobuf contract. It verifies init,
 aggregate, gauge, and trace payloads, including transaction-count versus histogram-count equality.

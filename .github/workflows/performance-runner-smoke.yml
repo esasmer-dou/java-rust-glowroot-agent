@@ -37,3 +37,20 @@ jobs:
           mvn -version
           ./benchmark/test_gate_statistics.ps1
           ./benchmark/test_warmup_statistics.ps1
+
+      - name: Record WSL smoke runner classification
+        shell: pwsh
+        run: |
+          ./benchmark/performance_runner_preflight.ps1 `
+            -RunnerClass reactor-wsl-smoke `
+            -AllowWslForSmoke `
+            -EvidencePath benchmark/results/runner-preflight/wsl-smoke.json
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-runner-smoke
+          path: benchmark/results/runner-preflight/wsl-smoke.json
+          if-no-files-found: error
+          retention-days: 7

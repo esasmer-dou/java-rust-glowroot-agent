@@ -100,6 +100,17 @@ native artifacts before ABI `3` can be published.
 | Spring performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, exact-commit evidence |
 | Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
 
+The two production performance jobs run only on the
+`self-hosted,linux,x64,reactor-performance-native-linux` runner class. Unit tests, package publishing,
+and release orchestration remain on GitHub-hosted Linux. Release validation reads the GitHub job
+labels and each job's preflight JSON, so hosted Linux, WSL, and containerized runners cannot be used
+as performance evidence by accident. Use two separate runner hosts for parallel execution; use only
+one runner service per host.
+
+Local Docker uses [`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) for fast
+c64 small/raw JSON feedback. Its output is diagnostic and never satisfies the exact-commit release
+gate.
+
 The embedded footprint report remains under
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md). For stable
 `0.3.0`, the authoritative reports are the `spring-boot-production-gate.md` and

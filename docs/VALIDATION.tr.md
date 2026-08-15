@@ -102,6 +102,17 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Spring performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256 ve exact-commit kanıtı |
 | Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
 
+İki production performans job'u yalnızca
+`self-hosted,linux,x64,reactor-performance-native-linux` runner sınıfında çalışır. Unit testler,
+package yayını ve release orkestrasyonu GitHub-hosted Linux üzerinde kalır. Release kontrolü GitHub
+job etiketlerini ve her job tarafından üretilen preflight JSON dosyasını okur. Böylece hosted Linux,
+WSL veya container içindeki bir runner yanlışlıkla performans kanıtı olarak kullanılamaz. Paralel
+çalışma için iki ayrı runner sunucusu kullanın. Her sunucuda yalnızca bir runner servisi çalıştırın.
+
+Hızlı local kontrol için
+[`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) kullanılır. Bu kısa test c64
+small/raw JSON akışını ölçer. Sonucu yalnız tanı amaçlıdır ve exact-commit release gate'ini karşılamaz.
+
 Embedded footprint raporu
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md) dosyasındadır.
 Stable `0.3.0` için geçerli kanıtlar, GitHub Release'e eklenen

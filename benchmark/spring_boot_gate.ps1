@@ -41,6 +41,7 @@ param(
     [int] $HostStabilizationSeconds = 10,
     [switch] $SkipHostPreflight,
     [switch] $SkipBuild,
+    [switch] $DevelopmentQuickMode,
     [switch] $FailOnGate
 )
 
@@ -79,6 +80,9 @@ if ($MaxSaturatedNon2xxDeltaPercentagePoints -lt $MaxNon2xxDeltaPercentagePoints
 }
 if ($MaxAbsoluteNon2xxPercent -le 0.0 -or $MaxAbsoluteNon2xxPercent -gt 0.05) {
     throw "The absolute non-2xx ceiling must be between 0 and 0.05 percent."
+}
+if ($DevelopmentQuickMode -and -not $SkipHostPreflight) {
+    throw "DevelopmentQuickMode requires SkipHostPreflight and cannot produce release evidence."
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -403,7 +407,7 @@ function Assert-StabilizedWarmup(
         rps_samples = @($Samples)
         gate = if ($warmupPassed) { "PASS" } else { "FAIL" }
     })
-    if (-not $warmupPassed) {
+    if (-not $warmupPassed -and -not $DevelopmentQuickMode) {
         $sampleText = @($Samples | ForEach-Object {
             $_.ToString("F2", [Globalization.CultureInfo]::InvariantCulture)
         }) -join ", "
@@ -957,6 +961,7 @@ $observedMaxWarmupRangeSpread = ($warmups.range_spread_pct | Measure-Object -Max
 $observedMaxFirstStableRound = ($warmups.first_stable_round | Measure-Object -Maximum).Maximum
 $observedMaxWarmupConfirmationRounds = ($warmups.confirmation_rounds | Measure-Object -Maximum).Maximum
 $observedMaxWarmupTotalRounds = ($warmups.rounds | Measure-Object -Maximum).Maximum
+$warmupGatePassed = -not ($warmups.gate -contains "FAIL")
 $passedAll = -not ($summary.gate -contains "FAIL") -and $startupDelta -le 10.0 -and $steadyMemoryPassed
 
 ConvertTo-Json -InputObject @($records) -Depth 5 |
@@ -967,6 +972,8 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
         Set-Content (Join-Path $Results "warmup.json") -Encoding utf8
 [ordered]@{
     passed = $passedAll
+    benchmark_classification = if ($DevelopmentQuickMode) { "development-only" } else { "production" }
+    release_evidence = -not $DevelopmentQuickMode
     application_kind = $ApplicationKind
     required_rest_version = if ($IsRustJavaRest) { $RequiredRestVersion } else { $null }
     required_rest_native_abi = if ($IsRustJavaRest) { $RequiredRestNativeAbi } else { $null }
@@ -1013,7 +1020,7 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
         observed_maximum_median_absolute_deviation_pct = [math]::Round($observedMaxWarmupMad, 3)
         observed_maximum_range_spread_pct = [math]::Round($observedMaxWarmupRangeSpread, 3)
         observed_maximum_first_stable_round = [int] $observedMaxFirstStableRound
-        gate = "PASS"
+        gate = if ($warmupGatePassed) { "PASS" } elseif ($DevelopmentQuickMode) { "WARN" } else { "FAIL" }
     }
     steady_memory = [ordered]@{
         normalization = if ($IsRustJavaRest) { "idle_window" } else { "explicit_full_gc_then_idle" }
@@ -1041,6 +1048,7 @@ $activationDescription = if ($IsRustJavaRest) {
     if ($UseJavaAgentBootstrap) { "optional -javaagent bootstrap + starter" } else { "recommended starter + properties" }
 }
 $lines.Add("Application: **$ApplicationKind**. Activation: **$activationDescription**.")
+$lines.Add("Benchmark classification: **$(if ($DevelopmentQuickMode) { 'development-only; not release evidence' } else { 'production release evidence' })**.")
 $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
@@ -1057,4 +1065,7 @@ $lines.Add("")
 $lines.Add("Overall gate: **$(if ($passedAll) { 'PASS' } else { 'BLOCKED' })**")
 $lines | Set-Content (Join-Path $Results "REPORT.md") -Encoding utf8
 Write-Host "$ApplicationKind gate report: $(Join-Path $Results 'REPORT.md')"
-if ($FailOnGate -and -not $passedAll) { throw "$ApplicationKind production gate failed." }
+if ($FailOnGate -and -not $passedAll) {
+    $gateName = if ($DevelopmentQuickMode) { "development quick gate" } else { "production gate" }
+    throw "$ApplicationKind $gateName failed."
+}

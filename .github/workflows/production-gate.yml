@@ -6,6 +6,9 @@ on:
 permissions:
   contents: read
 
+env:
+  REACTOR_PERFORMANCE_RUNNER_CLASS: reactor-performance-native-linux
+
 concurrency:
   group: java-rust-glowroot-production-performance
   cancel-in-progress: false
@@ -25,7 +28,7 @@ jobs:
 
   spring-boot-agent:
     needs: gate-statistics
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
     timeout-minutes: 120
     steps:
       - name: Check out source
@@ -43,7 +46,13 @@ jobs:
         with:
           distribution: semeru
           java-version: "21"
-          cache: maven
+
+      - name: Verify dedicated native Linux runner
+        shell: pwsh
+        run: |
+          ./benchmark/performance_runner_preflight.ps1 `
+            -RunnerClass $env:REACTOR_PERFORMANCE_RUNNER_CLASS `
+            -EvidencePath benchmark/results/runner-preflight/spring-boot-agent.json
 
       - name: Run full paired Spring Boot matrix
         shell: pwsh
@@ -73,13 +82,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: spring-boot-production-gate
-          path: benchmark/results/spring_gate_*/
+          path: |
+            benchmark/results/spring_gate_*/
+            benchmark/results/runner-preflight/spring-boot-agent.json
           if-no-files-found: error
           retention-days: 30
 
   rust-java-rest-agent:
     needs: gate-statistics
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
     timeout-minutes: 120
     steps:
       - name: Check out agent source
@@ -106,10 +117,14 @@ jobs:
         with:
           distribution: semeru
           java-version: "21"
-          cache: maven
-          cache-dependency-path: |
-            java-rust-glowroot-agent/pom.xml
-            rust-java-rest/pom.xml
+
+      - name: Verify dedicated native Linux runner
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        run: |
+          ./benchmark/performance_runner_preflight.ps1 `
+            -RunnerClass $env:REACTOR_PERFORMANCE_RUNNER_CLASS `
+            -EvidencePath benchmark/results/runner-preflight/rust-java-rest-agent.json
 
       - name: Run full paired Rust-Java REST matrix
         shell: pwsh
@@ -159,5 +174,6 @@ jobs:
           path: |
             java-rust-glowroot-agent/benchmark/results/rest_gate_*/
             java-rust-glowroot-agent/benchmark/results/glowroot_gate_*/
+            java-rust-glowroot-agent/benchmark/results/runner-preflight/rust-java-rest-agent.json
           if-no-files-found: error
           retention-days: 30
