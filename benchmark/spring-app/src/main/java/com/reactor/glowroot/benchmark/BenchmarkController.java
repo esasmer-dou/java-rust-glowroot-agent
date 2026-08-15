@@ -52,6 +52,12 @@ final class BenchmarkController {
         return ResponseEntity.ok(new ProfileResponse(active.activeProfile().propertyValue()));
     }
 
+    @PostMapping(path = "/internal/benchmark/full-gc")
+    ResponseEntity<Void> fullGc() {
+        System.gc();
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping(path = "/api/heavy", produces = MediaType.APPLICATION_JSON_VALUE)
     HeavyResponse heavy(@RequestParam(name = "items", defaultValue = "100") int items) {
         int boundedItems = Math.max(1, Math.min(items, 250));

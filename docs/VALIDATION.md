@@ -98,7 +98,7 @@ native artifacts before ABI `3` can be published.
 | Rust-Java REST performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, REST `4.5.0`, native ABI `29` |
 | Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, collector outage, and optional `-javaagent` bootstrap must all pass |
 | Spring performance matrix | RELEASE ENFORCED | Six paired runs, three endpoint classes, c64/c256, exact-commit evidence |
-| Spring steady memory | RELEASE ENFORCED | Same full workload and process age; paired median RSS/cgroup delta must stay within `+3 MiB` |
+| Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
 
 The embedded footprint report remains under
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md). For stable

@@ -241,10 +241,10 @@ function Ensure-Network {
     }
 }
 
-function Invoke-Curl([string] $Url) {
+function Invoke-Curl([string] $Url, [string] $Method = "GET") {
     $args = @("run", "--rm", "--network", $Network, "--entrypoint", "curl")
     if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
-    $output = & docker @args $RunnerImage "-fsS" $Url 2>&1
+    $output = & docker @args $RunnerImage "-fsS" "-X" $Method $Url 2>&1
     if ($LASTEXITCODE -ne 0) { throw "HTTP probe failed for ${Url}: $($output -join "`n")" }
     return $output -join "`n"
 }
@@ -275,11 +275,33 @@ function Invoke-InterleavedWarmup([string] $Target) {
         $samplesByEndpoint[$endpoint] = [Collections.Generic.List[double]]::new()
     }
     foreach ($round in 1..$MaxWarmupRounds) {
-        foreach ($endpoint in $endpoints) {
-            $samplesByEndpoint[$endpoint].Add((Invoke-Warmup $Target $EndpointMap[$endpoint]))
-        }
+        Add-InterleavedWarmupRound `
+                -Target $Target `
+                -SamplesByEndpoint $samplesByEndpoint
     }
     return $samplesByEndpoint
+}
+
+function Add-InterleavedWarmupRound(
+        [string] $Target,
+        [hashtable] $SamplesByEndpoint) {
+    foreach ($endpoint in $endpoints) {
+        $SamplesByEndpoint[$endpoint].Add((Invoke-Warmup $Target $EndpointMap[$endpoint]))
+    }
+}
+
+function Test-WarmupStability([hashtable] $SamplesByEndpoint) {
+    foreach ($endpoint in $endpoints) {
+        $decision = Get-ReactorWarmupDecision `
+                -Samples @($SamplesByEndpoint[$endpoint]) `
+                -WindowRounds $MinWarmupRounds `
+                -MaximumRobustTrendPercent $MaxWarmupRobustTrendPercent `
+                -MaximumBorderlineRobustTrendPercent $MaxWarmupBorderlineRobustTrendPercent `
+                -MaximumBorderlineMedianShiftPercent $MaxWarmupBorderlineMedianShiftPercent `
+                -MaximumMedianAbsoluteDeviationPercent $MaxWarmupMedianAbsoluteDeviationPercent
+        if (-not $decision.passed) { return $false }
+    }
+    return $true
 }
 
 function Invoke-PairedInterleavedWarmup {
@@ -501,6 +523,13 @@ function Get-StableContainerMetrics([string] $Name, [int] $SampleCount = 5) {
     }
 }
 
+function Prepare-SteadyMemoryMeasurement([string] $Name) {
+    if (-not $IsRustJavaRest) {
+        Invoke-Curl "http://${Name}:8080/internal/benchmark/full-gc" "POST" | Out-Null
+    }
+    Start-Sleep -Seconds 5
+}
+
 function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] $Sequence) {
     $runner = "spring-glowroot-wrk-$Sequence"
     Remove-Container $runner
@@ -644,11 +673,20 @@ try {
                 }
                 Invoke-RouteSmoke $name
                 $warmupSamples = Invoke-InterleavedWarmup $name
+                $confirmationRoundsUsed = 0
+                while (-not (Test-WarmupStability -SamplesByEndpoint $warmupSamples) `
+                        -and $confirmationRoundsUsed -lt $MaxWarmupConfirmationRounds) {
+                    $confirmationRoundsUsed++
+                    Add-InterleavedWarmupRound `
+                            -Target $name `
+                            -SamplesByEndpoint $warmupSamples
+                }
                 foreach ($endpoint in $endpoints) {
                     Assert-StabilizedWarmup `
                             -Pair $pair `
                             -Variant $variant `
                             -Endpoint $endpoint `
+                            -ConfirmationRoundsUsed $confirmationRoundsUsed `
                             -Samples @($warmupSamples[$endpoint])
                 }
                 foreach ($cell in $cells) {
@@ -673,7 +711,7 @@ try {
                     })
                     Start-Sleep -Seconds 2
                 }
-                Start-Sleep -Seconds 5
+                Prepare-SteadyMemoryMeasurement $name
                 $stable = Get-StableContainerMetrics $name
                 $steadyMemory.Add([pscustomobject]@{
                     pair = $pair
@@ -749,6 +787,10 @@ try {
                 })
                 Start-Sleep -Seconds 2
             }
+        }
+        if (-not $IsRustJavaRest) {
+            Invoke-Curl "http://${Baseline}:8080/internal/benchmark/full-gc" "POST" | Out-Null
+            Invoke-Curl "http://${Candidate}:8080/internal/benchmark/full-gc" "POST" | Out-Null
         }
         Start-Sleep -Seconds 5
         $memoryVariants = if ($pair % 2 -eq 1) {
@@ -974,6 +1016,7 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
         gate = "PASS"
     }
     steady_memory = [ordered]@{
+        normalization = if ($IsRustJavaRest) { "idle_window" } else { "explicit_full_gc_then_idle" }
         process_rss_delta_mib = [math]::Round($steadyRssDelta, 3)
         container_delta_mib = [math]::Round($steadyContainerDelta, 3)
         thread_delta = [int]$steadyThreadDelta
@@ -1003,7 +1046,7 @@ $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector
 $lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("Warmup stability: $MaxWarmupRounds fixed rounds per endpoint/process, fully interleaved across endpoint classes$(if (-not $SequentialVariants) { ' and baseline/candidate variants' } else { '' }) to remove process-age and ordering bias. A failing fixed window receives at most $MaxWarmupConfirmationRounds additional full-matrix interleaved confirmation rounds without relaxing any threshold; this run used at most $observedMaxWarmupConfirmationRounds. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend against a $MaxWarmupRobustTrendPercent% primary gate. A trend up to $MaxWarmupBorderlineRobustTrendPercent% is accepted only when previous/recent window medians differ by at most $MaxWarmupBorderlineMedianShiftPercent%. Median absolute deviation must remain within $MaxWarmupMedianAbsoluteDeviationPercent%. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
 $lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells and a $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin only for saturated embedded REST heavy-json c256+ cells. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
-$lines.Add("Steady memory paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
+$lines.Add("Steady memory normalization: $(if ($IsRustJavaRest) { 'equal idle window' } else { 'benchmark-only explicit full GC followed by an equal idle window' }). This removes unrelated GC-phase noise without changing any RPS or p99 measurement. Paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")
 $lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx off/on agg % | non-2xx off/on peak % | non-2xx delta med/agg/max pp | Host sibling med/max; steal max | Gate |")
 $lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |")

@@ -149,6 +149,7 @@ jobs:
             .warmup_stability.maximum_allowed_borderline_median_shift_pct == 3 and
             .warmup_stability.maximum_allowed_median_absolute_deviation_pct == 4 and
             .warmup_stability.gate == "PASS" and
+            .steady_memory.normalization == "explicit_full_gc_then_idle" and
             .steady_memory.gate == "PASS" and
             (.rows | length) == 6 and all(.rows[]; .gate == "PASS" and
               .non_2xx_delta_pp <= .non_2xx_delta_threshold_pp and
@@ -178,7 +179,9 @@ jobs:
             .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 5 and
             .warmup_stability.maximum_allowed_borderline_median_shift_pct == 3 and
             .warmup_stability.maximum_allowed_median_absolute_deviation_pct == 4 and
-            .warmup_stability.gate == "PASS" and .steady_memory.gate == "PASS" and
+            .warmup_stability.gate == "PASS" and
+            .steady_memory.normalization == "idle_window" and
+            .steady_memory.gate == "PASS" and
             (.rows | length) == 6 and
             all(.rows[]; .gate == "PASS" and
               .non_2xx_delta_pp <= .non_2xx_delta_threshold_pp and

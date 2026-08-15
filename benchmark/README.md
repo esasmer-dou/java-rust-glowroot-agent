@@ -69,9 +69,13 @@ all stay within the cell margin, while baseline and candidate aggregate/peak rat
 or below the absolute `0.05%` ceiling.
 The worst individual paired delta remains in the report as a noise/overload diagnostic, but cannot
 replace these population-level guards. Per-cell process RSS and cgroup maxima
-remain diagnostics because independent OpenJ9 JIT/GC residency is noisy. After the full workload,
-each variant enters the same idle phase and receives five memory samples at equal process age. The
-paired median of this steady process RSS and cgroup memory must stay within `+3 MiB`. Additional
+remain diagnostics because independent OpenJ9 JIT/GC residency is noisy. After all RPS and p99
+measurements finish, the Spring benchmark invokes one benchmark-only explicit full GC for both
+variants and then applies the same idle window. This does not affect any latency or throughput
+sample; it removes unrelated GC-phase noise from the retained-memory comparison. Embedded
+Rust-Java REST uses the same idle window without an explicit GC. Each variant then receives five
+memory samples at equal process age. The paired median of this retained process RSS and cgroup
+memory must stay within `+3 MiB`. Additional
 threads still use the worst paired delta. The separate footprint gates retain the stricter agent-owned
 and exact-source resident checks. Spring and embedded Rust-Java each allow exactly one bounded,
 isolated exporter thread when telemetry is enabled.

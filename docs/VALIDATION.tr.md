@@ -100,7 +100,7 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256, REST `4.5.0` ve native ABI `29` |
 | Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, collector kesintisi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
 | Spring performans matrisi | RELEASE ZORUNLULUĞU | Altı eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256 ve exact-commit kanıtı |
-| Spring steady memory | RELEASE ZORUNLULUĞU | Aynı tam yük ve process yaşı; RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` |
+| Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
 
 Embedded footprint raporu
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md) dosyasındadır.
