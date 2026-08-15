@@ -74,7 +74,8 @@ All notable changes to this project are recorded here.
   Release validation now rejects hosted, WSL, containerized, undersized, or multiply registered
   runner evidence. Local Docker retains a short development-only A/B gate.
 - Added repeatable CPU-group calibration and deterministic application, load-runner, and collector
-  roles. A partial configuration or an application role that omits an SMT sibling now fails closed.
+  roles on three separate physical groups. A partial configuration, shared physical group, or an
+  application role that omits an SMT sibling now fails closed.
 
 ### Compatibility
 

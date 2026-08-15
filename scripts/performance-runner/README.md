@@ -33,9 +33,10 @@ pwsh ./scripts/performance-runner/calibrate-cpu-roles.ps1 \
 ```
 
 The script interleaves 18 short SHA-256 samples across every physical CPU group. It recommends one
-complete SMT group for the application and one separate SMT group for the load runner and collector.
-Keep the JSON with the host evidence. If fewer than two groups pass the unchanged trend and
-dispersion limits, use another host instead of weakening the gate.
+complete SMT group for the application, another physical group for the load runner, and a third
+physical group for the collector. Keep the JSON with the host evidence. If fewer than three groups pass the unchanged trend and
+dispersion limits, use another host instead of weakening the gate. Passing groups are ranked by
+dispersion and trend first; a negligible peak-throughput difference cannot outrank stability.
 
 ## Install
 
@@ -57,9 +58,9 @@ sudo ./scripts/performance-runner/install-native-linux.sh \
   --repository https://github.com/esasmer-dou/java-rust-glowroot-agent \
   --token "$RUNNER_TOKEN" \
   --name perf-linux-01 \
-  --application-cpus 6,7 \
-  --runner-cpu 4 \
-  --collector-cpu 5
+  --application-cpus 4,5 \
+  --runner-cpu 0 \
+  --collector-cpu 2
 unset RUNNER_TOKEN
 ```
 
@@ -68,9 +69,9 @@ already installed runner, apply the measured roles without reinstalling it:
 
 ```bash
 sudo ./scripts/performance-runner/configure-cpu-roles.sh \
-  --application-cpus 6,7 \
-  --runner-cpu 4 \
-  --collector-cpu 5
+  --application-cpus 4,5 \
+  --runner-cpu 0 \
+  --collector-cpu 2
 ```
 
 The installer verifies the GitHub runner download digest, installs Maven `3.9.9`, and supports both

@@ -89,7 +89,6 @@ jobs:
             -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
             -MaxAbsoluteNon2xxPercent 0.05 `
             -AutoSelectCpuRoles `
-            -AllowRunnerCollectorSiblingSharing `
             -FailOnGate
 
       - name: Upload production evidence
@@ -167,7 +166,6 @@ jobs:
             -MemoryLimit "128m" `
             -AllowedThreadDelta 1 `
             -AutoSelectCpuRoles `
-            -AllowRunnerCollectorSiblingSharing `
             -FailOnGate
 
       - name: Run Rust-Java REST protocol and fail-open gate
@@ -178,7 +176,6 @@ jobs:
             -ProtocolOnly `
             -SkipBuild `
             -AutoSelectCpuRoles `
-            -AllowRunnerCollectorSiblingSharing `
             -FailOnGate
 
       - name: Upload production evidence

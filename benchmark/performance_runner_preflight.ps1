@@ -101,11 +101,12 @@ if ($RunnerClass -eq "reactor-performance-native-linux") {
             $applicationGroup = (Get-Content -Raw -LiteralPath `
                 "/sys/devices/system/cpu/cpu$($applicationCpus[0])/topology/thread_siblings_list").Trim()
             $infrastructureGroupValid = $runnerCpu -ne $collectorCpu `
-                -and $runnerGroup -eq $collectorGroup `
-                -and $runnerGroup -ne $applicationGroup
+                -and $runnerGroup -ne $collectorGroup `
+                -and $runnerGroup -ne $applicationGroup `
+                -and $collectorGroup -ne $applicationGroup
             Add-Check "cpu_role_group_isolation" $infrastructureGroupValid `
                 "application=$applicationGroup runner=$runnerGroup collector=$collectorGroup" `
-                "one separate SMT group for runner and collector"
+                "separate physical groups for application, runner, and collector"
         }
     }
 }

@@ -33,9 +33,10 @@ pwsh ./scripts/performance-runner/calibrate-cpu-roles.ps1 \
 ```
 
 Script, her fiziksel CPU grubunda dönüşümlü olarak 18 kısa SHA-256 testi çalıştırır. Uygulama için tam
-bir SMT grubu seçer. Yük üretici ve collector için ayrı bir SMT grubu önerir. JSON dosyasını sunucu
-kanıtıyla birlikte saklayın. İki kararlı grup bulunamazsa gate eşiklerini gevşetmeyin. Başka bir sunucu
-kullanın.
+bir SMT grubu seçer. Yük üretici için ikinci, collector için üçüncü bir fiziksel grup önerir. JSON
+dosyasını sunucu kanıtıyla birlikte saklayın. Üç kararlı grup bulunamazsa gate eşiklerini gevşetmeyin.
+Başka bir sunucu kullanın. Başarılı gruplar önce dağılım ve eğilime göre sıralanır. Çok küçük tepe
+throughput farkı, kararlılığın önüne geçmez.
 
 ## Kurulum
 
@@ -57,9 +58,9 @@ sudo ./scripts/performance-runner/install-native-linux.sh \
   --repository https://github.com/esasmer-dou/java-rust-glowroot-agent \
   --token "$RUNNER_TOKEN" \
   --name perf-linux-01 \
-  --application-cpus 6,7 \
-  --runner-cpu 4 \
-  --collector-cpu 5
+  --application-cpus 4,5 \
+  --runner-cpu 0 \
+  --collector-cpu 2
 unset RUNNER_TOKEN
 ```
 
@@ -68,9 +69,9 @@ Runner daha önce kurulduysa yeniden kurmadan ölçülen değerleri uygulayın:
 
 ```bash
 sudo ./scripts/performance-runner/configure-cpu-roles.sh \
-  --application-cpus 6,7 \
-  --runner-cpu 4 \
-  --collector-cpu 5
+  --application-cpus 4,5 \
+  --runner-cpu 0 \
+  --collector-cpu 2
 ```
 
 Kurulum script'i GitHub runner dosyasının SHA-256 değerini doğrular. Maven `3.9.9` kurar. Debian ve

@@ -87,19 +87,26 @@ $results = foreach ($group in $groups) {
     }
 }
 $passing = @($results | Where-Object { $_.passed } |
-        Sort-Object @{ Expression = "median_kib_per_second"; Descending = $true })
+        Sort-Object `
+            @{ Expression = "median_absolute_deviation_percent"; Descending = $false }, `
+            @{ Expression = "robust_trend_percent"; Descending = $false }, `
+            @{ Expression = "median_kib_per_second"; Descending = $true })
 $application = $passing | Select-Object -First 1
-$infrastructure = $passing | Where-Object { $_.cpu_set -ne $application.cpu_set -and $_.logical_cpu_count -ge 2 } |
+$runnerGroup = $passing | Where-Object { $_.cpu_set -ne $application.cpu_set } |
     Select-Object -First 1
-if ($null -eq $application -or $null -eq $infrastructure) {
+$collectorGroup = $passing | Where-Object {
+        $_.cpu_set -ne $application.cpu_set -and $_.cpu_set -ne $runnerGroup.cpu_set
+    } | Select-Object -First 1
+if ($null -eq $application -or $null -eq $runnerGroup -or $null -eq $collectorGroup) {
     $results | Format-Table cpu_set, median_kib_per_second, robust_trend_percent, median_absolute_deviation_percent, passed
-    throw "Calibration needs two stable physical CPU groups, including one SMT pair for runner and collector."
+    throw "Calibration needs three stable physical CPU groups for application, load runner, and collector isolation."
 }
-$infraCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $infrastructure.cpu_set)
+$runnerCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $runnerGroup.cpu_set)
+$collectorCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $collectorGroup.cpu_set)
 $recommendation = [pscustomobject]@{
     application_cpu_set = $application.cpu_set
-    runner_cpu_set = "$($infraCpus[0])"
-    collector_cpu_set = "$($infraCpus[1])"
+    runner_cpu_set = "$($runnerCpus[0])"
+    collector_cpu_set = "$($collectorCpus[0])"
 }
 $evidence = [pscustomobject]@{
     generated_at_utc = [DateTime]::UtcNow.ToString("o")

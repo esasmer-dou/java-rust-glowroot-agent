@@ -44,11 +44,11 @@ try {
         "Partial CPU role configuration must fail closed."
 
     [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_RUNNER_CPU_SET", "4", "Process")
-    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_COLLECTOR_CPU_SET", "5", "Process")
+    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_COLLECTOR_CPU_SET", "0", "Process")
     $configured = Get-ReactorConfiguredBenchmarkCpuRoles
     Assert-Equal "6,7" $configured.application "Application CPU set must remain normalized."
     Assert-Equal "4" $configured.runner "Runner CPU set must remain normalized."
-    Assert-Equal "5" $configured.collector "Collector CPU set must remain normalized."
+    Assert-Equal "0" $configured.collector "Collector CPU set must remain normalized."
     Assert-Equal "environment" $configured.source "Configured CPU role source must be observable."
 
     [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_APPLICATION_CPU_SET", "7,6", "Process")
