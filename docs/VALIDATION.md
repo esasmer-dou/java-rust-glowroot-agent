@@ -139,21 +139,26 @@ saturated embedded REST heavy JSON c256 cell uses a `0.02` percentage-point non-
 median, request-weighted aggregate, and peak envelope must stay within that margin. Baseline and
 candidate aggregate and peak error rates must also stay at or below `0.05%`. A single-pair delta
 remains visible as a diagnostic, but does not replace those population-level decisions. Build work is
-finished before CPU selection. Linux then chooses the quietest physical CPU group, reserves all SMT
-siblings in that group for the application, and pins the load runner and collector to another group.
-Every steal-time window must remain within `1%`. A manually configured single-logical-CPU run also
-keeps the paired SMT-sibling activity delta within `10%`.
+finished before CPU selection. A calibrated runner uses deterministic application, load-runner, and
+collector CPU roles from its service environment. The application role must reserve every SMT
+sibling in its physical group. A runner without calibrated roles falls back to the quietest-group
+selection. Every steal-time window must remain within `1%`. A manually configured
+single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 
-Each application process receives exactly sixteen warmup rounds per endpoint. Every round visits all
-configured endpoint classes in round-robin order. The production dual-slot gate also alternates
-baseline and candidate requests within every endpoint round. Both JVMs receive the same work at the
-same process age. This removes endpoint and variant-order bias and warms shared HTTP, servlet, and
-JIT code. The
+Each application process receives sixteen fixed warmup rounds per endpoint. If the final decision
+still shows a JVM that is improving, the process may receive at most eight additional full-matrix
+interleaved confirmation rounds. No threshold is relaxed. Every round visits all configured endpoint
+classes in round-robin order. The release workflow uses one calibrated application SMT group, runs
+baseline and candidate as separate processes, and reverses their order in alternating pairs. Both
+JVMs receive the same work at the same process age without competing for one physical core. A
+manually configured dual-slot gate can also interleave baseline and candidate requests within each
+endpoint round. These modes remove endpoint and variant-order bias and warm shared HTTP, servlet,
+and JIT code. The
 normalized Theil-Sen trend across the final six rounds normally may not exceed `3%`. A trend in the
 `3-5%` boundary band passes only when previous/recent three-round medians differ by at most `3%`.
 Median absolute deviation must remain within `4%` in both cases. This rejects a sustained OpenJ9
 interpreter/JIT ramp without failing a release for a near-plateau outlier. Baseline and candidate
-still perform the same fixed warmup work. The full range remains diagnostic, and every raw RPS
+still perform the same bounded warmup work. The full range remains diagnostic, and every raw RPS
 sample is attached to the release.
 
 Per-cell RSS maxima remain diagnostics because OpenJ9 JIT/GC page residency can move in both

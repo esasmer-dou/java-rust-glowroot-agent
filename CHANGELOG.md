@@ -4,7 +4,7 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-08-14
+## [0.3.0] - 2026-08-15
 
 ### Added
 
@@ -52,10 +52,11 @@ All notable changes to this project are recorded here.
   `3%` primary normalized Theil-Sen trend and at most `4%` median absolute deviation across the final
   six rounds. A `3-5%` boundary trend is accepted only when adjacent three-round medians remain within
   `3%`. Sustained JIT ramp-up still fails; a near-plateau outlier is not misclassified as a trend.
-- Interleaved all sixteen fixed rounds across endpoint classes and dual-slot baseline/candidate
-  variants. Both JVMs now receive identical warmup work at the same process age; shared HTTP,
-  servlet, and JIT code warms without endpoint or variant-order bias. Exact-source evidence drove
-  this change instead of weakening the stability thresholds.
+- Interleaved all sixteen fixed rounds across endpoint classes. The calibrated one-slot release gate
+  reverses baseline/candidate process order in alternating pairs; an explicit dual-slot gate can also
+  interleave variants. A process that is still improving can receive at most eight additional rounds.
+  Both JVMs receive identical work at the same process age, and the final six-round decision keeps
+  the same strict trend and dispersion thresholds.
 - Replaced the impossible zero-error requirement for the deliberately saturated embedded REST heavy JSON c256
   cell with a bounded `0.02` percentage-point non-inferiority margin. Normal cells remain zero-delta,
   and every baseline/candidate aggregate and peak error rate is capped at `0.05%`.
@@ -72,6 +73,8 @@ All notable changes to this project are recorded here.
   class while keeping GitHub Actions as the exact-commit orchestrator and release gatekeeper.
   Release validation now rejects hosted, WSL, containerized, undersized, or multiply registered
   runner evidence. Local Docker retains a short development-only A/B gate.
+- Added repeatable CPU-group calibration and deterministic application, load-runner, and collector
+  roles. A partial configuration or an application role that omits an SMT sibling now fails closed.
 
 ### Compatibility
 

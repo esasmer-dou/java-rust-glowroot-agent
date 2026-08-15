@@ -26,6 +26,53 @@ function ConvertFrom-ReactorCpuSet {
     return @($cpus | Sort-Object)
 }
 
+function ConvertTo-ReactorNormalizedCpuSet {
+    param([string] $CpuSet)
+
+    $cpus = @(ConvertFrom-ReactorCpuSet -CpuSet $CpuSet)
+    if ($cpus.Count -eq 0) {
+        throw "CPU set cannot be empty."
+    }
+    return $cpus -join ","
+}
+
+function Get-ReactorConfiguredBenchmarkCpuRoles {
+    $configured = [ordered]@{
+        application = $env:REACTOR_BENCHMARK_APPLICATION_CPU_SET
+        runner = $env:REACTOR_BENCHMARK_RUNNER_CPU_SET
+        collector = $env:REACTOR_BENCHMARK_COLLECTOR_CPU_SET
+    }
+    $present = @($configured.GetEnumerator() | Where-Object {
+            -not [string]::IsNullOrWhiteSpace("$($_.Value)")
+        })
+    if ($present.Count -eq 0) {
+        return $null
+    }
+    if ($present.Count -ne $configured.Count) {
+        $missing = @($configured.GetEnumerator() | Where-Object {
+                [string]::IsNullOrWhiteSpace("$($_.Value)")
+            } | ForEach-Object { $_.Key }) -join ", "
+        throw "Benchmark CPU role configuration is partial. Configure application, runner, and collector together. Missing: $missing."
+    }
+
+    $application = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.application
+    $runner = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.runner
+    $collector = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.collector
+    if (@(ConvertFrom-ReactorCpuSet -CpuSet $runner).Count -ne 1) {
+        throw "REACTOR_BENCHMARK_RUNNER_CPU_SET must contain exactly one logical CPU."
+    }
+    if (@(ConvertFrom-ReactorCpuSet -CpuSet $collector).Count -ne 1) {
+        throw "REACTOR_BENCHMARK_COLLECTOR_CPU_SET must contain exactly one logical CPU."
+    }
+
+    return [pscustomobject]@{
+        application = $application
+        runner = $runner
+        collector = $collector
+        source = "environment"
+    }
+}
+
 function Get-ReactorLinuxCpuSnapshot {
     if (-not $IsLinux) {
         throw "Linux CPU counters are available only on Linux."
@@ -104,6 +151,35 @@ function Select-ReactorBenchmarkCpuRoles {
         throw "CPU role selection requires at least two seconds."
     }
 
+    $configured = Get-ReactorConfiguredBenchmarkCpuRoles
+    if ($null -ne $configured) {
+        $applicationCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $configured.application)
+        $physicalApplicationCpus = @(Get-ReactorLinuxPhysicalCpuSet -CpuSet $configured.application)
+        if (($applicationCpus -join ",") -ne ($physicalApplicationCpus -join ",")) {
+            throw "REACTOR_BENCHMARK_APPLICATION_CPU_SET must reserve every SMT sibling. Configured=$($applicationCpus -join ',') Required=$($physicalApplicationCpus -join ',')."
+        }
+
+        $before = Get-ReactorLinuxCpuSnapshot
+        Start-Sleep -Seconds $SampleSeconds
+        $after = Get-ReactorLinuxCpuSnapshot
+        $window = Get-ReactorLinuxCpuWindow -Before $before -After $after -Cpus $applicationCpus
+        $topologyPath = "/sys/devices/system/cpu/cpu$($applicationCpus[0])/topology/thread_siblings_list"
+        $applicationGroup = (Get-Content -Raw -LiteralPath $topologyPath).Trim()
+        Write-Host (("CPU roles selected from calibrated runner configuration: app={0} group={1} " +
+                    "busy={2:N2}% steal={3:N2}%; runner={4} collector={5}") -f `
+                $configured.application, $applicationGroup, $window.busy_percent, $window.steal_percent, `
+                $configured.runner, $configured.collector)
+        return [pscustomobject]@{
+            application = $configured.application
+            runner = $configured.runner
+            collector = $configured.collector
+            application_group = $applicationGroup
+            observed_busy_percent = [math]::Round($window.busy_percent, 3)
+            observed_steal_percent = [math]::Round($window.steal_percent, 3)
+            source = $configured.source
+        }
+    }
+
     $groups = @{}
     foreach ($path in Get-ChildItem -Path "/sys/devices/system/cpu" -Directory) {
         if ($path.Name -notmatch "^cpu([0-9]+)$") { continue }
@@ -160,6 +236,7 @@ function Select-ReactorBenchmarkCpuRoles {
         application_group = "$($application.group)"
         observed_busy_percent = [math]::Round($application.busy_percent, 3)
         observed_steal_percent = [math]::Round($application.steal_percent, 3)
+        source = "automatic-idle-sample"
     }
 }
 

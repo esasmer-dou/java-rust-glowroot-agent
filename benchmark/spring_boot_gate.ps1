@@ -53,8 +53,8 @@ if ($MinWarmupRounds -lt 2) { throw "MinWarmupRounds must be at least 2." }
 if ($MaxWarmupRounds -lt (2 * $MinWarmupRounds)) {
     throw "Warmup must contain at least two complete stability windows."
 }
-if ($MaxWarmupConfirmationRounds -lt 0 -or $MaxWarmupConfirmationRounds -gt 4) {
-    throw "MaxWarmupConfirmationRounds must be between 0 and 4."
+if ($MaxWarmupConfirmationRounds -lt 0 -or $MaxWarmupConfirmationRounds -gt 8) {
+    throw "MaxWarmupConfirmationRounds must be between 0 and 8."
 }
 if ($MaxWarmupRobustTrendPercent -le 0 -or $MaxWarmupRobustTrendPercent -gt 3.0) {
     throw "MaxWarmupRobustTrendPercent must be between 0 and 3 percent."
@@ -993,6 +993,8 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
         runner = $RunnerCpuSet
         collector = $CollectorCpuSet
         auto_selected = [bool] $AutoSelectCpuRoles
+        selection_source = if ($null -ne $selectedRoles) { $selectedRoles.source } else { "parameters" }
+        application_group = if ($null -ne $selectedRoles) { $selectedRoles.application_group } else { "" }
     }
     host_preflight = $hostReadiness
     host_noise_limits = [ordered]@{
@@ -1006,7 +1008,11 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
         fixed_rounds = $MaxWarmupRounds
         interleaved_rounds = $MaxWarmupRounds
         maximum_confirmation_rounds = $MaxWarmupConfirmationRounds
-        confirmation_scope = "all_endpoints_and_variants_interleaved"
+        confirmation_scope = if ($SequentialVariants) {
+            "all_endpoints_interleaved_per_variant"
+        } else {
+            "all_endpoints_and_variants_interleaved"
+        }
         observed_maximum_confirmation_rounds = [int] $observedMaxWarmupConfirmationRounds
         observed_maximum_total_rounds = [int] $observedMaxWarmupTotalRounds
         variant_interleaved = -not $SequentialVariants

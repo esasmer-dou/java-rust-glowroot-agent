@@ -141,19 +141,24 @@ olarak doygun çalıştırılan embedded REST heavy JSON c256 hücresinde `0,02`
 kullanılır. Eşleştirilmiş medyan, istek sayısıyla ağırlıklandırılmış toplam ve en yüksek hata oranı
 bu marj içinde kalmalıdır. Baseline ve candidate toplam ve en yüksek hata oranları ayrıca `%0,05`
 sınırını aşmamalıdır. Tek bir eşleşmedeki fark tanı amacıyla raporda kalır; bu genel kararların
-yerine geçmez. Build bittikten sonra Linux
-en sakin fiziksel CPU grubunu seçer. Bu grubun bütün SMT kardeşleri uygulamaya ayrılır. Load runner ve
-collector başka bir gruba sabitlenir. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal
-CPU elle seçilirse eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
+yerine geçmez. Build bittikten sonra kalibre edilmiş runner, servis ortamında tanımlanan sabit
+uygulama, yük üretici ve collector CPU rollerini kullanır. Uygulama rolü, aynı fiziksel gruptaki bütün
+SMT kardeşlerini ayırmak zorundadır. Kalibre edilmemiş runner en sakin grubu seçen eski yöntemi
+kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal CPU elle seçilirse
+eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
-Her uygulama süreci, endpoint başına tam on altı ısınma turu tamamlar. Her tur, tanımlı endpoint
-sınıflarını sırayla dolaşır. Production dual-slot gate, her endpoint turunda baseline ve candidate
-isteklerini de sırayla çalıştırır. Böylece iki JVM aynı işi aynı süreç yaşında alır. Endpoint ve
-varyant sırası yanlılığı kalkar; ortak HTTP, servlet ve JIT kodu hazırlanır. Son altı turun normalize
+Her uygulama süreci, endpoint başına on altı sabit ısınma turu tamamlar. Son karar JVM'in hâlâ
+hızlandığını gösteriyorsa en fazla sekiz ek ve tam matris doğrulama turu çalışır. Hiçbir eşik
+gevşetilmez. Her tur, tanımlı endpoint sınıflarını sırayla dolaşır. Release workflow'u kalibre edilmiş
+tek uygulama SMT grubunu kullanır. Baseline ve candidate ayrı süreçlerde çalışır. Her pair'de çalışma
+sırası ters çevrilir. Böylece iki JVM aynı işi aynı süreç yaşında alır ve aynı fiziksel CPU için
+yarışmaz. Elle tanımlanan çift slotlu gate ise baseline ve candidate isteklerini endpoint turu içinde
+de dönüşümlü çalıştırabilir. Bu iki yöntem endpoint ve varyant sırası yanlılığını kaldırır; ortak HTTP,
+servlet ve JIT kodunu hazırlar. Son altı turun normalize
 edilmiş Theil-Sen eğilimi normalde en fazla `%3` olabilir. Eğilim `%3-%5` sınır bandındaysa önceki
 ve sonraki üç turun medyanları en fazla `%3` ayrılabilir. Her iki durumda medyan mutlak sapma `%4`
 sınırını aşamaz. Bu hesap, devam eden OpenJ9 interpreter/JIT ısınmasını reddeder; plateau'ya yakın
-tekil sıçramayı kalıcı eğilim saymaz. Baseline ve candidate yine aynı sabit ısınma işini yapar. Tam
+tekil sıçramayı kalıcı eğilim saymaz. Baseline ve candidate yine aynı sınırlı ısınma işini yapar. Tam
 aralık tanı amacıyla raporlanır ve bütün ham RPS örnekleri release kanıtına eklenir.
 
 Endpoint içindeki anlık RSS maksimumları tanılama amacıyla raporda kalır. OpenJ9 JIT/GC resident

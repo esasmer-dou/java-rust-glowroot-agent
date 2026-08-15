@@ -22,6 +22,21 @@ Spring ve Rust-Java REST testlerini paralel çalıştırmak istiyorsanız iki ay
 Aynı sunucuya iki runner servisi kurmayın. İki job aynı CPU cache, bellek bant genişliği ve Docker
 kaynakları için yarışır. Böyle bir ölçüm latency ve RSS kanıtını geçersiz hale getirir.
 
+## CPU Rollerini Ölçün
+
+Boş görünen bir CPU, sanal veya paylaşımlı bir sunucuda her zaman kararlı değildir. Release ölçümünden
+önce fiziksel CPU gruplarını ölçün:
+
+```bash
+pwsh ./scripts/performance-runner/calibrate-cpu-roles.ps1 \
+  -OutputPath /tmp/reactor-cpu-calibration.json
+```
+
+Script, her fiziksel CPU grubunda dönüşümlü olarak 18 kısa SHA-256 testi çalıştırır. Uygulama için tam
+bir SMT grubu seçer. Yük üretici ve collector için ayrı bir SMT grubu önerir. JSON dosyasını sunucu
+kanıtıyla birlikte saklayın. İki kararlı grup bulunamazsa gate eşiklerini gevşetmeyin. Başka bir sunucu
+kullanın.
+
 ## Kurulum
 
 Yönetici bilgisayarında kısa ömürlü kayıt token'ı üretin. Ekrana yazılan token'ı onaylı güvenli
@@ -41,8 +56,21 @@ read -rsp "Runner registration token: " RUNNER_TOKEN && echo
 sudo ./scripts/performance-runner/install-native-linux.sh \
   --repository https://github.com/esasmer-dou/java-rust-glowroot-agent \
   --token "$RUNNER_TOKEN" \
-  --name perf-linux-01
+  --name perf-linux-01 \
+  --application-cpus 6,7 \
+  --runner-cpu 4 \
+  --collector-cpu 5
 unset RUNNER_TOKEN
+```
+
+CPU değerlerini kalibrasyon script'inin çıktısından alın. Yukarıdaki sayılar yalnızca örnektir.
+Runner daha önce kurulduysa yeniden kurmadan ölçülen değerleri uygulayın:
+
+```bash
+sudo ./scripts/performance-runner/configure-cpu-roles.sh \
+  --application-cpus 6,7 \
+  --runner-cpu 4 \
+  --collector-cpu 5
 ```
 
 Kurulum script'i GitHub runner dosyasının SHA-256 değerini doğrular. Maven `3.9.9` kurar. Debian ve
@@ -69,6 +97,10 @@ politikası, swap, Docker, Java veya runner kaydı hatalıysa birkaç dakika iç
 Release workflow'u hem job etiketlerini hem de preflight JSON dosyasını kontrol eder. Hosted runner,
 WSL, container içinde çalışan runner, yetersiz sunucu, kullanılan swap veya ikinci runner listener ile
 üretilen ölçüm release kanıtı sayılmaz.
+
+Tam matris 16 sabit OpenJ9 ısınma turu kullanır. JVM hâlâ hızlanıyorsa en fazla sekiz ek ve dönüşümlü
+doğrulama turu çalışır. RPS eğilimi ve dağılım eşikleri gevşetilmez. Bu sınırlı uzatma, JIT henüz
+tamamlanmadan erken ret verilmesini önler. Kararsız bir uygulamanın gate'i geçmesini sağlamaz.
 
 ## Hızlı Local Kontrol
 

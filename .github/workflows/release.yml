@@ -170,11 +170,13 @@ jobs:
             .absolute_non_2xx_ceiling_percent == 0.05 and
             .warmup_stability.fixed_rounds == 16 and
             .warmup_stability.interleaved_rounds == 16 and
-            .warmup_stability.maximum_confirmation_rounds == 4 and
-            .warmup_stability.confirmation_scope == "all_endpoints_and_variants_interleaved" and
-            .warmup_stability.observed_maximum_confirmation_rounds <= 4 and
-            .warmup_stability.observed_maximum_total_rounds <= 20 and
-            .warmup_stability.variant_interleaved == true and
+            .cpu_roles.auto_selected == true and
+            .cpu_roles.selection_source == "environment" and
+            .warmup_stability.maximum_confirmation_rounds == 8 and
+            .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
+            .warmup_stability.observed_maximum_confirmation_rounds <= 8 and
+            .warmup_stability.observed_maximum_total_rounds <= 24 and
+            .warmup_stability.variant_interleaved == false and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
             .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 5 and
@@ -202,11 +204,13 @@ jobs:
             .absolute_non_2xx_ceiling_percent == 0.05 and
             .warmup_stability.fixed_rounds == 16 and
             .warmup_stability.interleaved_rounds == 16 and
-            .warmup_stability.maximum_confirmation_rounds == 4 and
-            .warmup_stability.confirmation_scope == "all_endpoints_and_variants_interleaved" and
-            .warmup_stability.observed_maximum_confirmation_rounds <= 4 and
-            .warmup_stability.observed_maximum_total_rounds <= 20 and
-            .warmup_stability.variant_interleaved == true and
+            .cpu_roles.auto_selected == true and
+            .cpu_roles.selection_source == "environment" and
+            .warmup_stability.maximum_confirmation_rounds == 8 and
+            .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
+            .warmup_stability.observed_maximum_confirmation_rounds <= 8 and
+            .warmup_stability.observed_maximum_total_rounds <= 24 and
+            .warmup_stability.variant_interleaved == false and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
             .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 5 and

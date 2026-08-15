@@ -11,6 +11,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
+. (Join-Path $PSScriptRoot "benchmark_isolation.ps1")
 
 if (-not $IsLinux) {
     throw "The performance runner preflight supports Linux only."
@@ -64,6 +65,50 @@ foreach ($topology in Get-ChildItem -Path "/sys/devices/system/cpu/cpu*/topology
     [void] $physicalGroups.Add((Get-Content -Raw -LiteralPath $topology.FullName).Trim())
 }
 Add-Check "physical_cpu_groups" ($physicalGroups.Count -ge 4) "$($physicalGroups.Count)" ">= 4"
+
+$configuredCpuRoles = $null
+$cpuRoleError = ""
+try {
+    $configuredCpuRoles = Get-ReactorConfiguredBenchmarkCpuRoles
+} catch {
+    $cpuRoleError = $_.Exception.Message
+}
+if ($RunnerClass -eq "reactor-performance-native-linux") {
+    Add-Check "calibrated_cpu_roles" ($null -ne $configuredCpuRoles -and [string]::IsNullOrWhiteSpace($cpuRoleError)) `
+        $(if (-not [string]::IsNullOrWhiteSpace($cpuRoleError)) { $cpuRoleError } `
+          elseif ($null -eq $configuredCpuRoles) { "not configured" } `
+          else { "app=$($configuredCpuRoles.application) runner=$($configuredCpuRoles.runner) collector=$($configuredCpuRoles.collector)" }) `
+        "all calibrated CPU roles configured"
+    if ($null -ne $configuredCpuRoles -and [string]::IsNullOrWhiteSpace($cpuRoleError)) {
+        $applicationCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $configuredCpuRoles.application)
+        $requiredApplicationCpus = @(Get-ReactorLinuxPhysicalCpuSet -CpuSet $configuredCpuRoles.application)
+        $completeApplicationGroup = ($applicationCpus -join ",") -eq ($requiredApplicationCpus -join ",")
+        Add-Check "application_smt_group_complete" $completeApplicationGroup `
+            "configured=$($applicationCpus -join ','); required=$($requiredApplicationCpus -join ',')" `
+            "every SMT sibling reserved"
+
+        $runnerCpu = [int] $configuredCpuRoles.runner
+        $collectorCpu = [int] $configuredCpuRoles.collector
+        $runnerTopology = "/sys/devices/system/cpu/cpu$runnerCpu/topology/thread_siblings_list"
+        $collectorTopology = "/sys/devices/system/cpu/cpu$collectorCpu/topology/thread_siblings_list"
+        $infrastructureCpusAvailable = (Test-Path -LiteralPath $runnerTopology -PathType Leaf) `
+            -and (Test-Path -LiteralPath $collectorTopology -PathType Leaf)
+        Add-Check "infrastructure_cpus_available" $infrastructureCpusAvailable `
+            "runner=$runnerCpu collector=$collectorCpu" "both logical CPUs available"
+        if ($infrastructureCpusAvailable) {
+            $runnerGroup = (Get-Content -Raw -LiteralPath $runnerTopology).Trim()
+            $collectorGroup = (Get-Content -Raw -LiteralPath $collectorTopology).Trim()
+            $applicationGroup = (Get-Content -Raw -LiteralPath `
+                "/sys/devices/system/cpu/cpu$($applicationCpus[0])/topology/thread_siblings_list").Trim()
+            $infrastructureGroupValid = $runnerCpu -ne $collectorCpu `
+                -and $runnerGroup -eq $collectorGroup `
+                -and $runnerGroup -ne $applicationGroup
+            Add-Check "cpu_role_group_isolation" $infrastructureGroupValid `
+                "application=$applicationGroup runner=$runnerGroup collector=$collectorGroup" `
+                "one separate SMT group for runner and collector"
+        }
+    }
+}
 
 $governors = @(
     Get-ChildItem -Path "/sys/devices/system/cpu/cpu*/cpufreq/scaling_governor" `
@@ -139,6 +184,7 @@ $result = [ordered]@{
     free_disk_gib = $freeDiskGiB
     cpu_governors = $governorObserved
     runner_listener_count = $listenerCount
+    cpu_roles = $configuredCpuRoles
     checks = $checks
 }
 

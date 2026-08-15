@@ -7,6 +7,9 @@ RUNNER_NAME="$(hostname)-reactor-performance"
 RUNNER_USER="github-runner"
 INSTALL_ROOT="/opt/actions-runner/reactor-performance"
 LABELS="reactor-performance-native-linux,openj9,docker"
+APPLICATION_CPUS=""
+RUNNER_CPU=""
+COLLECTOR_CPU=""
 
 usage() {
   cat <<'EOF'
@@ -14,7 +17,8 @@ Usage:
   sudo ./install-native-linux.sh \
     --repository https://github.com/OWNER/REPOSITORY \
     --token SHORT_LIVED_REGISTRATION_TOKEN \
-    [--name RUNNER_NAME]
+    [--name RUNNER_NAME] \
+    [--application-cpus CPU_SET --runner-cpu CPU --collector-cpu CPU]
 
 Run exactly one GitHub Actions runner service on each performance host. Use two physical hosts if
 Spring and Rust-Java REST matrices must execute in parallel.
@@ -26,6 +30,9 @@ while [[ $# -gt 0 ]]; do
     --repository) REPOSITORY_URL="$2"; shift 2 ;;
     --token) REGISTRATION_TOKEN="$2"; shift 2 ;;
     --name) RUNNER_NAME="$2"; shift 2 ;;
+    --application-cpus) APPLICATION_CPUS="$2"; shift 2 ;;
+    --runner-cpu) RUNNER_CPU="$2"; shift 2 ;;
+    --collector-cpu) COLLECTOR_CPU="$2"; shift 2 ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
   esac
@@ -38,6 +45,24 @@ fi
 if [[ -z "$REPOSITORY_URL" || -z "$REGISTRATION_TOKEN" ]]; then
   usage
   exit 2
+fi
+cpu_role_count=0
+[[ -n "$APPLICATION_CPUS" ]] && cpu_role_count=$((cpu_role_count + 1))
+[[ -n "$RUNNER_CPU" ]] && cpu_role_count=$((cpu_role_count + 1))
+[[ -n "$COLLECTOR_CPU" ]] && cpu_role_count=$((cpu_role_count + 1))
+if [[ $cpu_role_count -ne 0 && $cpu_role_count -ne 3 ]]; then
+  echo "Configure application, runner, and collector CPU roles together, or omit all three." >&2
+  exit 2
+fi
+if [[ $cpu_role_count -eq 3 ]]; then
+  if [[ ! "$APPLICATION_CPUS" =~ ^[0-9]+([,-][0-9]+)*$ ]]; then
+    echo "Invalid application CPU set: $APPLICATION_CPUS" >&2
+    exit 2
+  fi
+  if [[ ! "$RUNNER_CPU" =~ ^[0-9]+$ || ! "$COLLECTOR_CPU" =~ ^[0-9]+$ ]]; then
+    echo "Runner and collector roles must each contain one logical CPU." >&2
+    exit 2
+  fi
 fi
 if grep -Eqi 'microsoft|wsl' /proc/version; then
   echo "WSL cannot be registered as reactor-performance-native-linux." >&2
@@ -64,11 +89,11 @@ source /etc/os-release
 case "${ID:-}" in
   ubuntu|debian)
     apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git jq tar
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git jq openssl tar
     package_family="debian"
     ;;
   rhel|centos|rocky|almalinux)
-    dnf install -y ca-certificates curl git jq tar gzip
+    dnf install -y ca-certificates curl git jq openssl tar gzip
     package_family="rhel"
     ;;
   *)
@@ -150,6 +175,22 @@ runuser -u "$RUNNER_USER" -- "$INSTALL_ROOT/config.sh" \
   --labels "$LABELS" \
   --work _work
 
+if [[ $cpu_role_count -eq 3 ]]; then
+  runner_env="$INSTALL_ROOT/.env"
+  filtered_env="$(mktemp)"
+  if [[ -f "$runner_env" ]]; then
+    grep -Ev '^REACTOR_BENCHMARK_(APPLICATION_CPU_SET|RUNNER_CPU_SET|COLLECTOR_CPU_SET)=' \
+      "$runner_env" >"$filtered_env" || true
+  fi
+  cat >>"$filtered_env" <<EOF
+REACTOR_BENCHMARK_APPLICATION_CPU_SET=$APPLICATION_CPUS
+REACTOR_BENCHMARK_RUNNER_CPU_SET=$RUNNER_CPU
+REACTOR_BENCHMARK_COLLECTOR_CPU_SET=$COLLECTOR_CPU
+EOF
+  install -o "$RUNNER_USER" -g "$RUNNER_USER" -m 0644 "$filtered_env" "$runner_env"
+  rm -f "$filtered_env"
+fi
+
 (
   cd "$INSTALL_ROOT"
   ./svc.sh install "$RUNNER_USER"
@@ -158,4 +199,7 @@ runuser -u "$RUNNER_USER" -- "$INSTALL_ROOT/config.sh" \
 
 echo "Runner installed: $RUNNER_NAME"
 echo "Labels: self-hosted,linux,x64,$LABELS"
+if [[ $cpu_role_count -eq 3 ]]; then
+  echo "CPU roles: application=$APPLICATION_CPUS runner=$RUNNER_CPU collector=$COLLECTOR_CPU"
+fi
 echo "Do not install a second runner service on this host."
