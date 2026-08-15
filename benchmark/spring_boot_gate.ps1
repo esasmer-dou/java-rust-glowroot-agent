@@ -256,7 +256,7 @@ function Invoke-Curl([string] $Url, [string] $Method = "GET") {
 function Invoke-Warmup([string] $Target, [string] $Path) {
     $args = @("run", "--rm", "--network", $Network)
     if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
-    $args += @($WrkImage, "-t1", "-c32", "-d$Warmup", "http://${Target}:8080$Path")
+    $args += @($WrkImage, "-t2", "-c32", "-d$Warmup", "http://${Target}:8080$Path")
     $output = $null
     foreach ($attempt in 1..3) {
         $output = & docker @args 2>&1
