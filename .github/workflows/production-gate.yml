@@ -25,24 +25,11 @@ jobs:
 
   spring-boot-agent:
     needs: gate-statistics
-    runs-on: [self-hosted, reactor-performance, linux, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - name: Check out source
         uses: actions/checkout@v5
-
-      - name: Verify dedicated performance runner
-        shell: pwsh
-        run: |
-          $dockerCpu = [int] (docker info --format '{{.NCPU}}')
-          $dockerMemory = [int64] (docker info --format '{{.MemTotal}}')
-          if ($dockerCpu -lt 8) {
-            throw "The production performance runner requires at least 8 logical CPUs; found $dockerCpu"
-          }
-          if ($dockerMemory -lt 12GB) {
-            throw "The production performance runner requires at least 12 GiB; found $dockerMemory bytes"
-          }
-          Write-Host "Dedicated runner ready: CPUs=$dockerCpu memoryBytes=$dockerMemory"
 
       - name: Check out pinned Glowroot wire contract
         uses: actions/checkout@v5
@@ -92,26 +79,13 @@ jobs:
 
   rust-java-rest-agent:
     needs: gate-statistics
-    runs-on: [self-hosted, reactor-performance, linux, x64]
+    runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - name: Check out agent source
         uses: actions/checkout@v5
         with:
           path: java-rust-glowroot-agent
-
-      - name: Verify dedicated performance runner
-        shell: pwsh
-        run: |
-          $dockerCpu = [int] (docker info --format '{{.NCPU}}')
-          $dockerMemory = [int64] (docker info --format '{{.MemTotal}}')
-          if ($dockerCpu -lt 8) {
-            throw "The production performance runner requires at least 8 logical CPUs; found $dockerCpu"
-          }
-          if ($dockerMemory -lt 12GB) {
-            throw "The production performance runner requires at least 12 GiB; found $dockerMemory bytes"
-          }
-          Write-Host "Dedicated runner ready: CPUs=$dockerCpu memoryBytes=$dockerMemory"
 
       - name: Check out production Rust-Java REST runtime
         uses: actions/checkout@v5

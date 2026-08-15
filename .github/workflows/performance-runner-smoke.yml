@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   smoke:
-    runs-on: [self-hosted, reactor-performance, linux, x64]
+    runs-on: [self-hosted, reactor-wsl-smoke, linux, x64]
     timeout-minutes: 15
     steps:
       - name: Check out source

@@ -1,5 +1,6 @@
 self-hosted-runner:
   labels:
-    - reactor-performance
+    - reactor-wsl-smoke
+    - reactor-performance-native-linux
     - openj9
     - docker
