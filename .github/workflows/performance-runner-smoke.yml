@@ -23,7 +23,6 @@ jobs:
         with:
           distribution: semeru
           java-version: "21"
-          cache: maven
 
       - name: Verify runner toolchain and isolation prerequisites
         shell: pwsh
@@ -38,4 +37,3 @@ jobs:
           mvn -version
           ./benchmark/test_gate_statistics.ps1
           ./benchmark/test_warmup_statistics.ps1
-
