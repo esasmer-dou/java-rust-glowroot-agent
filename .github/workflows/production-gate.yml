@@ -17,7 +17,7 @@ permissions:
 
 env:
   REACTOR_PERFORMANCE_RUNNER_CLASS: reactor-performance-native-linux
-  REACTOR_GATE_PAIR_REPEATS: ${{ inputs.qualification_depth == 'extended' && '6' || '3' }}
+  REACTOR_GATE_QUALIFICATION_DEPTH: ${{ inputs.qualification_depth }}
 
 concurrency:
   group: java-rust-glowroot-production-performance
@@ -84,8 +84,11 @@ jobs:
         shell: pwsh
         run: |
           ./benchmark/spring_boot_gate.ps1 `
-            -PairRepeats $env:REACTOR_GATE_PAIR_REPEATS `
+            -PairRepeats 6 `
+            -MinimumPairRepeats 3 `
+            -RequireAllPairs:($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") `
             -ConcurrencyLevels "64,256" `
+            -HeavyConcurrencyLevels "64,128" `
             -EndpointClasses "small-json,raw-json,heavy-json" `
             -Duration "12s" `
             -Warmup "5s" `
@@ -160,8 +163,11 @@ jobs:
             -ApplicationKind rust-java-rest `
             -RequiredRestVersion "4.5.0" `
             -RequiredRestNativeAbi 29 `
-            -PairRepeats $env:REACTOR_GATE_PAIR_REPEATS `
+            -PairRepeats 6 `
+            -MinimumPairRepeats 3 `
+            -RequireAllPairs:($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") `
             -ConcurrencyLevels "64,256" `
+            -HeavyConcurrencyLevels "64,128" `
             -EndpointClasses "small-json,raw-json,heavy-json" `
             -Duration "12s" `
             -Warmup "5s" `

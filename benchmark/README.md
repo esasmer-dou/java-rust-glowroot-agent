@@ -42,11 +42,11 @@ Use **Production Gate** only for a release candidate. The release workflow still
 successful native-Linux evidence for the exact tag commit. Do not relabel a WSL/Docker Desktop host
 as `reactor-performance-native-linux`; its warmup trend and RSS evidence are not equivalent.
 
-Choose `release` in the workflow for the normal three-pair gate. On the current single dedicated
-runner, its target wall time is 30-45 minutes for both application kinds together. Choose `extended`
-only for a boundary result or a benchmark-engine investigation; it uses six independent pairs and
-may take roughly twice as long. Creating a tag reuses the successful exact-commit evidence and does
-not run the matrix again.
+Choose `release` for the adaptive gate. It starts with three independent JVM pairs and stops only
+when every cell satisfies a stricter early-pass envelope. A boundary result automatically continues
+to at most six pairs. Choose `extended` to require all six pairs for a benchmark-engine
+investigation. Creating a tag reuses successful exact-commit evidence and does not run the matrix
+again.
 
 For development-only feedback, run a short c64 small/raw JSON matrix locally:
 
@@ -84,8 +84,10 @@ classpath behavior.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 3 `
+  -PairRepeats 6 `
+  -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
+  -HeavyConcurrencyLevels "64,128" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
@@ -160,8 +162,10 @@ thread because it shared the framework runtime.
   -ApplicationKind rust-java-rest `
   -RequiredRestVersion "4.5.0" `
   -RequiredRestNativeAbi 29 `
-  -PairRepeats 3 `
+  -PairRepeats 6 `
+  -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
+  -HeavyConcurrencyLevels "64,128" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `

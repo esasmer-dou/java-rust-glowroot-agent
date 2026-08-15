@@ -523,11 +523,14 @@ endpoint/concurrency cell must keep:
 - additional agent threads at most `1` for both embedded Rust-Java and standalone Spring.
 
 The stable release runs this full matrix separately for Spring Boot and Rust-Java REST. Both cover
-small JSON, precomputed raw JSON, and dynamic heavy JSON at c64 and c256 with three independent paired
-runs. RPS, p99, and startup use each pair's delta before the median is calculated. Non-2xx uses the
+small JSON and precomputed raw JSON at c64/c256, plus dynamic heavy JSON at c64/c128. The release
+starts with three independent pairs. It stops only when a stricter early-pass envelope succeeds;
+otherwise it continues to six. RPS, p99, and startup use each pair's delta before the median is
+calculated. Non-2xx uses the
 paired median, request-weighted total, peak error envelope, and the absolute `0.05%` ceiling
-together. The bounded `0.02` percentage-point margin applies only to the saturated embedded REST heavy JSON
-c256 cell. One saturated-run delta remains visible without replacing the overall error decision. After both
+together. The normal release matrix uses the zero-delta rule for every cell. The bounded `0.02`
+percentage-point margin applies only when heavy JSON is tested manually at the saturated embedded
+REST c256+ range. One saturated-run delta remains visible without replacing the overall error decision. After both
 variants complete the same full workload, a controlled equal-process-age phase requires
 paired-median process RSS and cgroup deltas at or below `+3 MiB` for `micro`. Both runtimes may add
 one bounded exporter thread. `jvm`, `sql`, `full`, and `diagnostic` are separate temporary-profile
@@ -576,8 +579,10 @@ do not publish a local dirty native build.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 3 `
+  -PairRepeats 6 `
+  -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
+  -HeavyConcurrencyLevels "64,128" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
@@ -597,10 +602,10 @@ do not publish a local dirty native build.
   -FailOnGate
 ```
 
-This is the normal release profile. It uses three independent JVM pairs and normally targets a
-30-45 minute total wall time on the dedicated single-runner host. Select `extended` in the GitHub
-**Production Gate** workflow only for a boundary result; that mode uses six pairs. A release tag
-reuses the successful gate evidence for the same commit and does not rerun the matrix.
+This is the normal release profile. It stops after three independent JVM pairs only when every cell
+passes a stricter safety margin; otherwise it automatically continues to at most six. Select
+`extended` in the GitHub **Production Gate** workflow to require all six pairs. A release tag reuses
+the successful gate evidence for the same commit and does not rerun the matrix.
 
 Use the following additional parameters to reproduce the embedded REST matrix:
 

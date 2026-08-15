@@ -532,11 +532,13 @@ Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
 - İki çalışma şeklinde de agent'a ait ek thread sayısı en fazla `1`.
 
 Stable release bu tam matrisi Spring Boot ve Rust-Java REST için ayrı çalıştırır. İki matris de
-small JSON, önceden hazırlanmış raw JSON ve dynamic heavy JSON endpoint'lerini c64/c256 seviyesinde
-üç bağımsız çiftle ölçer. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan
+small JSON ve önceden hazırlanmış raw JSON endpoint'lerini c64/c256 seviyesinde ölçer. Dynamic heavy
+JSON için c64/c128 kullanılır. Release üç bağımsız çiftle başlar. Daha sıkı erken PASS sınırı
+sağlanmazsa otomatik olarak altı çifte devam eder. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan
 hesaplanır. Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırılmış toplamı, en
-yüksek hata oranını ve mutlak `%0,05` sınırını birlikte kullanır. `0,02` yüzde puanlık sınırlı marj
-yalnız doygun embedded REST heavy JSON c256 hücresinde geçerlidir. Doygun bir koşudaki tek fark raporda görünür; genel hata
+yüksek hata oranını ve mutlak `%0,05` sınırını birlikte kullanır. Normal release matrisindeki bütün
+hücrelerde sıfır artış kuralı uygulanır. `0,02` yüzde puanlık sınırlı marj yalnız heavy JSON manuel
+olarak embedded REST c256+ doygunluk bölgesinde ölçülürse geçerlidir. Doygun bir koşudaki tek fark raporda görünür; genel hata
 kararının yerine geçmez. Aynı tam
 yükten sonra eşit process yaşında ölçülen RSS ve cgroup medyan farkları en fazla
 `micro` için `+3 MiB` olabilir. İki runtime da yalnız tek sınırlı exporter thread'i ekleyebilir.
@@ -586,8 +588,10 @@ native build yayınlamayın.
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 3 `
+  -PairRepeats 6 `
+  -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
+  -HeavyConcurrencyLevels "64,128" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
@@ -607,10 +611,10 @@ native build yayınlamayın.
   -FailOnGate
 ```
 
-Bu komut normal release profilidir. Üç bağımsız JVM çifti kullanır. Dedicated tek runner üzerinde
-toplam hedef süre 30-45 dakikadır. Sonuç sınıra yakınsa GitHub **Production Gate** workflow'unda
-`extended` seçin. Bu seçenek altı çift çalıştırır. Aynı commit için başarılı gate kanıtı varsa release
-tag'i matrisi yeniden çalıştırmaz.
+Bu komut normal release profilidir. Üç bağımsız JVM çiftinden sonra yalnız bütün hücreler daha sıkı
+güvenlik marjını geçerse durur. Sonuç sınırdaysa en fazla altı çifte otomatik devam eder. GitHub
+**Production Gate** workflow'unda `extended` seçilirse altı çiftin tamamı zorunlu olur. Aynı commit
+için başarılı gate kanıtı varsa release tag'i matrisi yeniden çalıştırmaz.
 
 Embedded REST matrisini çalıştırmak için aynı komuta şu parametreleri ekleyin:
 

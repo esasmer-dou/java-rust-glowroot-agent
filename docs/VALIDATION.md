@@ -97,9 +97,9 @@ native artifacts before ABI `3` can be published.
 | Embedded native attributed ceiling | PASS | `0.694 MiB`, including measured feature code pages; `0` additional threads |
 | Embedded observed resident maximum | PASS | smaps RSS maximum `+1.817 MiB`, below the `+3 MiB` boundary |
 | Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` |
-| Rust-Java REST performance matrix | RELEASE ENFORCED | Three independent paired runs, three endpoint classes, c64/c256, REST `4.5.0`, native ABI `29` |
+| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; small/raw c64/c256; heavy c64/c128; REST `4.5.0`; native ABI `29` |
 | Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, one failed transport attempt within the 75-second observation window, continued business HTTP availability, and optional `-javaagent` bootstrap must all pass |
-| Spring performance matrix | RELEASE ENFORCED | Three independent paired runs, three endpoint classes, c64/c256, exact-commit evidence |
+| Spring performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs, three endpoint classes, exact-commit evidence |
 | Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
 
 The two production performance jobs run only on the
@@ -109,10 +109,10 @@ labels and each job's preflight JSON, so hosted Linux, WSL, and containerized ru
 as performance evidence by accident. Use two separate runner hosts for parallel execution; use only
 one runner service per host.
 
-The workflow's `release` depth uses three independent JVM pairs and targets 30-45 minutes on the
-current single runner. `extended` uses six pairs only when a result is close to a boundary or the
-benchmark engine itself is under investigation. Tagging the already-qualified exact commit reuses
-the evidence; it does not launch the matrix again.
+The workflow's `release` depth starts with three independent JVM pairs. It stops only when all cells
+pass a stricter early envelope; otherwise it continues to at most six. `extended` always runs all
+six pairs. Tagging the already-qualified exact commit reuses the evidence and does not launch the
+matrix again.
 
 Local Docker uses [`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) for fast
 c64 small/raw JSON feedback. Its output is diagnostic and never satisfies the exact-commit release
@@ -135,8 +135,9 @@ The matrix covers:
 - small dynamic JSON;
 - raw/precomputed JSON;
 - dynamic heavy JSON;
-- concurrency `64` and `256`;
-- three independent paired baseline/candidate runs with alternating variant order.
+- concurrency `64` and `256` for small/raw JSON;
+- concurrency `64` and `128` for heavy JSON, keeping the baseline below the framework's overload boundary;
+- three-to-six independent paired baseline/candidate runs with alternating variant order.
 
 Every performance cell must keep useful HTTP 200 RPS loss within `2%`, p99 regression within `10%`,
 and additional threads at one or less. Normal cells use a zero-delta non-2xx gate. The deliberately
@@ -192,8 +193,10 @@ Spring production matrix:
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 3 `
+  -PairRepeats 6 `
+  -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
+  -HeavyConcurrencyLevels "64,128" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
@@ -220,8 +223,10 @@ Rust-Java REST production matrix:
   -ApplicationKind rust-java-rest `
   -RequiredRestVersion "4.5.0" `
   -RequiredRestNativeAbi 29 `
-  -PairRepeats 3 `
+  -PairRepeats 6 `
+  -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
+  -HeavyConcurrencyLevels "64,128" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `

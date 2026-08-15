@@ -99,9 +99,9 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Embedded native atfedilen üst sınır | PASS | Kod sayfaları dahil `0,694 MiB`; ek thread `0` |
 | Embedded resident maksimum | PASS | smaps RSS maksimumu `+1,817 MiB`; `+3 MiB` sınırının altında |
 | Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` revision'ından üretildi |
-| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç bağımsız eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256, REST `4.5.0` ve native ABI `29` |
+| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; small/raw c64/c256; heavy c64/c128; REST `4.5.0`; native ABI `29` |
 | Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, 75 saniyelik gözlem içinde en az bir başarısız taşıma denemesi, business HTTP erişiminin devam etmesi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
-| Spring performans matrisi | RELEASE ZORUNLULUĞU | Üç bağımsız eşleştirilmiş koşu, üç endpoint sınıfı, c64/c256 ve exact-commit kanıtı |
+| Spring performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu, üç endpoint sınıfı ve exact-commit kanıtı |
 | Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
 
 İki production performans job'u yalnızca
@@ -111,9 +111,9 @@ job etiketlerini ve her job tarafından üretilen preflight JSON dosyasını oku
 WSL veya container içindeki bir runner yanlışlıkla performans kanıtı olarak kullanılamaz. Paralel
 çalışma için iki ayrı runner sunucusu kullanın. Her sunucuda yalnızca bir runner servisi çalıştırın.
 
-Workflow'daki `release` seçeneği üç bağımsız JVM çifti kullanır. Mevcut tek runner üzerinde hedef
-toplam süre 30-45 dakikadır. Sonuç sınıra yakınsa veya benchmark motoru inceleniyorsa `extended`
-seçeneğini kullanın. Bu seçenek altı çift çalıştırır. Aynı exact commit daha önce gate'i geçtiyse tag
+Workflow'daki `release` seçeneği üç bağımsız JVM çiftiyle başlar. Yalnız bütün hücreler daha sıkı erken
+PASS sınırını sağlarsa durur. Sonuç sınırdaysa en fazla altı çifte otomatik devam eder. `extended`
+seçeneği altı çiftin tamamını zorunlu çalıştırır. Aynı exact commit daha önce gate'i geçtiyse tag
 oluşturmak matrisi yeniden başlatmaz; mevcut kanıt kullanılır.
 
 Hızlı local kontrol için
@@ -137,8 +137,9 @@ Matris şu alanları kapsar:
 - küçük dynamic JSON;
 - raw veya önceden hazırlanmış JSON;
 - dynamic heavy JSON;
-- `64` ve `256` concurrency;
-- sırası değiştirilen üç bağımsız baseline/candidate çifti.
+- small/raw JSON için `64` ve `256` concurrency;
+- baseline'ı framework overload sınırının altında tutmak için heavy JSON'da `64` ve `128` concurrency;
+- sırası değiştirilen üç ile altı arasında bağımsız baseline/candidate çifti.
 
 Her performans hücresinde başarılı HTTP 200 RPS kaybı en fazla `%2`, p99 artışı en fazla `%10` ve
 yeni thread sayısı en fazla bir olmalıdır. Normal hücrelerde non-2xx artış sınırı sıfırdır. Bilinçli
@@ -192,8 +193,10 @@ Spring production matrisi:
 
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 3 `
+  -PairRepeats 6 `
+  -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
+  -HeavyConcurrencyLevels "64,128" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
@@ -220,8 +223,10 @@ Rust-Java REST production matrisi:
   -ApplicationKind rust-java-rest `
   -RequiredRestVersion "4.5.0" `
   -RequiredRestNativeAbi 29 `
-  -PairRepeats 3 `
+  -PairRepeats 6 `
+  -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
+  -HeavyConcurrencyLevels "64,128" `
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `

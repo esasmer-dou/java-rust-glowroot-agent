@@ -5,7 +5,10 @@ param(
     [string] $RequiredRestVersion = "4.5.0",
     [int] $RequiredRestNativeAbi = 29,
     [int] $PairRepeats = 3,
+    [int] $MinimumPairRepeats = 3,
+    [switch] $RequireAllPairs,
     [string] $ConcurrencyLevels = "64,256",
+    [string] $HeavyConcurrencyLevels = "",
     [string] $EndpointClasses = "small-json,raw-json,heavy-json",
     [string] $Duration = "12s",
     [string] $Warmup = "5s",
@@ -48,7 +51,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
-if ($PairRepeats -lt 3) { throw "PairRepeats must be at least 3." }
+if ($MinimumPairRepeats -lt 3) { throw "MinimumPairRepeats must be at least 3." }
+if ($PairRepeats -lt $MinimumPairRepeats) {
+    throw "PairRepeats must be greater than or equal to MinimumPairRepeats."
+}
 if ($MaxMemoryRegressionMiB -gt 3.0) { throw "The agent memory gate cannot exceed 3 MiB." }
 if ($PreWarmCycles -lt 1 -or $PreWarmCycles -gt 8) {
     throw "PreWarmCycles must be between 1 and 8."
@@ -130,6 +136,11 @@ $EndpointMap = if ($IsRustJavaRest) {
     }
 }
 $concurrency = @($ConcurrencyLevels -split "[,\s]+" | Where-Object { $_ } | ForEach-Object { [int] $_ })
+$heavyConcurrency = if ([string]::IsNullOrWhiteSpace($HeavyConcurrencyLevels)) {
+    $concurrency
+} else {
+    @($HeavyConcurrencyLevels -split "[,\s]+" | Where-Object { $_ } | ForEach-Object { [int] $_ })
+}
 $endpoints = @($EndpointClasses -split "[,\s]+" | Where-Object { $_ })
 foreach ($endpoint in $endpoints) {
     if (-not $EndpointMap.ContainsKey($endpoint)) { throw "Unknown endpoint class: $endpoint" }
@@ -153,6 +164,11 @@ function Remove-Container([string] $Name) {
         & docker rm -f $Name *> $null
     }
     [void] $ContainerCpuSets.Remove($Name)
+}
+
+function Get-EndpointConcurrency([string] $Endpoint) {
+    if ($Endpoint -eq "heavy-json") { return @($heavyConcurrency) }
+    return @($concurrency)
 }
 
 function Find-AgentJar {
@@ -668,6 +684,102 @@ if ((Median -Values @(3.0, 1.0, 2.0)) -ne 2.0 -or
     throw "Median self-check failed."
 }
 
+function Test-EarlyReleaseDecision([int] $CompletedPairs) {
+    if ($RequireAllPairs -or $CompletedPairs -lt $MinimumPairRepeats `
+            -or $CompletedPairs -ge $PairRepeats) {
+        return $false
+    }
+
+    $earlyRpsThreshold = $MinUsefulRpsDeltaPercent + 0.5
+    $earlyP99Threshold = $MaxP99RegressionPercent - 2.0
+    foreach ($endpoint in $endpoints) {
+        foreach ($value in @(Get-EndpointConcurrency $endpoint)) {
+            $base = @($records | Where-Object {
+                    $_.endpoint -eq $endpoint -and $_.concurrency -eq $value `
+                    -and $_.variant -eq "baseline"
+                })
+            $agent = @($records | Where-Object {
+                    $_.endpoint -eq $endpoint -and $_.concurrency -eq $value `
+                    -and $_.variant -eq "candidate"
+                })
+            if ($base.Count -ne $CompletedPairs -or $agent.Count -ne $CompletedPairs) {
+                return $false
+            }
+            $pairedRpsDeltas = [Collections.Generic.List[double]]::new()
+            $pairedP99Deltas = [Collections.Generic.List[double]]::new()
+            $pairedThreadDeltas = [Collections.Generic.List[int]]::new()
+            $pairedHostSiblingMaxima = [Collections.Generic.List[double]]::new()
+            $maximumHostSteal = 0.0
+            foreach ($pair in 1..$CompletedPairs) {
+                $pairedBase = $base | Where-Object pair -eq $pair | Select-Object -First 1
+                $pairedAgent = $agent | Where-Object pair -eq $pair | Select-Object -First 1
+                $pairedRpsDeltas.Add(
+                    100.0 * ($pairedAgent.useful_rps - $pairedBase.useful_rps) / $pairedBase.useful_rps)
+                $pairedP99Deltas.Add(
+                    100.0 * ($pairedAgent.p99_ms - $pairedBase.p99_ms) / $pairedBase.p99_ms)
+                $pairedThreadDeltas.Add($pairedAgent.threads - $pairedBase.threads)
+                $pairedHostSiblingMaxima.Add([math]::Max(
+                        $pairedBase.host_sibling_busy_percent,
+                        $pairedAgent.host_sibling_busy_percent
+                ))
+                $maximumHostSteal = [math]::Max(
+                        $maximumHostSteal,
+                        [math]::Max($pairedBase.host_steal_percent, $pairedAgent.host_steal_percent)
+                )
+            }
+            if ((Median -Values @($pairedRpsDeltas)) -lt $earlyRpsThreshold `
+                    -or (Median -Values @($pairedP99Deltas)) -gt $earlyP99Threshold `
+                    -or ($pairedThreadDeltas | Measure-Object -Maximum).Maximum -gt $AllowedThreadDelta `
+                    -or (Median -Values @($pairedHostSiblingMaxima)) -gt $MaxHostSiblingCpuPercent `
+                    -or $maximumHostSteal -gt $MaxHostStealCpuPercent) {
+                return $false
+            }
+            $non2xxDeltaThreshold = if ($IsRustJavaRest -and $endpoint -eq "heavy-json" `
+                    -and $value -ge 256) {
+                $MaxSaturatedNon2xxDeltaPercentagePoints
+            } else {
+                $MaxNon2xxDeltaPercentagePoints
+            }
+            $errorDecision = Get-ReactorNon2xxDecision `
+                    -Baseline $base `
+                    -Candidate $agent `
+                    -MaximumDeltaPercentagePoints $non2xxDeltaThreshold `
+                    -MaximumAbsolutePercent $MaxAbsoluteNon2xxPercent
+            if (-not $errorDecision.passed) { return $false }
+        }
+    }
+
+    $startupDeltas = [Collections.Generic.List[double]]::new()
+    $rssDeltas = [Collections.Generic.List[double]]::new()
+    $containerDeltas = [Collections.Generic.List[double]]::new()
+    $steadyThreadDeltas = [Collections.Generic.List[int]]::new()
+    foreach ($pair in 1..$CompletedPairs) {
+        $baseStartup = $startups | Where-Object { $_.pair -eq $pair -and $_.variant -eq "baseline" } |
+                Select-Object -First 1
+        $agentStartup = $startups | Where-Object { $_.pair -eq $pair -and $_.variant -eq "candidate" } |
+                Select-Object -First 1
+        $startupDeltas.Add(100.0 * ($agentStartup.ms - $baseStartup.ms) / $baseStartup.ms)
+        $baseMemory = $steadyMemory | Where-Object {
+                $_.pair -eq $pair -and $_.variant -eq "baseline"
+            } | Select-Object -First 1
+        $agentMemory = $steadyMemory | Where-Object {
+                $_.pair -eq $pair -and $_.variant -eq "candidate"
+            } | Select-Object -First 1
+        $rssDeltas.Add($agentMemory.process_rss_mib - $baseMemory.process_rss_mib)
+        $containerDeltas.Add($agentMemory.container_mib - $baseMemory.container_mib)
+        $steadyThreadDeltas.Add($agentMemory.threads - $baseMemory.threads)
+    }
+    if ((Median -Values @($startupDeltas)) -gt 8.0 `
+            -or (Median -Values @($rssDeltas)) -gt ($MaxMemoryRegressionMiB - 0.5) `
+            -or (Median -Values @($containerDeltas)) -gt ($MaxMemoryRegressionMiB - 0.5) `
+            -or ($steadyThreadDeltas | Measure-Object -Maximum).Maximum -gt $AllowedThreadDelta) {
+        return $false
+    }
+
+    Write-Host "Strict early-pass envelope satisfied after $CompletedPairs independent pairs."
+    return $true
+}
+
 Prepare-Build
 Ensure-Network
 New-Item -ItemType Directory -Force -Path $Results | Out-Null
@@ -709,10 +821,14 @@ $startups = [Collections.Generic.List[object]]::new()
 $steadyMemory = [Collections.Generic.List[object]]::new()
 $warmups = [Collections.Generic.List[object]]::new()
 $sequence = 0
+$completedPairs = 0
+$stoppedAfterStrictEarlyPass = $false
 try {
     for ($pair = 1; $pair -le $PairRepeats; $pair++) {
         $cells = foreach ($endpoint in $endpoints) {
-            foreach ($value in $concurrency) { [pscustomobject]@{ endpoint = $endpoint; concurrency = $value } }
+            foreach ($value in @(Get-EndpointConcurrency $endpoint)) {
+                [pscustomobject]@{ endpoint = $endpoint; concurrency = $value }
+            }
         }
         $cells = @($cells | Sort-Object { Get-Random })
 
@@ -781,6 +897,11 @@ try {
                 })
                 Remove-Container $name
                 Start-Sleep -Seconds 5
+            }
+            $completedPairs = $pair
+            if (Test-EarlyReleaseDecision -CompletedPairs $completedPairs) {
+                $stoppedAfterStrictEarlyPass = $true
+                break
             }
             continue
         }
@@ -872,6 +993,11 @@ try {
         Remove-Container $Baseline
         Remove-Container $Candidate
         Start-Sleep -Seconds 5
+        $completedPairs = $pair
+        if (Test-EarlyReleaseDecision -CompletedPairs $completedPairs) {
+            $stoppedAfterStrictEarlyPass = $true
+            break
+        }
     }
 } catch {
     ConvertTo-Json -InputObject @($records) -Depth 6 | Set-Content `
@@ -894,7 +1020,7 @@ try {
 
 $summary = [Collections.Generic.List[object]]::new()
 foreach ($endpoint in $endpoints) {
-    foreach ($value in $concurrency) {
+    foreach ($value in @(Get-EndpointConcurrency $endpoint)) {
         $base = @($records | Where-Object { $_.endpoint -eq $endpoint -and $_.concurrency -eq $value -and $_.variant -eq "baseline" })
         $agent = @($records | Where-Object { $_.endpoint -eq $endpoint -and $_.concurrency -eq $value -and $_.variant -eq "candidate" })
         $baseRps = Median -Values @($base.useful_rps)
@@ -910,7 +1036,7 @@ foreach ($endpoint in $endpoints) {
         $pairedRssDeltas = [Collections.Generic.List[double]]::new()
         $pairedContainerDeltas = [Collections.Generic.List[double]]::new()
         $pairedThreadDeltas = [Collections.Generic.List[int]]::new()
-        foreach ($pair in 1..$PairRepeats) {
+        foreach ($pair in 1..$completedPairs) {
             $pairedBase = $base | Where-Object pair -eq $pair | Select-Object -First 1
             $pairedAgent = $agent | Where-Object pair -eq $pair | Select-Object -First 1
             $pairedRpsDeltas.Add(100.0 * ($pairedAgent.useful_rps - $pairedBase.useful_rps) / $pairedBase.useful_rps)
@@ -938,7 +1064,7 @@ foreach ($endpoint in $endpoints) {
                 -MaximumDeltaPercentagePoints $non2xxDeltaThreshold `
                 -MaximumAbsolutePercent $MaxAbsoluteNon2xxPercent
         $pairedHostSiblingMaxima = [Collections.Generic.List[double]]::new()
-        foreach ($pair in 1..$PairRepeats) {
+        foreach ($pair in 1..$completedPairs) {
             $pairedBase = $base | Where-Object pair -eq $pair | Select-Object -First 1
             $pairedAgent = $agent | Where-Object pair -eq $pair | Select-Object -First 1
             $pairedHostSiblingMaxima.Add([math]::Max(
@@ -986,7 +1112,7 @@ foreach ($endpoint in $endpoints) {
 $startupBase = Median -Values @(($startups | Where-Object variant -eq "baseline").ms)
 $startupAgent = Median -Values @(($startups | Where-Object variant -eq "candidate").ms)
 $pairedStartupDeltas = [Collections.Generic.List[double]]::new()
-foreach ($pair in 1..$PairRepeats) {
+foreach ($pair in 1..$completedPairs) {
     $pairedBase = $startups | Where-Object { $_.pair -eq $pair -and $_.variant -eq "baseline" } | Select-Object -First 1
     $pairedAgent = $startups | Where-Object { $_.pair -eq $pair -and $_.variant -eq "candidate" } | Select-Object -First 1
     $pairedStartupDeltas.Add(100.0 * ($pairedAgent.ms - $pairedBase.ms) / $pairedBase.ms)
@@ -995,7 +1121,7 @@ $startupDelta = Median -Values @($pairedStartupDeltas)
 $pairedSteadyRssDeltas = [Collections.Generic.List[double]]::new()
 $pairedSteadyContainerDeltas = [Collections.Generic.List[double]]::new()
 $pairedSteadyThreadDeltas = [Collections.Generic.List[int]]::new()
-foreach ($pair in 1..$PairRepeats) {
+foreach ($pair in 1..$completedPairs) {
     $pairedBase = $steadyMemory | Where-Object { $_.pair -eq $pair -and $_.variant -eq "baseline" } |
             Select-Object -First 1
     $pairedAgent = $steadyMemory | Where-Object { $_.pair -eq $pair -and $_.variant -eq "candidate" } |
@@ -1033,7 +1159,10 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     application_kind = $ApplicationKind
     required_rest_version = if ($IsRustJavaRest) { $RequiredRestVersion } else { $null }
     required_rest_native_abi = if ($IsRustJavaRest) { $RequiredRestNativeAbi } else { $null }
-    pair_repeats = $PairRepeats
+    pair_repeats = $completedPairs
+    minimum_pair_repeats = $MinimumPairRepeats
+    maximum_pair_repeats = $PairRepeats
+    pair_decision = if ($stoppedAfterStrictEarlyPass) { "strict_early_pass" } else { "maximum_pairs" }
     decision_statistic = "median_of_paired_deltas"
     non_2xx_decision = "endpoint_noninferiority_median_weighted_aggregate_and_peak_envelope"
     non_2xx_threshold_percentage_points = $MaxNon2xxDeltaPercentagePoints
@@ -1116,9 +1245,9 @@ $lines.Add("Application: **$ApplicationKind**. Activation: **$activationDescript
 $lines.Add("Benchmark classification: **$(if ($DevelopmentQuickMode) { 'development-only; not release evidence' } else { 'production release evidence' })**.")
 $lines.Add($compatibilityDescription)
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
-$lines.Add("Paired runs: $PairRepeats. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
+$lines.Add("Paired runs: $completedPairs (minimum=$MinimumPairRepeats, maximum=$PairRepeats, decision=$(if ($stoppedAfterStrictEarlyPass) { 'strict early pass' } else { 'maximum pairs' })). Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("Warmup stability: $PreWarmCycles equal pre-warm cycles plus $MaxWarmupRounds measured rounds per endpoint/process, fully interleaved across endpoint classes$(if (-not $SequentialVariants) { ' and baseline/candidate variants' } else { '' }). One persistent wrk container is reused for the whole gate. A failing measured window receives at most $MaxWarmupConfirmationRounds additional full-matrix interleaved confirmation rounds without relaxing any threshold; this run used at most $observedMaxWarmupConfirmationRounds. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend against a $MaxWarmupRobustTrendPercent% primary gate. A trend up to $MaxWarmupBorderlineRobustTrendPercent% is accepted only when previous/recent window medians differ by at most $MaxWarmupBorderlineMedianShiftPercent%. Median absolute deviation must remain within $MaxWarmupMedianAbsoluteDeviationPercent%. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
-$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells and a $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin only for saturated embedded REST heavy-json c256+ cells. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
+$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells. The $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin applies only when embedded REST heavy-json is explicitly tested at c256+. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory normalization: $(if ($IsRustJavaRest) { 'equal idle window' } else { 'benchmark-only explicit full GC followed by an equal idle window' }). This removes unrelated GC-phase noise without changing any RPS or p99 measurement. Paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")
 $lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx off/on agg % | non-2xx off/on peak % | non-2xx delta med/agg/max pp | Host sibling med/max; steal max | Gate |")
