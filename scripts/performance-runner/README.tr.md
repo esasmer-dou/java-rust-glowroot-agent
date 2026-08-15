@@ -11,7 +11,7 @@ Her sunucuda yalnızca bir runner servisi çalıştırın.
 
 | Kaynak | En düşük değer |
 | --- | --- |
-| İşletim sistemi | Native Ubuntu veya Debian x64; WSL ve container kabul edilmez |
+| İşletim sistemi | Native Ubuntu, Debian, RHEL/CentOS, Rocky veya AlmaLinux x64; WSL ve container kabul edilmez |
 | CPU | 8 mantıksal CPU ve en az 4 fiziksel CPU grubu |
 | Bellek | Sunucu ve Docker için en az 12 GiB |
 | Disk | `/` üzerinde en az 20 GiB boş alan |
@@ -45,9 +45,9 @@ sudo ./scripts/performance-runner/install-native-linux.sh \
 unset RUNNER_TOKEN
 ```
 
-Kurulum script'i GitHub runner dosyasının SHA-256 değerini doğrular. Tek bir systemd servisi kurar.
-Servis `reactor-performance-native-linux` etiketini taşır. Docker önceden kurulmuş ve çalışıyor
-olmalıdır.
+Kurulum script'i GitHub runner dosyasının SHA-256 değerini doğrular. Maven `3.9.9` kurar. Debian ve
+RHEL paket ailelerini destekler. Tek bir systemd servisi kurar. Servis
+`reactor-performance-native-linux` etiketini taşır. Docker önceden kurulmuş ve çalışıyor olmalıdır.
 
 ## Doğrulama
 

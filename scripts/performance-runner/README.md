@@ -11,7 +11,7 @@ Use one runner service per host. The host needs:
 
 | Resource | Minimum |
 | --- | --- |
-| Operating system | Native Ubuntu or Debian x64; WSL and containers are rejected |
+| Operating system | Native Ubuntu, Debian, RHEL/CentOS, Rocky, or AlmaLinux x64; WSL and containers are rejected |
 | CPU | 8 logical CPUs and at least 4 physical CPU groups |
 | Memory | 12 GiB available to the host and Docker |
 | Disk | 20 GiB free on `/` |
@@ -45,7 +45,8 @@ sudo ./scripts/performance-runner/install-native-linux.sh \
 unset RUNNER_TOKEN
 ```
 
-The installer verifies the GitHub runner download digest. It installs one system service with the
+The installer verifies the GitHub runner download digest, installs Maven `3.9.9`, and supports both
+Debian and RHEL package families. It installs one system service with the
 `reactor-performance-native-linux` label. Docker must already be installed and healthy.
 
 ## Verify

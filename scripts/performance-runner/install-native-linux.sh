@@ -61,26 +61,58 @@ if ! command -v docker >/dev/null || ! docker info >/dev/null 2>&1; then
 fi
 
 source /etc/os-release
-if [[ "${ID:-}" != "ubuntu" && "${ID:-}" != "debian" ]]; then
-  echo "This installer supports Ubuntu/Debian. Install the prerequisites manually on ${ID:-unknown}." >&2
-  exit 1
-fi
-
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git jq maven tar
+case "${ID:-}" in
+  ubuntu|debian)
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git jq tar
+    package_family="debian"
+    ;;
+  rhel|centos|rocky|almalinux)
+    dnf install -y ca-certificates curl git jq tar gzip
+    package_family="rhel"
+    ;;
+  *)
+    echo "Supported systems are Ubuntu, Debian, RHEL, CentOS, Rocky Linux, and AlmaLinux." >&2
+    exit 1
+    ;;
+esac
 
 if ! command -v pwsh >/dev/null; then
-  if [[ "$ID" == "ubuntu" ]]; then
-    curl -fsSL -o /tmp/packages-microsoft-prod.deb \
-      "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/packages-microsoft-prod.deb"
+  if [[ "$package_family" == "debian" ]]; then
+    if [[ "$ID" == "ubuntu" ]]; then
+      curl -fsSL -o /tmp/packages-microsoft-prod.deb \
+        "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/packages-microsoft-prod.deb"
+    else
+      curl -fsSL -o /tmp/packages-microsoft-prod.deb \
+        "https://packages.microsoft.com/config/debian/${VERSION_ID}/packages-microsoft-prod.deb"
+    fi
+    dpkg -i /tmp/packages-microsoft-prod.deb
+    rm -f /tmp/packages-microsoft-prod.deb
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y powershell
   else
-    curl -fsSL -o /tmp/packages-microsoft-prod.deb \
-      "https://packages.microsoft.com/config/debian/${VERSION_ID}/packages-microsoft-prod.deb"
+    rhel_major="${VERSION_ID%%.*}"
+    curl -fsSL -o /etc/yum.repos.d/microsoft-prod.repo \
+      "https://packages.microsoft.com/config/rhel/${rhel_major}/prod.repo"
+    dnf install -y powershell
   fi
-  dpkg -i /tmp/packages-microsoft-prod.deb
-  rm -f /tmp/packages-microsoft-prod.deb
-  apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y powershell
+fi
+
+MAVEN_VERSION="3.9.9"
+if ! command -v mvn >/dev/null || ! mvn -version 2>&1 | grep -q "Apache Maven ${MAVEN_VERSION}"; then
+  maven_archive="/tmp/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+  maven_base="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries"
+  curl -fsSL -o "$maven_archive" "${maven_base}/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
+  maven_sha512="$(curl -fsSL "${maven_base}/apache-maven-${MAVEN_VERSION}-bin.tar.gz.sha512" | awk '{print $1}' | tr -d '[:space:]')"
+  if [[ ! "$maven_sha512" =~ ^[0-9a-fA-F]{128}$ ]]; then
+    echo "Cannot resolve the Maven SHA-512 checksum." >&2
+    exit 1
+  fi
+  echo "${maven_sha512}  ${maven_archive}" | sha512sum --check --status
+  rm -rf "/opt/apache-maven-${MAVEN_VERSION}"
+  tar -xzf "$maven_archive" -C /opt
+  rm -f "$maven_archive"
+  ln -sfn "/opt/apache-maven-${MAVEN_VERSION}/bin/mvn" /usr/local/bin/mvn
 fi
 
 if ! id "$RUNNER_USER" >/dev/null 2>&1; then
