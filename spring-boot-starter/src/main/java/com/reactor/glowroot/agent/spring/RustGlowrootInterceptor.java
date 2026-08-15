@@ -8,6 +8,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.AsyncHandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+
 /** Low-allocation Spring MVC request timing adapter. */
 public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
 
@@ -109,20 +112,21 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
 
         RequestState state = requestState.get();
         int observationFlags = state.takeObservationFlags();
-        boolean timed = (observationFlags & TIMED_OBSERVATION) != 0;
-        boolean sampled = (observationFlags & SAMPLED_OBSERVATION) != 0;
-        long startedAtNanos = state.startedAtNanos();
-
         int status = forcedStatus == 0 ? response.getStatus() : forcedStatus;
         if (exception != null && status < 500) status = 500;
-        if (timed) {
-            long durationNanos = Math.max(0L, System.nanoTime() - startedAtNanos);
-            if (sampled || status >= 500 || durationNanos >= slowThresholdNanos) {
-                recordStatus(request, status, durationNanos, sampled, exception);
-            }
+
+        // Successful unsampled requests are the dominant path. Return before reading the timer,
+        // resolving route metadata, or touching native state.
+        if (observationFlags == 0) {
+            if (status >= 500) recordStatus(request, status, 0L, false, exception);
             return;
         }
-        if (status >= 500) recordStatus(request, status, 0L, false, exception);
+
+        boolean sampled = (observationFlags & SAMPLED_OBSERVATION) != 0;
+        long durationNanos = Math.max(0L, System.nanoTime() - state.startedAtNanos());
+        if (sampled || status >= 500 || durationNanos >= slowThresholdNanos) {
+            recordStatus(request, status, durationNanos, sampled, exception);
+        }
     }
 
     void completeAsync(
@@ -178,6 +182,9 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
 
     /** Fixed-capacity route table; lookups do not allocate temporary composite keys. */
     private static final class RouteSlotTable {
+        private static final VarHandle STRING_ELEMENT =
+                MethodHandles.arrayElementVarHandle(String[].class);
+
         private final int maxRoutes;
         private final int mask;
         private final String[] methods;
@@ -195,24 +202,44 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             this.slots = new int[capacity];
         }
 
-        private synchronized int getOrRegister(
+        private int getOrRegister(
                 String method,
                 String route,
                 HttpTelemetryRecorder telemetry) {
+            int registered = find(method, route);
+            if (registered != DISABLED_SLOT) return registered;
+            return register(method, route, telemetry);
+        }
+
+        private int find(String method, String route) {
             int index = spreadHash(method, route) & mask;
-            while (methods[index] != null) {
-                if (methods[index].equals(method) && routes[index].equals(route)) {
+            String registeredMethod;
+            while ((registeredMethod = (String) STRING_ELEMENT.getAcquire(methods, index)) != null) {
+                if (registeredMethod.equals(method) && routes[index].equals(route)) {
                     return slots[index];
                 }
                 index = (index + 1) & mask;
             }
+            return DISABLED_SLOT;
+        }
+
+        private synchronized int register(
+                String method,
+                String route,
+                HttpTelemetryRecorder telemetry) {
+            int registered = find(method, route);
+            if (registered != DISABLED_SLOT) return registered;
             if (size >= maxRoutes) return DISABLED_SLOT;
 
+            int index = spreadHash(method, route) & mask;
+            while ((String) STRING_ELEMENT.getAcquire(methods, index) != null) {
+                index = (index + 1) & mask;
+            }
             int slot = telemetry.registerHttpRoute(method, route);
             if (slot == DISABLED_SLOT) return DISABLED_SLOT;
-            methods[index] = method;
             routes[index] = route;
             slots[index] = slot;
+            STRING_ELEMENT.setRelease(methods, index, method);
             size++;
             return slot;
         }
@@ -240,7 +267,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
                         | (sampled ? SAMPLED_OBSERVATION : 0);
                 return;
             }
-            observationFlags = 0;
+            if (observationFlags != 0) observationFlags = 0;
         }
 
         private Object asyncObservation() {
@@ -261,7 +288,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
 
         private int takeObservationFlags() {
             int flags = observationFlags;
-            observationFlags = 0;
+            if (flags != 0) observationFlags = 0;
             return flags;
         }
 

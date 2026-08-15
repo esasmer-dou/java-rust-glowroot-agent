@@ -101,11 +101,10 @@ if ($null -eq $application -or $null -eq $runnerGroup -or $null -eq $collectorGr
     $results | Format-Table cpu_set, median_kib_per_second, robust_trend_percent, median_absolute_deviation_percent, passed
     throw "Calibration needs three stable physical CPU groups for application, load runner, and collector isolation."
 }
-$runnerCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $runnerGroup.cpu_set)
 $collectorCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $collectorGroup.cpu_set)
 $recommendation = [pscustomobject]@{
     application_cpu_set = $application.cpu_set
-    runner_cpu_set = "$($runnerCpus[0])"
+    runner_cpu_set = $runnerGroup.cpu_set
     collector_cpu_set = "$($collectorCpus[0])"
 }
 $evidence = [pscustomobject]@{
@@ -119,7 +118,7 @@ $evidence = [pscustomobject]@{
 $results | Format-Table cpu_set, median_kib_per_second, robust_trend_percent, median_absolute_deviation_percent, passed
 Write-Host ""
 Write-Host "Recommended calibrated roles:"
-Write-Host "  --application-cpus $($recommendation.application_cpu_set) --runner-cpu $($recommendation.runner_cpu_set) --collector-cpu $($recommendation.collector_cpu_set)"
+Write-Host "  --application-cpus $($recommendation.application_cpu_set) --runner-cpus $($recommendation.runner_cpu_set) --collector-cpu $($recommendation.collector_cpu_set)"
 if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     $parent = Split-Path -Parent $OutputPath
     if (-not [string]::IsNullOrWhiteSpace($parent)) {

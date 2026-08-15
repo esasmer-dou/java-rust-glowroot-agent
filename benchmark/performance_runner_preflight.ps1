@@ -87,14 +87,21 @@ if ($RunnerClass -eq "reactor-performance-native-linux") {
             "configured=$($applicationCpus -join ','); required=$($requiredApplicationCpus -join ',')" `
             "every SMT sibling reserved"
 
-        $runnerCpu = [int] $configuredCpuRoles.runner
+        $runnerCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $configuredCpuRoles.runner)
+        $requiredRunnerCpus = @(Get-ReactorLinuxPhysicalCpuSet -CpuSet $configuredCpuRoles.runner)
+        $completeRunnerGroup = ($runnerCpus -join ",") -eq ($requiredRunnerCpus -join ",")
+        Add-Check "load_runner_smt_group_complete" $completeRunnerGroup `
+            "configured=$($runnerCpus -join ','); required=$($requiredRunnerCpus -join ',')" `
+            "every SMT sibling reserved for the two wrk threads"
+
+        $runnerCpu = $runnerCpus[0]
         $collectorCpu = [int] $configuredCpuRoles.collector
         $runnerTopology = "/sys/devices/system/cpu/cpu$runnerCpu/topology/thread_siblings_list"
         $collectorTopology = "/sys/devices/system/cpu/cpu$collectorCpu/topology/thread_siblings_list"
         $infrastructureCpusAvailable = (Test-Path -LiteralPath $runnerTopology -PathType Leaf) `
             -and (Test-Path -LiteralPath $collectorTopology -PathType Leaf)
         Add-Check "infrastructure_cpus_available" $infrastructureCpusAvailable `
-            "runner=$runnerCpu collector=$collectorCpu" "both logical CPUs available"
+            "runner=$($runnerCpus -join ',') collector=$collectorCpu" "configured CPU roles available"
         if ($infrastructureCpusAvailable) {
             $runnerGroup = (Get-Content -Raw -LiteralPath $runnerTopology).Trim()
             $collectorGroup = (Get-Content -Raw -LiteralPath $collectorTopology).Trim()

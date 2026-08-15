@@ -33,7 +33,9 @@ pwsh ./scripts/performance-runner/calibrate-cpu-roles.ps1 \
 ```
 
 Script, her fiziksel CPU grubunda dönüşümlü olarak 18 kısa SHA-256 testi çalıştırır. Uygulama için tam
-bir SMT grubu seçer. Yük üretici için ikinci, collector için üçüncü bir fiziksel grup önerir. JSON
+bir SMT grubu seçer. İki `wrk` yük thread'i için ikinci tam SMT grubunu ayırır. Collector için üçüncü
+fiziksel gruptan bir mantıksal CPU seçer. İki yük thread'ini tek mantıksal CPU üzerinde çalıştırmak,
+uygulama yerine yük üreticisini darboğaz haline getirebilir. JSON
 dosyasını sunucu kanıtıyla birlikte saklayın. Üç kararlı grup bulunamazsa gate eşiklerini gevşetmeyin.
 Başka bir sunucu kullanın. Başarılı gruplar önce dağılım ve eğilime göre sıralanır. Çok küçük tepe
 throughput farkı, kararlılığın önüne geçmez.
@@ -59,7 +61,7 @@ sudo ./scripts/performance-runner/install-native-linux.sh \
   --token "$RUNNER_TOKEN" \
   --name perf-linux-01 \
   --application-cpus 4,5 \
-  --runner-cpu 0 \
+  --runner-cpus 0,1 \
   --collector-cpu 2
 unset RUNNER_TOKEN
 ```
@@ -70,7 +72,7 @@ Runner daha önce kurulduysa yeniden kurmadan ölçülen değerleri uygulayın:
 ```bash
 sudo ./scripts/performance-runner/configure-cpu-roles.sh \
   --application-cpus 4,5 \
-  --runner-cpu 0 \
+  --runner-cpus 0,1 \
   --collector-cpu 2
 ```
 

@@ -76,6 +76,11 @@ All notable changes to this project are recorded here.
 - Added repeatable CPU-group calibration and deterministic application, load-runner, and collector
   roles on three separate physical groups. A partial configuration, shared physical group, or an
   application role that omits an SMT sibling now fails closed.
+- Reserved the load runner's complete SMT sibling group for its two `wrk` event loops. The release
+  gate now fails closed when a two-thread load generator is pinned to one logical CPU and could hide
+  application throughput behind load-generator saturation.
+- Removed the monitor lock from registered Spring MVC route lookups and shortened the dominant
+  unsampled successful completion path without changing exact `5xx` or async accounting.
 
 ### Compatibility
 

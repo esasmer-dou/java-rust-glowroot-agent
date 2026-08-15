@@ -43,11 +43,11 @@ try {
     Assert-Throws { Get-ReactorConfiguredBenchmarkCpuRoles } "configuration is partial" `
         "Partial CPU role configuration must fail closed."
 
-    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_RUNNER_CPU_SET", "4", "Process")
+    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_RUNNER_CPU_SET", "4,5", "Process")
     [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_COLLECTOR_CPU_SET", "0", "Process")
     $configured = Get-ReactorConfiguredBenchmarkCpuRoles
     Assert-Equal "6,7" $configured.application "Application CPU set must remain normalized."
-    Assert-Equal "4" $configured.runner "Runner CPU set must remain normalized."
+    Assert-Equal "4,5" $configured.runner "Runner CPU set must remain normalized."
     Assert-Equal "0" $configured.collector "Collector CPU set must remain normalized."
     Assert-Equal "environment" $configured.source "Configured CPU role source must be observable."
 
@@ -55,11 +55,11 @@ try {
     $configured = Get-ReactorConfiguredBenchmarkCpuRoles
     Assert-Equal "6,7" $configured.application "Application CPU set must be sorted and deduplicated."
 
-    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_RUNNER_CPU_SET", "2,4", "Process")
-    Assert-Throws { Get-ReactorConfiguredBenchmarkCpuRoles } "RUNNER_CPU_SET must contain exactly one" `
-        "Runner role must use one logical CPU."
+    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_RUNNER_CPU_SET", "5,4", "Process")
+    $configured = Get-ReactorConfiguredBenchmarkCpuRoles
+    Assert-Equal "4,5" $configured.runner "Runner CPU set must be sorted and deduplicated."
 
-    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_RUNNER_CPU_SET", "4", "Process")
+    [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_RUNNER_CPU_SET", "4,5", "Process")
     [Environment]::SetEnvironmentVariable("REACTOR_BENCHMARK_COLLECTOR_CPU_SET", "1-2", "Process")
     Assert-Throws { Get-ReactorConfiguredBenchmarkCpuRoles } "COLLECTOR_CPU_SET must contain exactly one" `
         "Collector role must use one logical CPU."

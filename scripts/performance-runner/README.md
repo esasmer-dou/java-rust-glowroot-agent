@@ -33,8 +33,10 @@ pwsh ./scripts/performance-runner/calibrate-cpu-roles.ps1 \
 ```
 
 The script interleaves 18 short SHA-256 samples across every physical CPU group. It recommends one
-complete SMT group for the application, another physical group for the load runner, and a third
-physical group for the collector. Keep the JSON with the host evidence. If fewer than three groups pass the unchanged trend and
+complete SMT group for the application, another complete SMT group for the two `wrk` load threads,
+and one logical CPU from a third physical group for the collector. Keeping both load threads on one
+logical CPU can make the load generator, rather than the application, the benchmark bottleneck.
+Keep the JSON with the host evidence. If fewer than three groups pass the unchanged trend and
 dispersion limits, use another host instead of weakening the gate. Passing groups are ranked by
 dispersion and trend first; a negligible peak-throughput difference cannot outrank stability.
 
@@ -59,7 +61,7 @@ sudo ./scripts/performance-runner/install-native-linux.sh \
   --token "$RUNNER_TOKEN" \
   --name perf-linux-01 \
   --application-cpus 4,5 \
-  --runner-cpu 0 \
+  --runner-cpus 0,1 \
   --collector-cpu 2
 unset RUNNER_TOKEN
 ```
@@ -70,7 +72,7 @@ already installed runner, apply the measured roles without reinstalling it:
 ```bash
 sudo ./scripts/performance-runner/configure-cpu-roles.sh \
   --application-cpus 4,5 \
-  --runner-cpu 0 \
+  --runner-cpus 0,1 \
   --collector-cpu 2
 ```
 

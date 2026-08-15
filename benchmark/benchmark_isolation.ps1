@@ -58,9 +58,6 @@ function Get-ReactorConfiguredBenchmarkCpuRoles {
     $application = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.application
     $runner = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.runner
     $collector = ConvertTo-ReactorNormalizedCpuSet -CpuSet $configured.collector
-    if (@(ConvertFrom-ReactorCpuSet -CpuSet $runner).Count -ne 1) {
-        throw "REACTOR_BENCHMARK_RUNNER_CPU_SET must contain exactly one logical CPU."
-    }
     if (@(ConvertFrom-ReactorCpuSet -CpuSet $collector).Count -ne 1) {
         throw "REACTOR_BENCHMARK_COLLECTOR_CPU_SET must contain exactly one logical CPU."
     }
@@ -158,6 +155,11 @@ function Select-ReactorBenchmarkCpuRoles {
         if (($applicationCpus -join ",") -ne ($physicalApplicationCpus -join ",")) {
             throw "REACTOR_BENCHMARK_APPLICATION_CPU_SET must reserve every SMT sibling. Configured=$($applicationCpus -join ',') Required=$($physicalApplicationCpus -join ',')."
         }
+        $runnerCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $configured.runner)
+        $physicalRunnerCpus = @(Get-ReactorLinuxPhysicalCpuSet -CpuSet $configured.runner)
+        if (($runnerCpus -join ",") -ne ($physicalRunnerCpus -join ",")) {
+            throw "REACTOR_BENCHMARK_RUNNER_CPU_SET must reserve every SMT sibling for the two wrk threads. Configured=$($runnerCpus -join ',') Required=$($physicalRunnerCpus -join ',')."
+        }
 
         $before = Get-ReactorLinuxCpuSnapshot
         Start-Sleep -Seconds $SampleSeconds
@@ -192,8 +194,8 @@ function Select-ReactorBenchmarkCpuRoles {
         }
         $groups[$group].Add($cpu)
     }
-    if ($groups.Count -lt 2) {
-        throw "At least two physical CPU groups are required for the production benchmark."
+    if ($groups.Count -lt 3) {
+        throw "At least three physical CPU groups are required for application, load-runner, and collector isolation."
     }
 
     $before = Get-ReactorLinuxCpuSnapshot
@@ -217,21 +219,24 @@ function Select-ReactorBenchmarkCpuRoles {
     $ranked = @($ranked | Sort-Object busy_percent, steal_percent, group)
     $application = $ranked[0]
     $load = $ranked[1]
+    $collector = $ranked[2]
     # Reserve the complete SMT sibling group for the application. Pinning only one logical CPU
     # leaves its sibling available to unrelated host work, which can steal execution resources from
     # the same physical core and create false A/B regressions. --cpus still enforces the requested
     # aggregate CPU quota inside this bounded cpuset.
     $applicationCpuSet = $application.cpus -join ","
-    $runnerCpu = $load.logical[0].cpu
-    $collectorCpu = if ($load.logical.Count -gt 1) { $load.logical[1].cpu } else { $runnerCpu }
+    # wrk uses two event-loop threads. Give it the complete physical sibling group instead of
+    # forcing both threads onto one logical CPU and measuring load-generator saturation.
+    $runnerCpuSet = $load.cpus -join ","
+    $collectorCpu = $collector.logical[0].cpu
 
     Write-Host (("CPU roles selected after build: app={0} group={1} busy={2:N2}% steal={3:N2}%; " +
-            "runner={4} collector={5} group={6}") -f `
+            "runner={4} runner-group={5}; collector={6} collector-group={7}") -f `
             $applicationCpuSet, $application.group, $application.busy_percent, $application.steal_percent, `
-            $runnerCpu, $collectorCpu, $load.group)
+            $runnerCpuSet, $load.group, $collectorCpu, $collector.group)
     return [pscustomobject]@{
         application = $applicationCpuSet
-        runner = "$runnerCpu"
+        runner = $runnerCpuSet
         collector = "$collectorCpu"
         application_group = "$($application.group)"
         observed_busy_percent = [math]::Round($application.busy_percent, 3)
@@ -301,6 +306,21 @@ function Assert-ReactorBenchmarkCpuIsolation {
         $roleCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $entry.Value)
         if ($roleCpus.Count -eq 0) {
             throw "CPU isolation requires an explicit non-empty CPU set for $($entry.Key)."
+        }
+        if ($entry.Key -like "application-slot-*" -or $entry.Key -eq "load-runner") {
+            $requiredCpus = [System.Collections.Generic.HashSet[int]]::new()
+            foreach ($cpu in $roleCpus) {
+                if (-not $topology.ContainsKey($cpu)) {
+                    throw "CPU $cpu from $($entry.Key) is not available to Docker."
+                }
+                foreach ($sibling in @(ConvertFrom-ReactorCpuSet -CpuSet "$($topology[$cpu])")) {
+                    [void] $requiredCpus.Add($sibling)
+                }
+            }
+            $required = @($requiredCpus | Sort-Object)
+            if (($roleCpus -join ",") -ne ($required -join ",")) {
+                throw "CPU isolation requires $($entry.Key) to reserve every SMT sibling. Configured=$($roleCpus -join ',') Required=$($required -join ',')."
+            }
         }
         foreach ($cpu in $roleCpus) {
             if (-not $topology.ContainsKey($cpu)) {

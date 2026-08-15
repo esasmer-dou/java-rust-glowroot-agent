@@ -9,6 +9,11 @@ import org.springframework.web.servlet.HandlerMapping;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -85,6 +90,38 @@ class RustGlowrootInterceptorTest {
         assertEquals(0, recorder.records.get(0).slot());
         assertEquals(1, recorder.records.get(1).slot());
         assertEquals(0, recorder.records.get(2).slot());
+    }
+
+    @Test
+    void publishesOneRouteSlotAcrossConcurrentSampledRequests() throws Exception {
+        ConcurrentRecorder recorder = new ConcurrentRecorder();
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 4));
+        int workers = 8;
+        int requestsPerWorker = 50;
+        CountDownLatch start = new CountDownLatch(1);
+        CountDownLatch finished = new CountDownLatch(workers);
+
+        try (ExecutorService executor = Executors.newFixedThreadPool(workers)) {
+            for (int worker = 0; worker < workers; worker++) {
+                executor.execute(() -> {
+                    try {
+                        start.await();
+                        for (int request = 0; request < requestsPerWorker; request++) {
+                            invoke(interceptor, 200, "/orders/{id}", null);
+                        }
+                    } catch (Exception error) {
+                        throw new AssertionError(error);
+                    } finally {
+                        finished.countDown();
+                    }
+                });
+            }
+            start.countDown();
+            assertTrue(finished.await(10, TimeUnit.SECONDS));
+        }
+
+        assertEquals(1, recorder.registrations.get());
+        assertEquals(workers * requestsPerWorker, recorder.records.get());
     }
 
     @Test
@@ -253,6 +290,21 @@ class RustGlowrootInterceptorTest {
         public void removeAttribute(String name) {
             if (OBSERVATION_ATTRIBUTE.equals(name)) observationAttributeWrites++;
             super.removeAttribute(name);
+        }
+    }
+
+    private static final class ConcurrentRecorder implements HttpTelemetryRecorder {
+        private final AtomicInteger registrations = new AtomicInteger();
+        private final AtomicInteger records = new AtomicInteger();
+
+        @Override
+        public int registerHttpRoute(String method, String route) {
+            return registrations.getAndIncrement();
+        }
+
+        @Override
+        public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
+            records.incrementAndGet();
         }
     }
 

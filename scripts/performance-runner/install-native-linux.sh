@@ -8,7 +8,7 @@ RUNNER_USER="github-runner"
 INSTALL_ROOT="/opt/actions-runner/reactor-performance"
 LABELS="reactor-performance-native-linux,openj9,docker"
 APPLICATION_CPUS=""
-RUNNER_CPU=""
+RUNNER_CPUS=""
 COLLECTOR_CPU=""
 
 usage() {
@@ -18,7 +18,7 @@ Usage:
     --repository https://github.com/OWNER/REPOSITORY \
     --token SHORT_LIVED_REGISTRATION_TOKEN \
     [--name RUNNER_NAME] \
-    [--application-cpus CPU_SET --runner-cpu CPU --collector-cpu CPU]
+    [--application-cpus CPU_SET --runner-cpus CPU_SET --collector-cpu CPU]
 
 Run exactly one GitHub Actions runner service on each performance host. Use two physical hosts if
 Spring and Rust-Java REST matrices must execute in parallel.
@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
     --token) REGISTRATION_TOKEN="$2"; shift 2 ;;
     --name) RUNNER_NAME="$2"; shift 2 ;;
     --application-cpus) APPLICATION_CPUS="$2"; shift 2 ;;
-    --runner-cpu) RUNNER_CPU="$2"; shift 2 ;;
+    --runner-cpus|--runner-cpu) RUNNER_CPUS="$2"; shift 2 ;;
     --collector-cpu) COLLECTOR_CPU="$2"; shift 2 ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 2 ;;
@@ -48,7 +48,7 @@ if [[ -z "$REPOSITORY_URL" || -z "$REGISTRATION_TOKEN" ]]; then
 fi
 cpu_role_count=0
 [[ -n "$APPLICATION_CPUS" ]] && cpu_role_count=$((cpu_role_count + 1))
-[[ -n "$RUNNER_CPU" ]] && cpu_role_count=$((cpu_role_count + 1))
+[[ -n "$RUNNER_CPUS" ]] && cpu_role_count=$((cpu_role_count + 1))
 [[ -n "$COLLECTOR_CPU" ]] && cpu_role_count=$((cpu_role_count + 1))
 if [[ $cpu_role_count -ne 0 && $cpu_role_count -ne 3 ]]; then
   echo "Configure application, runner, and collector CPU roles together, or omit all three." >&2
@@ -59,8 +59,8 @@ if [[ $cpu_role_count -eq 3 ]]; then
     echo "Invalid application CPU set: $APPLICATION_CPUS" >&2
     exit 2
   fi
-  if [[ ! "$RUNNER_CPU" =~ ^[0-9]+$ || ! "$COLLECTOR_CPU" =~ ^[0-9]+$ ]]; then
-    echo "Runner and collector roles must each contain one logical CPU." >&2
+  if [[ ! "$RUNNER_CPUS" =~ ^[0-9]+([,-][0-9]+)*$ || ! "$COLLECTOR_CPU" =~ ^[0-9]+$ ]]; then
+    echo "Runner must contain a CPU set and collector must contain one logical CPU." >&2
     exit 2
   fi
 fi
@@ -184,7 +184,7 @@ if [[ $cpu_role_count -eq 3 ]]; then
   fi
   cat >>"$filtered_env" <<EOF
 REACTOR_BENCHMARK_APPLICATION_CPU_SET=$APPLICATION_CPUS
-REACTOR_BENCHMARK_RUNNER_CPU_SET=$RUNNER_CPU
+REACTOR_BENCHMARK_RUNNER_CPU_SET=$RUNNER_CPUS
 REACTOR_BENCHMARK_COLLECTOR_CPU_SET=$COLLECTOR_CPU
 EOF
   install -o "$RUNNER_USER" -g "$RUNNER_USER" -m 0644 "$filtered_env" "$runner_env"
@@ -200,6 +200,6 @@ fi
 echo "Runner installed: $RUNNER_NAME"
 echo "Labels: self-hosted,linux,x64,$LABELS"
 if [[ $cpu_role_count -eq 3 ]]; then
-  echo "CPU roles: application=$APPLICATION_CPUS runner=$RUNNER_CPU collector=$COLLECTOR_CPU"
+  echo "CPU roles: application=$APPLICATION_CPUS runner=$RUNNER_CPUS collector=$COLLECTOR_CPU"
 fi
 echo "Do not install a second runner service on this host."
