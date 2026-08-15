@@ -150,8 +150,11 @@ runuser -u "$RUNNER_USER" -- "$INSTALL_ROOT/config.sh" \
   --labels "$LABELS" \
   --work _work
 
-"$INSTALL_ROOT/svc.sh" install "$RUNNER_USER"
-"$INSTALL_ROOT/svc.sh" start
+(
+  cd "$INSTALL_ROOT"
+  ./svc.sh install "$RUNNER_USER"
+  ./svc.sh start
+)
 
 echo "Runner installed: $RUNNER_NAME"
 echo "Labels: self-hosted,linux,x64,$LABELS"
