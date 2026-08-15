@@ -1,0 +1,41 @@
+name: Performance Runner Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: java-rust-glowroot-performance-runner
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, reactor-performance, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Semeru OpenJ9 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: semeru
+          java-version: "21"
+          cache: maven
+
+      - name: Verify runner toolchain and isolation prerequisites
+        shell: pwsh
+        run: |
+          $dockerCpu = [int] (docker info --format '{{.NCPU}}')
+          $dockerMemory = [int64] (docker info --format '{{.MemTotal}}')
+          if ($dockerCpu -lt 8 -or $dockerMemory -lt 12GB) {
+            throw "Runner capacity is below the production gate floor: CPUs=$dockerCpu memoryBytes=$dockerMemory"
+          }
+          docker version
+          java -version
+          mvn -version
+          ./benchmark/test_gate_statistics.ps1
+          ./benchmark/test_warmup_statistics.ps1
+

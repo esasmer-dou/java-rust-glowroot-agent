@@ -5,6 +5,27 @@ dependencies are packaged in `java-rust-glowroot-agent` or a user application.
 The mock collector is never deployed to production and does not replace the existing Glowroot
 Central/collector.
 
+## Runner Topology
+
+Fast local diagnosis and release evidence have different jobs:
+
+| Stage | Runner | Purpose |
+|---|---|---|
+| Unit and decision statistics | GitHub-hosted Linux | Clean, reproducible correctness checks |
+| Focused diagnosis | Local Docker/WSL | Short feedback while changing code or gate logic |
+| Full Spring and Rust-Java REST matrix | Dedicated `reactor-performance` Linux runner | Stable CPU topology, persistent Maven/Docker cache, exact-commit release evidence |
+| Package and release | GitHub-hosted Linux | Provenance, hashes, Maven Packages, and GitHub Release |
+
+The performance runner is repository-scoped and accepts only jobs carrying all of these labels:
+`self-hosted`, `reactor-performance`, `linux`, and `x64`. It needs at least eight logical CPUs,
+12 GiB available to Docker, PowerShell, Maven, and Docker socket access. One runner executes Spring
+and Rust-Java REST serially. Running both on the same host at once is faster on paper but invalidates
+CPU isolation and resident-memory evidence.
+
+Use **Performance Runner Smoke** after changing the runner installation. Use **Production Gate**
+only for a release candidate. The release workflow still requires a successful Production Gate for
+the exact tag commit; moving execution to a self-hosted runner does not weaken that safeguard.
+
 `mock-collector` parses messages using Glowroot's current protobuf contract. It verifies init,
 aggregate, gauge, and trace payloads, including transaction-count versus histogram-count equality.
 The footprint gate runs the same application image with the agent disabled and enabled.
