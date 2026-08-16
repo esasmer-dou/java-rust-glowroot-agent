@@ -35,7 +35,7 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 
 | Uygulama | Uygulamaya eklenecek paket | Native çalışma şekli | Ek telemetri thread'i |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.5.1` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
+| Rust-Java REST `4.5.2` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
 | Spring Boot `3.x`, web veya web olmayan | `java-rust-glowroot-spring-boot-starter:0.3.0` | Küçük standalone agent kütüphanesini yükler | `1` |
 | `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.3.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Aynı tek exporter kullanılır; bootstrap eklemez |
 
@@ -46,7 +46,7 @@ kalır. Böylece Spring Boot executable JAR classloader sınırı bozulmaz.
 Mevcut Glowroot collector, kullanıcı arayüzü ve veritabanı değişmez.
 
 > **Uyumluluk sınırı:** Çalışma sırasında profil değiştirme özelliği REST native ABI `29` ve
-> Glowroot ABI `3` gerektirir. Agent `0.3.0` ile Rust-Java REST `4.5.1` kullanın. Eski bir paketten
+> Glowroot ABI `3` gerektirir. Agent `0.3.0` ile Rust-Java REST `4.5.2` kullanın. Eski bir paketten
 > DLL/SO kopyalamayın.
 
 ## Hangi Verileri Alırsınız?
@@ -98,14 +98,14 @@ WebFlux uygulamasında yine çalışır; yalnız WebFlux route verisini toplamaz
 
 ## Rust-Java REST Kurulumu
 
-Uyumlu `4.5.1` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `3` içerir. Native dosyanın
+Uyumlu `4.5.2` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `3` içerir. Native dosyanın
 kaynak revision ve ABI bilgisi HTTP server başlamadan doğrulanır.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.5.1</version>
+  <version>4.5.2</version>
 </dependency>
 ```
 
@@ -557,10 +557,10 @@ uyumluluk ayrıntıları için [0.3.0 sürüm notlarını](docs/releases/0.3.0.t
 | Bileşen | Sürüm | Sözleşme |
 | --- | ---: | --- |
 | Java | `21` | Ana test JVM'i Semeru OpenJ9'dur |
-| Rust-Java REST | `4.5.1` | REST ABI `29`, Glowroot ABI `3` |
+| Rust-Java REST | `4.5.2` | REST ABI `29`, Glowroot ABI `3` |
 | Agent bootstrap | `0.3.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
 | Spring Boot starter | `0.3.0` | Spring Boot `3.x`; web'den bağımsız çekirdek ve isteğe bağlı Servlet MVC adaptörü |
-| Standalone native kaynak | `rust-spring v4.5.1` | Glowroot ABI `3`; temiz CI DLL/SO |
+| Standalone native kaynak | `rust-spring v4.5.2` | Glowroot ABI `3`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |
 
@@ -620,7 +620,7 @@ Embedded REST matrisini çalıştırmak için aynı komuta şu parametreleri ekl
 
 ```powershell
 -ApplicationKind rust-java-rest `
--RequiredRestVersion "4.5.1" `
+-RequiredRestVersion "4.5.2" `
 -RequiredRestNativeAbi 29 `
 -MemoryLimit "128m" `
 -AllowedThreadDelta 1

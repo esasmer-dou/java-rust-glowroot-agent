@@ -11,7 +11,8 @@
   MVC yalnız isteğe bağlı HTTP interceptor'ını ekler.
 
 İki yol da telemetriyi uygulama ve Hyper worker'larından ayırır. Bunun için `256 KiB` stack kullanan
-tek sınırlı thread ve tekrar kullanılan tek HTTP/2 collector bağlantısı açılır.
+tek sınırlı thread açılır. Embedded REST sınırlı HTTP/2 bağlantısını yalnız export penceresinde
+kullanır. Standalone Spring ise tek sınırlı collector bağlantısını yeniden kullanır.
 
 Release workflow, tag'in işaret ettiği commit başarılı Production Gate sonucu olmadan yayın yapmaz.
 Bu koşunun okunabilir raporu ve JSON özeti GitHub Release asset'lerine eklenir. Başka branch veya
@@ -99,7 +100,7 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Embedded native atfedilen üst sınır | PASS | Kod sayfaları dahil `0,694 MiB`; ek thread `0` |
 | Embedded resident maksimum | PASS | smaps RSS maksimumu `+1,817 MiB`; `+3 MiB` sınırının altında |
 | Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` revision'ından üretildi |
-| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; small/raw c64/c256; heavy c64/c128; REST `4.5.1`; native ABI `29` |
+| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; small/raw c64/c256; heavy c64/c128; REST `4.5.2`; native ABI `29` |
 | Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, 75 saniyelik gözlem içinde en az bir başarısız taşıma denemesi, business HTTP erişiminin devam etmesi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
 | Spring performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu, üç endpoint sınıfı ve exact-commit kanıtı |
 | Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
@@ -178,7 +179,7 @@ process yaşında beş örnek alınır. Eşleştirilmiş process RSS ve cgroup m
 
 ## Rust-Java REST Gate Nasıl Çalışır?
 
-REST gate, yayınlanmış `rust-java-rest:4.5.1` source tag'ini kullanır. Native ABI `29` değilse test
+REST gate, yayınlanmış `rust-java-rest:4.5.2` source tag'ini kullanır. Native ABI `29` değilse test
 başlamaz. Tek bir minimal production image hazırlanır. Telemetri kapalı ve açık varyantlar aynı
 fiziksel CPU üzerinde sıralı çalışır. Matris; küçük JSON, raw JSON ve heavy JSON endpoint'lerini
 c64/c256 altında ölçer. Embedded telemetri yalnızca mimarinin gerektirdiği tek sınırlı exporter
@@ -223,7 +224,7 @@ Rust-Java REST production matrisi:
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.5.1" `
+  -RequiredRestVersion "4.5.2" `
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `

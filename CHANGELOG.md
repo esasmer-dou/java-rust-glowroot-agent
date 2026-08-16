@@ -27,9 +27,9 @@ All notable changes to this project are recorded here.
 
 - Moved the exporter and profile-release loop onto one isolated `256 KiB` Rust thread in both Spring
   and Rust-Java REST. Telemetry no longer consumes Hyper workers or application executors.
-- Prepared the collector connection when that isolated exporter starts and lowered its operating-
-  system scheduling priority. Initial DNS/TCP/HTTP/2/init work no longer lands on the first
-  aggregate boundary, and application request work remains preferred under CPU pressure.
+- Validated collector reachability when the isolated exporter starts and lowered its operating-
+  system scheduling priority. Embedded REST releases that startup probe and reconnects only for a
+  bounded export window; standalone Spring reuses one bounded connection.
 - Moved Spring MVC synchronous request sampling state into one reusable per-thread primitive holder.
   Normal synchronous requests no longer touch the Servlet attribute table, and sampled synchronous
   requests no longer allocate an `Observation` object. Async redispatch keeps the bounded attribute
@@ -49,6 +49,9 @@ All notable changes to this project are recorded here.
 
 ### Fixed
 
+- Removed the embedded REST idle h2 connection from the Hyper process CPU budget. The published
+  `4.4.1` gate had already proven the export-window connection lifecycle; `4.5.2` restores that
+  behavior while retaining the isolated lower-priority exporter thread.
 - Aligned the production gate with the one-thread exporter isolation contract and extended fixed
   OpenJ9 warmup before measuring either variant.
 - Replaced the outlier-sensitive final-three min/max warmup check with two robust controls: at most
@@ -87,9 +90,9 @@ All notable changes to this project are recorded here.
 
 ### Compatibility
 
-- Agent `0.3.0` requires Glowroot native ABI `3`. The embedded path requires Rust-Java REST `4.5.1`
+- Agent `0.3.0` requires Glowroot native ABI `3`. The embedded path requires Rust-Java REST `4.5.2`
   and REST native ABI `29`.
-- Windows x64 and Linux glibc x64 binaries are produced from the same clean `rust-spring v4.5.1`
+- Windows x64 and Linux glibc x64 binaries are produced from the same clean `rust-spring v4.5.2`
   source revision and are protected by SHA-256 provenance checks.
 
 ## [0.2.1] - 2026-08-14

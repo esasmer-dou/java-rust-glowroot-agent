@@ -203,7 +203,7 @@ jobs:
             "$SPRING_SUMMARY" >/dev/null
           jq -e '.passed == true and .benchmark_classification == "production" and
             .release_evidence == true and .application_kind == "rust-java-rest" and
-            .required_rest_version == "4.5.1" and .required_rest_native_abi == 29 and
+            .required_rest_version == "4.5.2" and .required_rest_native_abi == 29 and
             .activation_mode == "embedded_native_properties" and .pair_repeats >= 3 and
             .minimum_pair_repeats == 3 and .maximum_pair_repeats == 6 and
             ((.pair_repeats < 6 and .pair_decision == "strict_early_pass") or

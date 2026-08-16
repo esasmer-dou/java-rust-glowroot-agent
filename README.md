@@ -34,7 +34,7 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 | Application | Add to the application | Native runtime | Extra telemetry thread |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.5.1` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
+| Rust-Java REST `4.5.2` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
 | Spring Boot `3.x`, web or non-web | `java-rust-glowroot-spring-boot-starter:0.3.0` | Loads the small standalone agent library | `1` |
 | Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.3.0` bootstrap | Same runtime as the row above | Same single exporter; bootstrap adds none |
 
@@ -45,7 +45,7 @@ so Spring classes never cross the executable-JAR classloader boundary.
 The existing Glowroot collector, UI, and database stay unchanged.
 
 > **Compatibility boundary:** runtime profile switching requires REST native ABI `29` and Glowroot
-> ABI `3`. Use agent `0.3.0` with Rust-Java REST `4.5.1`. Do not copy DLL/SO files from an older
+> ABI `3`. Use agent `0.3.0` with Rust-Java REST `4.5.2`. Do not copy DLL/SO files from an older
 > package.
 
 ## What You Get
@@ -97,14 +97,14 @@ still works in a WebFlux application, but it does not record WebFlux routes.
 
 ## Rust-Java REST Setup
 
-Use the coordinated `4.5.1` framework line. It contains Glowroot native ABI `3` and validates the
+Use the coordinated `4.5.2` framework line. It contains Glowroot native ABI `3` and validates the
 native provenance before the HTTP server starts.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.5.1</version>
+  <version>4.5.2</version>
 </dependency>
 ```
 
@@ -548,10 +548,10 @@ See [Validation Evidence](docs/VALIDATION.md),
 | Component | Release | Contract |
 | --- | ---: | --- |
 | Java | `21` | Semeru OpenJ9 is the primary tested JVM |
-| Rust-Java REST | `4.5.1` | REST ABI `29`, Glowroot ABI `3` |
+| Rust-Java REST | `4.5.2` | REST ABI `29`, Glowroot ABI `3` |
 | Agent bootstrap | `0.3.0` | One class; works with either supported runtime |
 | Spring Boot starter | `0.3.0` | Spring Boot `3.x`; web-independent core and optional Servlet MVC adapter |
-| Standalone native source | `rust-spring v4.5.1` | Glowroot ABI `3`; clean CI DLL/SO |
+| Standalone native source | `rust-spring v4.5.2` | Glowroot ABI `3`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
 
@@ -611,7 +611,7 @@ Use the following additional parameters to reproduce the embedded REST matrix:
 
 ```powershell
 -ApplicationKind rust-java-rest `
--RequiredRestVersion "4.5.1" `
+-RequiredRestVersion "4.5.2" `
 -RequiredRestNativeAbi 29 `
 -MemoryLimit "128m" `
 -AllowedThreadDelta 1
