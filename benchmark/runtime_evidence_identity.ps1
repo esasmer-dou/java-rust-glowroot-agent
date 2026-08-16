@@ -16,7 +16,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$runtimePaths = @("pom.xml", "agent-bootstrap", "spring-boot-starter")
+$runtimePaths = @(
+    "agent-bootstrap/src/main",
+    "spring-boot-starter/src/main/resources/native",
+    "benchmark/app.Dockerfile"
+)
 
 function Resolve-GitObject([string] $Commit, [string] $Path) {
     $object = (& git -C $projectRoot rev-parse "${Commit}:$Path" 2>&1) -join ""

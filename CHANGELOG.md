@@ -25,6 +25,12 @@ All notable changes to this project are recorded here.
 
 ### Changed
 
+- Embedded Tomcat now uses one bounded context valve instead of entering the Spring MVC interceptor
+  lifecycle on every request. Jetty, Undertow, and other Servlet containers retain the portable MVC
+  interceptor fallback. Exact `5xx`, async completion, route bounds, and the one-thread native
+  exporter contract are unchanged.
+- Added `reactor.glowroot.spring.tomcat-native.enabled=false` as an explicit escape hatch for forcing
+  the portable MVC fallback without disabling process/JVM/SQL telemetry.
 - Moved the exporter and profile-release loop onto one isolated `256 KiB` Rust thread in both Spring
   and Rust-Java REST. Telemetry no longer consumes Hyper workers or application executors.
 - Packed the embedded REST request capture state into one 32-bit value and simplified the exact

@@ -7,8 +7,9 @@
 `0.3.0` sürümünde iki farklı paketleme şekli vardır:
 
 - Rust-Java REST, framework native kütüphanesindeki exporter'ı kullanır.
-- Spring Boot, web sunucusu olsa da olmasa da standalone Rust exporter kütüphanesini yükler. Servlet
-  MVC yalnız isteğe bağlı HTTP interceptor'ını ekler.
+- Spring Boot, web sunucusu olsa da olmasa da standalone Rust exporter kütüphanesini yükler. Embedded
+  Tomcat tek sınırlı context valve ekler. Diğer Servlet container'lar taşınabilir MVC interceptor
+  kullanır.
 
 İki yol da telemetriyi uygulama ve Hyper worker'larından ayırır. Bunun için `256 KiB` stack kullanan
 tek sınırlı thread açılır. Embedded REST sınırlı HTTP/2 bağlantısını yalnız export penceresinde
@@ -139,6 +140,10 @@ Gate, starter bulunan tek bir Spring Boot image üretir. Baseline telemetriyi ka
 telemetriyi açar. Uygulama sınıfları, dependency'ler, JVM ayarları, CPU kotası ve bellek limiti aynı
 kalır.
 
+Yük başlamadan önce gate, açık candidate'ın Tomcat valve yolunu seçtiğini ve ayrıca MVC interceptor
+eklemediğini doğrular. Kapalı baseline'da iki HTTP adaptörü de bulunmamalıdır. Böylece hedeflenen
+izleme yolu devreye girmediği için hızlı görünen hatalı bir benchmark sonucu kabul edilmez.
+
 Stable release matrisi şu alanları kapsar:
 
 - küçük dynamic JSON;
@@ -174,9 +179,10 @@ Baseline ve candidate aynı, production kullanımını temsil eden OpenJ9 ayarla
 Yapılan ölçüm, bu zorlamanın Spring JIT ısınmasını uzattığını gösterdi.
 
 Yalnız benchmark, workflow veya doküman değiştiren sonraki bir commit, daha önce geçen REST matrisini
-run kimliğiyle kullanabilir. Workflow; ana POM, bootstrap modülü ve native dosyaları içeren Spring
-starter modülünün Git object değerlerini birebir karşılaştırır. Runtime tarafında tek dosya bile
-değişirse yeniden kullanım reddedilir. Kimlik kanıtı release dosyalarına eklenir. Protokol ve Spring
+run kimliğiyle kullanabilir. Workflow; bootstrap kaynaklarını, paketli standalone native kaynaklarını
+ve REST benchmark image Git object değerlerini birebir karşılaştırır. Embedded REST runtime tarafında
+tek dosya bile değişirse yeniden kullanım reddedilir. Yalnız Spring adapter kodu embedded REST yolunda
+çalışmaz. Kimlik kanıtı release dosyalarına eklenir. Protokol ve Spring
 gate'leri yine release commit'i üzerinde çalışır.
 
 Her uygulama süreci önce dört eşit ön ısınma döngüsü çalıştırır. Ardından ölçülen endpoint başına altı

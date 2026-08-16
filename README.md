@@ -77,17 +77,19 @@ inside Spring or the JVM.
 | JVM gauges | Rust | The isolated exporter discovers and owns JNI global references, invokes the selected MXBeans, aggregates values, and builds the gauge message |
 | Diagnostics | Rust | The command queue, JNI calls, bounded orchestration, file creation, atomic publication, failure cleanup, and counters stay in Rust |
 | Profile lifecycle | Rust | Optional state is allocated, retired, dropped, and optionally trimmed outside Hyper and application workers |
-| Optional Spring MVC edge | Java, constant-time only | Supplies the matched route, status, async completion, timestamp, and optional `Throwable` reference to Rust |
+| Optional Spring HTTP edge | Java, constant-time only | Tomcat uses one native context valve; other Servlet containers use the portable MVC interceptor. Both supply only the matched route, status, completion time, and optional `Throwable` reference to Rust |
 | JVM internals | JVM, invoked by Rust | MXBean and dump APIs still execute inside the JVM because that is where the data exists; no Java helper, polling thread, cache, or direct-buffer callback is used |
 
 The native lifecycle is independent of Spring Web. A database worker, Kafka application, scheduler,
 or command-line Spring Boot service can therefore export process and profile-specific JVM/SQL data
 without adding MVC, a Servlet container, or a Java telemetry executor.
 
-Rust-Java REST HTTP telemetry is already recorded directly in the Rust server. Spring MVC cannot
-derive the final matched controller route from the socket layer. Moving its small edge adapter to
-Rust would require another JNI call at request start or general JVMTI/bytecode weaving. Both options
-increase request cost and violate the performance contract, so they are deliberately rejected.
+Rust-Java REST HTTP telemetry is already recorded directly in the Rust server. In Spring Boot with
+embedded Tomcat, one context valve observes completion without entering the Spring MVC interceptor
+lifecycle. The final matched controller route still comes from Spring's request attribute. Other
+Servlet containers use the portable MVC interceptor fallback. Moving that last route lookup to Rust
+would require another JNI call at request start or general JVMTI/bytecode weaving, so it is
+deliberately avoided.
 
 This is intentionally not a replacement for every full Glowroot feature. It does not weave arbitrary
 Java methods, wrap every JDBC object, run a profiler, capture logs, or accept remote instrumentation.
@@ -165,11 +167,11 @@ Then run the existing Spring Boot application:
 java -jar orders-api.jar
 ```
 
-In a Servlet MVC application, Spring auto-configuration registers one MVC interceptor. It reads the
-normalized route pattern selected by Spring, such as `/orders/{id}`, after the handler completes. It
-does not add a Servlet filter, scan application classes, or create a Java worker pool. A normal
-unsampled success creates no agent request object. Sampled, slow, failed, and async requests reuse
-Spring MVC's completion lifecycle. Mapped status codes and unhandled failures remain exact.
+With embedded Tomcat, auto-configuration installs one bounded context valve. It reads the normalized
+route pattern selected by Spring, such as `/orders/{id}`, after the request completes. It does not add
+a Servlet filter, enter the MVC interceptor lifecycle, scan application classes, or create a Java
+worker pool. Jetty, Undertow, and other Servlet containers keep the portable MVC interceptor fallback.
+Mapped status codes, unhandled failures, and async completion remain exact on both paths.
 
 ### 2. Non-web applications
 
@@ -199,9 +201,10 @@ methods. Kafka/scheduler business-operation timing is therefore not automatic in
 and JVM evidence is automatic; database timing is explicit through the reusable `SqlStatement` API
 shown below. This keeps the hot path predictable and avoids a framework-specific Java agent layer.
 
-`reactor.glowroot.spring.enabled=false` disables only the optional MVC interceptor. It is useful when
-a web application needs process/JVM/SQL telemetry but no HTTP telemetry. To stop the native runtime
-and remove its exporter thread, use `reactor.glowroot.enabled=false`.
+`reactor.glowroot.spring.enabled=false` disables both optional Spring HTTP adapters. It is useful when
+a web application needs process/JVM/SQL telemetry but no HTTP telemetry. To test or force the portable
+MVC fallback on Tomcat, set `reactor.glowroot.spring.tomcat-native.enabled=false`. To stop the native
+runtime and remove its exporter thread, use `reactor.glowroot.enabled=false`.
 
 ### 3. Optional early-start bootstrap
 
@@ -314,8 +317,9 @@ underscores. Example: `reactor.glowroot.max-export-bytes` becomes
 | `reactor.glowroot.error.max-bytes` | `4096` | 256-8192 | Maximum UTF-8 error detail size |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Maximum retained HTTP route slots |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Maximum encoded collector request |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables only the optional Spring MVC interceptor; the native core is controlled by `reactor.glowroot.enabled` |
-| `reactor.glowroot.spring.order` | `-2147483548` | integer | MVC interceptor order; former `interceptor-order` and `filter-order` names remain aliases |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | Enables the optional Spring HTTP adapter; the native core is controlled by `reactor.glowroot.enabled` |
+| `reactor.glowroot.spring.tomcat-native.enabled` | `true` | boolean | Uses the lower-overhead Tomcat context valve. Set `false` only to force the portable MVC fallback |
+| `reactor.glowroot.spring.order` | `-2147483548` | integer | Portable MVC fallback order; former `interceptor-order` and `filter-order` names remain aliases |
 | `reactor.glowroot.native.extract-dir` | user home | directory | Standalone Spring native extraction directory |
 | `reactor.glowroot.native.path` | empty | existing DLL/SO path | Development and staging override; production should use packaged binaries |
 
@@ -553,7 +557,7 @@ See [Validation Evidence](docs/VALIDATION.md),
 | Java | `21` | Semeru OpenJ9 is the primary tested JVM |
 | Rust-Java REST | `4.5.4` | REST ABI `29`, Glowroot ABI `3` |
 | Agent bootstrap | `0.3.0` | One class; works with either supported runtime |
-| Spring Boot starter | `0.3.0` | Spring Boot `3.x`; web-independent core and optional Servlet MVC adapter |
+| Spring Boot starter | `0.3.0` | Spring Boot `3.x`; web-independent core, Tomcat valve fast path, and portable Servlet MVC fallback |
 | Standalone native source | `rust-spring v4.5.4` | Glowroot ABI `3`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |

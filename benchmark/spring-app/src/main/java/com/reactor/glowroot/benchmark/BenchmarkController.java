@@ -2,7 +2,9 @@ package com.reactor.glowroot.benchmark;
 
 import com.reactor.glowroot.agent.runtime.NativeTelemetry;
 import com.reactor.glowroot.agent.runtime.TelemetryProfile;
+import com.reactor.glowroot.agent.spring.RustGlowrootInterceptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,9 +23,13 @@ final class BenchmarkController {
     private static final byte[] RAW_JSON = "{\"status\":\"ok\",\"source\":\"precomputed\"}"
             .getBytes(StandardCharsets.UTF_8);
     private final ObjectProvider<NativeTelemetry> telemetry;
+    private final ApplicationContext applicationContext;
 
-    BenchmarkController(ObjectProvider<NativeTelemetry> telemetry) {
+    BenchmarkController(
+            ObjectProvider<NativeTelemetry> telemetry,
+            ApplicationContext applicationContext) {
         this.telemetry = telemetry;
+        this.applicationContext = applicationContext;
     }
 
     @GetMapping(path = "/health", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -58,6 +64,15 @@ final class BenchmarkController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping(path = "/internal/benchmark/telemetry-adapter", produces = MediaType.APPLICATION_JSON_VALUE)
+    AdapterResponse telemetryAdapter() {
+        return new AdapterResponse(
+                telemetry.getIfAvailable() != null,
+                applicationContext.containsBean("rustGlowrootTomcatValveCustomizer"),
+                !applicationContext.getBeansOfType(RustGlowrootInterceptor.class).isEmpty()
+        );
+    }
+
     @GetMapping(path = "/api/heavy", produces = MediaType.APPLICATION_JSON_VALUE)
     HeavyResponse heavy(@RequestParam(name = "items", defaultValue = "100") int items) {
         int boundedItems = Math.max(1, Math.min(items, 250));
@@ -77,4 +92,6 @@ final class BenchmarkController {
     record HeavyItem(int id, String name, long score, boolean featured) {}
 
     record ProfileResponse(String profile) {}
+
+    record AdapterResponse(boolean enabled, boolean tomcatValve, boolean mvcInterceptor) {}
 }

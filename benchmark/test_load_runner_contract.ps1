@@ -60,6 +60,12 @@ Assert-Contains $gate 'Reset-ReactorListToCount -List \$steadyMemory' `
         "An invalid process pair must not leak memory samples into release evidence."
 Assert-Contains $gate 'Reset-ReactorListToCount -List \$warmups' `
         "An invalid process pair must not leak warmup samples into release evidence."
+Assert-Contains $gate 'function Assert-SpringTelemetryAdapter' `
+        "The Spring release gate must verify the selected HTTP adapter."
+Assert-Contains $gate '\$adapter\.tomcatValve -ne \$true' `
+        "The Spring candidate must use the Tomcat valve fast path."
+Assert-Contains $gate '\$adapter\.mvcInterceptor -ne \$false' `
+        "The Tomcat fast path must not also register the MVC interceptor."
 Assert-Contains $gate 'Set-ReactorCurrentProcessCpuAffinity -CpuSet \$OrchestratorCpuSet' `
         "Benchmark orchestration must not share the wrk CPU set."
 Assert-Contains $protocolGate '\$OrchestratorCpuSet = \$selectedRoles\.orchestrator' `

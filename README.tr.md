@@ -78,17 +78,19 @@ ileten sabit maliyetli sınırdır.
 | JVM ölçümleri | Rust | İzole exporter, JNI global referanslarını bulur ve sahiplenir; seçilen MXBean metotlarını çağırır, değerleri toplar ve gauge mesajını üretir |
 | Tanılama | Rust | Komut kuyruğu, JNI çağrısı, sınırlı yürütme, dosya yazma, atomik yayın, hata temizliği ve sayaçlar Rust'ta kalır |
 | Profil yaşam döngüsü | Rust | İsteğe bağlı state ayrılır, emekliye alınır, bırakılır ve gerekirse Hyper ile uygulama worker'larından uzakta trim edilir |
-| İsteğe bağlı Spring MVC sınırı | Java, yalnız sabit maliyetli geçiş | Eşleşen route, HTTP status, async tamamlanma, zaman ve gerekirse `Throwable` referansını Rust'a verir |
+| İsteğe bağlı Spring HTTP sınırı | Java, yalnız sabit maliyetli geçiş | Tomcat'te tek context valve, diğer Servlet container'larda taşınabilir MVC interceptor kullanılır. Rust'a yalnız eşleşen route, HTTP status, tamamlanma süresi ve gerekirse `Throwable` referansı verilir |
 | JVM iç işlemleri | JVM, Rust tarafından çağrılır | Veri JVM içinde olduğu için MXBean ve dump API'leri JVM'de çalışır; Java yardımcı sınıfı, polling thread'i, cache veya direct-buffer callback'i yoktur |
 
 Native yaşam döngüsü Spring Web'e bağlı değildir. Veritabanı worker'ı, Kafka uygulaması, scheduler
 veya komut satırı Spring Boot servisi; MVC, Servlet container ya da Java telemetri executor'ı
 eklemeden process ve seçilen profile ait JVM/SQL verisini gönderebilir.
 
-Rust-Java REST HTTP telemetrisi doğrudan Rust server içinde kaydedilir. Spring MVC'de son eşleşen
-controller route'u socket katmanından öğrenilemez. Küçük Spring adaptörünü de Rust'a taşımak, request
-başında ek JNI çağrısı veya genel JVMTI/bytecode weaving gerektirir. İki seçenek de request maliyetini
-artırır. Bu nedenle performans sözleşmesini korumak için bilinçli olarak kullanılmaz.
+Rust-Java REST HTTP telemetrisi doğrudan Rust server içinde kaydedilir. Embedded Tomcat kullanan
+Spring Boot uygulamasında tek context valve, Spring MVC interceptor yaşam döngüsüne girmeden isteğin
+tamamlanmasını izler. Son eşleşen controller route'u yine Spring'in request attribute değerinden
+alınır. Diğer Servlet container'larda taşınabilir MVC interceptor fallback'i kullanılır. Bu son route
+okumasını Rust'a taşımak request başında ek JNI çağrısı veya genel bytecode weaving gerektireceği için
+bilinçli olarak yapılmaz.
 
 Bu agent, bütün Glowroot özelliklerinin küçük bir kopyası değildir. Rastgele Java metotlarını
 işaretlemez. Her JDBC nesnesini proxy ile sarmaz. Profiler, log toplama ve uzaktan enstrümantasyon
@@ -166,12 +168,12 @@ Mevcut Spring Boot uygulamasını başlatın:
 java -jar orders-api.jar
 ```
 
-Servlet MVC uygulamasında Spring auto-configuration tek bir MVC interceptor ekler. Spring'in seçtiği
-`/orders/{id}` gibi normalize edilmiş endpoint kalıbını handler tamamlandıktan sonra okur. Servlet
-filter eklemez. Uygulama sınıflarını taramaz ve Java worker pool oluşturmaz. Örneklenmeyen normal bir
-başarılı istek için agent request nesnesi ayırmaz. Örneklenen, yavaş, hatalı ve async isteklerde Spring
-MVC'nin completion akışını kullanır. Handler'ın ürettiği durum kodları ve yakalanmamış hatalar tam
-sayılır.
+Embedded Tomcat kullanıldığında auto-configuration tek bir sınırlı context valve ekler. Spring'in
+seçtiği `/orders/{id}` gibi normalize edilmiş endpoint kalıbını istek tamamlandıktan sonra okur.
+Servlet filter eklemez, MVC interceptor yaşam döngüsüne girmez, uygulama sınıflarını taramaz ve Java
+worker pool oluşturmaz. Jetty, Undertow ve diğer Servlet container'larda taşınabilir MVC interceptor
+fallback'i kullanılır. İki yolda da durum kodları, yakalanmamış hatalar ve async tamamlanma doğru
+şekilde kaydedilir.
 
 ### 2. Web olmayan uygulamalar
 
@@ -202,10 +204,11 @@ toplanmaz. Process ve JVM verisi otomatik alınır. Veritabanı süresini aşağ
 `SqlStatement` API'si ile açıkça kaydedebilirsiniz. Böylece hot path öngörülebilir kalır ve ek bir
 framework-specific Java agent katmanı oluşmaz.
 
-`reactor.glowroot.spring.enabled=false` yalnız isteğe bağlı MVC interceptor'ını kapatır. Web
+`reactor.glowroot.spring.enabled=false` isteğe bağlı iki Spring HTTP adaptörünü de kapatır. Web
 uygulamasında HTTP verisini kapatıp process/JVM/SQL verisini açık bırakmak için kullanabilirsiniz.
-Native runtime'ı ve exporter thread'ini tamamen kapatmak için `reactor.glowroot.enabled=false`
-kullanın.
+Tomcat üzerinde taşınabilir MVC fallback'ini zorlamak veya karşılaştırmak için
+`reactor.glowroot.spring.tomcat-native.enabled=false` kullanın. Native runtime'ı ve exporter
+thread'ini tamamen kapatmak için `reactor.glowroot.enabled=false` kullanın.
 
 ### 3. İsteğe bağlı erken başlangıç bootstrap'ı
 
@@ -319,8 +322,9 @@ tire yerine alt çizgi kullanın. Örnek: `reactor.glowroot.max-export-bytes`,
 | `reactor.glowroot.error.max-bytes` | `4096` | 256-8192 | Bir hatanın en fazla UTF-8 ayrıntı boyutu |
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Bellekte tutulacak en fazla endpoint sayısı |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Tek collector mesajının en büyük boyutu |
-| `reactor.glowroot.spring.enabled` | `true` | boolean | Yalnız isteğe bağlı Spring MVC interceptor'ını açar; native çekirdeği `reactor.glowroot.enabled` yönetir |
-| `reactor.glowroot.spring.order` | `-2147483548` | integer | MVC interceptor sırası; eski `interceptor-order` ve `filter-order` adları da çalışır |
+| `reactor.glowroot.spring.enabled` | `true` | boolean | İsteğe bağlı Spring HTTP adaptörünü açar; native çekirdeği `reactor.glowroot.enabled` yönetir |
+| `reactor.glowroot.spring.tomcat-native.enabled` | `true` | boolean | Daha düşük maliyetli Tomcat context valve yolunu kullanır. Yalnız taşınabilir MVC fallback'ini zorlamak için `false` yapın |
+| `reactor.glowroot.spring.order` | `-2147483548` | integer | Taşınabilir MVC fallback sırası; eski `interceptor-order` ve `filter-order` adları da çalışır |
 | `reactor.glowroot.native.extract-dir` | kullanıcı home dizini | dizin | Spring standalone native çıkarma dizini |
 | `reactor.glowroot.native.path` | boş | mevcut DLL/SO yolu | Geliştirme ve staging override değeri; production'da paketli binary kullanın |
 
@@ -563,7 +567,7 @@ uyumluluk ayrıntıları için [0.3.0 sürüm notlarını](docs/releases/0.3.0.t
 | Java | `21` | Ana test JVM'i Semeru OpenJ9'dur |
 | Rust-Java REST | `4.5.4` | REST ABI `29`, Glowroot ABI `3` |
 | Agent bootstrap | `0.3.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
-| Spring Boot starter | `0.3.0` | Spring Boot `3.x`; web'den bağımsız çekirdek ve isteğe bağlı Servlet MVC adaptörü |
+| Spring Boot starter | `0.3.0` | Spring Boot `3.x`; web'den bağımsız çekirdek, Tomcat valve hızlı yolu ve taşınabilir Servlet MVC fallback'i |
 | Standalone native kaynak | `rust-spring v4.5.4` | Glowroot ABI `3`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |

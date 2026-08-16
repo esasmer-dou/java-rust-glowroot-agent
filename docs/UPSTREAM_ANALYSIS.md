@@ -18,7 +18,8 @@ The target is narrower than the full Glowroot agent:
 - expose HTTP, native Dubbo, native Redis, RSS, thread, and exporter-health telemetry in Glowroot;
 - add JVM/GC gauges, explicit SQL timings, bounded error stacks, and diagnostic commands only through
   temporary runtime profiles;
-- add no Java request filter to Rust-Java REST and only one bounded MVC interceptor to Spring MVC;
+- add no Java request filter to Rust-Java REST; use the Tomcat context-valve fast path in Spring Boot
+  and only one bounded MVC interceptor fallback on other Servlet containers;
 - keep all state, queues, payloads, and reconnect behavior bounded;
 - keep agent-owned state and feature pages below `1 MiB`, and isolate all exporter/profile-release
   work on one bounded native thread that never consumes Hyper or application workers.

@@ -8,13 +8,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.AsyncHandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-
 /** Low-allocation Spring MVC request timing adapter. */
 public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
 
-    private static final int DISABLED_SLOT = -1;
+    private static final int DISABLED_SLOT = HttpRouteRegistry.DISABLED_SLOT;
     private static final int TIMED_OBSERVATION = 1;
     private static final int SAMPLED_OBSERVATION = 1 << 1;
     private static final String UNMATCHED_ROUTE = "<unmatched>";
@@ -28,7 +25,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
     private final boolean slowTraceEnabled;
     private final long slowThresholdNanos;
     private final ThreadLocal<RequestState> requestState;
-    private final RouteSlotTable routeSlots;
+    private final HttpRouteRegistry routeSlots;
 
     /**
      * Creates the low-allocation MVC interceptor.
@@ -37,7 +34,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
      * @param config bounded telemetry configuration
      */
     public RustGlowrootInterceptor(NativeTelemetry telemetry, TelemetryConfig config) {
-        this(new NativeRecorder(telemetry), config);
+        this(new NativeHttpTelemetryRecorder(telemetry), config);
     }
 
     RustGlowrootInterceptor(HttpTelemetryRecorder telemetry, TelemetryConfig config) {
@@ -50,24 +47,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
                 : config.slowThresholdMs() * 1_000_000L;
         this.requestState = ThreadLocal.withInitial(() ->
                 new RequestState(initialSampleOffset(Thread.currentThread().threadId(), sampleMask)));
-        this.routeSlots = new RouteSlotTable(config.maxRoutes());
-    }
-
-    private record NativeRecorder(NativeTelemetry telemetry) implements HttpTelemetryRecorder {
-        @Override
-        public int registerHttpRoute(String method, String route) {
-            return telemetry.registerHttpRoute(method, route);
-        }
-
-        @Override
-        public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
-            telemetry.recordHttp(slot, status, durationNanos, sampleWeight);
-        }
-
-        @Override
-        public void recordError(int slot, long durationNanos, Throwable error) {
-            telemetry.recordError(slot, durationNanos, error);
-        }
+        this.routeSlots = new HttpRouteRegistry(config.maxRoutes());
     }
 
     @Override
@@ -179,76 +159,6 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
     }
 
     private record Observation(boolean sampled, long startedAtNanos) {}
-
-    /** Fixed-capacity route table; lookups do not allocate temporary composite keys. */
-    private static final class RouteSlotTable {
-        private static final VarHandle STRING_ELEMENT =
-                MethodHandles.arrayElementVarHandle(String[].class);
-
-        private final int maxRoutes;
-        private final int mask;
-        private final String[] methods;
-        private final String[] routes;
-        private final int[] slots;
-        private int size;
-
-        private RouteSlotTable(int maxRoutes) {
-            int capacity = 2;
-            while (capacity < maxRoutes * 2) capacity <<= 1;
-            this.maxRoutes = maxRoutes;
-            this.mask = capacity - 1;
-            this.methods = new String[capacity];
-            this.routes = new String[capacity];
-            this.slots = new int[capacity];
-        }
-
-        private int getOrRegister(
-                String method,
-                String route,
-                HttpTelemetryRecorder telemetry) {
-            int registered = find(method, route);
-            if (registered != DISABLED_SLOT) return registered;
-            return register(method, route, telemetry);
-        }
-
-        private int find(String method, String route) {
-            int index = spreadHash(method, route) & mask;
-            String registeredMethod;
-            while ((registeredMethod = (String) STRING_ELEMENT.getAcquire(methods, index)) != null) {
-                if (registeredMethod.equals(method) && routes[index].equals(route)) {
-                    return slots[index];
-                }
-                index = (index + 1) & mask;
-            }
-            return DISABLED_SLOT;
-        }
-
-        private synchronized int register(
-                String method,
-                String route,
-                HttpTelemetryRecorder telemetry) {
-            int registered = find(method, route);
-            if (registered != DISABLED_SLOT) return registered;
-            if (size >= maxRoutes) return DISABLED_SLOT;
-
-            int index = spreadHash(method, route) & mask;
-            while ((String) STRING_ELEMENT.getAcquire(methods, index) != null) {
-                index = (index + 1) & mask;
-            }
-            int slot = telemetry.registerHttpRoute(method, route);
-            if (slot == DISABLED_SLOT) return DISABLED_SLOT;
-            routes[index] = route;
-            slots[index] = slot;
-            STRING_ELEMENT.setRelease(methods, index, method);
-            size++;
-            return slot;
-        }
-
-        private static int spreadHash(String method, String route) {
-            int hash = 31 * method.hashCode() + route.hashCode();
-            return hash ^ (hash >>> 16);
-        }
-    }
 
     private static final class RequestState {
         private int remaining;

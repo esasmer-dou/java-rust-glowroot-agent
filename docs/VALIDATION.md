@@ -7,8 +7,8 @@
 Version `0.3.0` has two intentionally different packaging shapes:
 
 - Rust-Java REST uses the exporter included in the framework's native library.
-- Spring Boot, with or without a web server, loads the standalone Rust exporter library. Servlet MVC
-  adds only the optional HTTP interceptor.
+- Spring Boot, with or without a web server, loads the standalone Rust exporter library. Embedded
+  Tomcat adds one bounded context valve; other Servlet containers add the portable MVC interceptor.
 
 Both paths isolate telemetry from application and Hyper workers on one bounded thread with a
 `256 KiB` stack. Embedded REST opens a bounded HTTP/2 connection only for an export window;
@@ -137,6 +137,10 @@ The gate builds one Spring Boot image with the starter present. Baseline disable
 Candidate enables it. This keeps the application classes, dependencies, JVM flags, CPU quota, and
 memory limit identical.
 
+Before load starts, the gate proves that the enabled candidate selected the Tomcat valve and did not
+also register the MVC interceptor. The disabled baseline must contain neither HTTP adapter. This
+prevents a fast benchmark from passing because the intended instrumentation path was absent.
+
 The stable release matrix covers:
 
 - small dynamic JSON;
@@ -171,8 +175,9 @@ Baseline and candidate use the same production-representative OpenJ9 settings wi
 used because measured Spring evidence showed that they prolonged the JIT ramp.
 
 A benchmark/workflow-only follow-up may reuse a passing REST matrix by run id. The workflow compares
-the Git objects for the root POM, bootstrap module, and Spring starter/native module. Reuse is rejected
-if any runtime object differs. The release includes this identity manifest, while protocol and Spring
+the Git objects for the bootstrap sources/resources, standalone native resources, and REST benchmark
+image. Reuse is rejected if any embedded runtime object differs. Spring-only adapter code does not
+run in the embedded REST path. The release includes this identity manifest, while protocol and Spring
 gates still execute on the release commit.
 
 Each application process receives four equal pre-warm cycles and six measured warmup rounds per

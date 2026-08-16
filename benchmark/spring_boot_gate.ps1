@@ -566,6 +566,23 @@ function Assert-NativeTelemetryLoaded([string] $Name) {
     }
 }
 
+function Assert-SpringTelemetryAdapter([string] $Name, [bool] $Enabled) {
+    if ($IsRustJavaRest) { return }
+    $adapter = Invoke-Curl "http://${Name}:8080/internal/benchmark/telemetry-adapter" |
+            ConvertFrom-Json
+    if ($Enabled) {
+        if ($adapter.enabled -ne $true -or $adapter.tomcatValve -ne $true `
+                -or $adapter.mvcInterceptor -ne $false) {
+            throw "Spring candidate did not select the Tomcat valve fast path: $($adapter | ConvertTo-Json -Compress)"
+        }
+        return
+    }
+    if ($adapter.enabled -ne $false -or $adapter.tomcatValve -ne $false `
+            -or $adapter.mvcInterceptor -ne $false) {
+        throw "Spring baseline unexpectedly enabled telemetry: $($adapter | ConvertTo-Json -Compress)"
+    }
+}
+
 function Invoke-RouteSmoke([string] $Name) {
     foreach ($path in @($EndpointMap.Values | Sort-Object -Unique)) {
         Invoke-Curl "http://${Name}:8080$path" | Out-Null
@@ -886,6 +903,7 @@ try {
                 if ($enabled) {
                     Assert-NativeTelemetryLoaded $name
                 }
+                Assert-SpringTelemetryAdapter -Name $name -Enabled $enabled
                 Invoke-RouteSmoke $name
                 Invoke-InterleavedPreWarm $name
                 $warmupSamples = Invoke-InterleavedWarmup $name
@@ -957,6 +975,8 @@ try {
             $startups.Add([pscustomobject]@{ pair = $pair; variant = "baseline"; ms = (Start-App $Baseline $baselineCpu $false $pair) })
         }
         Assert-NativeTelemetryLoaded $Candidate
+        Assert-SpringTelemetryAdapter -Name $Baseline -Enabled $false
+        Assert-SpringTelemetryAdapter -Name $Candidate -Enabled $true
         foreach ($variant in @("baseline", "candidate")) {
             $name = if ($variant -eq "baseline") { $Baseline } else { $Candidate }
             Invoke-RouteSmoke $name

@@ -75,8 +75,9 @@ measured trial prolonged the Spring JIT ramp and made the evidence less represen
 
 If a later commit changes only benchmark, workflow, or documentation files, the production workflow
 can reuse an earlier passing REST matrix with `rest_evidence_run_id`. Reuse is content-addressed, not
-trust-based: `pom.xml`, `agent-bootstrap`, and `spring-boot-starter` Git objects must match exactly,
-including packaged native binaries. Any runtime change fails closed and requires a new matrix. The
+trust-based: the bootstrap sources/resources, packaged standalone native resources, and REST
+benchmark image Git objects must match exactly. Spring-only adapter code is not part of the embedded
+REST runtime and cannot invalidate REST measurements. Any embedded runtime change fails closed and requires a new matrix. The
 current commit still runs protocol and Spring integration gates.
 
 For development-only feedback, run a short c64 small/raw JSON matrix locally:
@@ -95,8 +96,9 @@ The footprint gate runs the same application image with the agent disabled and e
 ## Spring Boot Gate
 
 The Spring gate builds one executable Spring Boot image and runs it with the starter present in both
-variants. Baseline keeps telemetry disabled. Candidate enables the MVC interceptor and standalone
-Rust exporter through system properties. This is the recommended strict-memory production path.
+variants. Baseline keeps telemetry disabled. Candidate enables the Tomcat context-valve fast path and
+standalone Rust exporter through system properties. The gate rejects a candidate that falls back to
+the MVC interceptor or enables both adapters. This is the recommended strict-memory production path.
 The same-image design prevents application dependencies or JVM flags from being mistaken for agent
 overhead.
 

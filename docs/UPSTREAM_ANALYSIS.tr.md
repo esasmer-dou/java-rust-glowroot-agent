@@ -18,7 +18,8 @@ Hedefimiz tam Glowroot agent'tan daha dardır:
 - HTTP, native Dubbo, native Redis, RSS, thread ve exporter sağlık verileri Glowroot'ta görülecek;
 - JVM/GC ölçümleri, açık SQL süreleri, sınırlı hata stack bilgisi ve tanılama komutları yalnız geçici
   çalışma profilleriyle açılacak;
-- Rust-Java REST'e Java request filter eklenmeyecek; Spring MVC'de yalnız bir sınırlı MVC interceptor kullanılacak;
+- Rust-Java REST'e Java request filter eklenmeyecek; Spring Boot'ta Tomcat context valve hızlı yolu,
+  diğer Servlet container'larda yalnız sınırlı MVC interceptor fallback'i kullanılacak;
 - state, queue, payload ve reconnect davranışının tamamı sınırlı olacak;
 - agent-owned state ve feature sayfaları `1 MiB` altında kalacak; exporter ve profil kaynak bırakma
   işleri Hyper veya uygulama worker'larını kullanmayan tek sınırlı native thread üzerinde çalışacak.

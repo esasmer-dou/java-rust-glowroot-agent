@@ -20,6 +20,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass({AsyncHandlerInterceptor.class, DispatcherServlet.class})
 @ConditionalOnBean(NativeTelemetry.class)
+@ConditionalOnMissingBean(name = RustGlowrootTomcatAutoConfiguration.CUSTOMIZER_BEAN)
 @ConditionalOnProperty(
         prefix = "reactor.glowroot.spring",
         name = "enabled",

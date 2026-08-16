@@ -113,11 +113,11 @@ profile's contract.
 
 ## Spring Boot Boundary
 
-Spring Boot support has two separate auto-configuration layers. The web-independent core owns the
+Spring Boot support has three auto-configuration layers. The web-independent core owns the
 process-scoped `NativeTelemetry` lifecycle and standalone native binary. It has no Servlet or Spring
 MVC condition and therefore starts in database workers, Kafka applications, schedulers, batch jobs,
-and command-line services. The optional MVC layer is the only layer guarded by Servlet web-application
-and MVC class conditions. It registers one interceptor when those conditions are present.
+and command-line services. The optional HTTP layer selects one Tomcat context valve when embedded
+Tomcat is present. Other Servlet containers select one portable MVC interceptor instead.
 
 Packaging still uses two deliberately separate artifacts. The bootstrap JAR contains one premain
 class and only maps bounded arguments to properties. The starter stays in Spring Boot's application
@@ -126,11 +126,11 @@ failure caused by putting Spring classes in a `-javaagent` JAR used with an exec
 archive. MVC, Tomcat, and Servlet dependencies are not transitively added to a non-web application.
 
 Successful requests are sampled in Java before JNI. Mapped MVC handler `5xx` responses remain exact.
-The interceptor resolves Spring's normalized route pattern after dispatch only for a sampled, slow,
-or failed request. An unsampled successful request allocates no agent request object. Sampled or
-trace-enabled requests retain one small observation on the request; async redispatch reuses Spring
-MVC's existing completion lifecycle. The adapter creates no Java executor, Servlet filter, or
-classpath scan. The standalone Rust library runs one current-thread
+The Tomcat valve obtains request start time from Tomcat's existing Coyote request and resolves
+Spring's normalized route pattern after completion only for a sampled, slow, or failed request. It
+does not enter the MVC interceptor lifecycle. The portable fallback keeps the same bounded sampling
+and exact error contract for other Servlet containers. Both adapters create no Java executor,
+Servlet filter, or classpath scan. The standalone Rust library runs one current-thread
 Tokio exporter on a `256 KiB` stack. Every queue, route table, trace buffer, message, and DNS address
 set is bounded by the same native engine contract.
 

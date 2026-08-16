@@ -112,11 +112,11 @@ pod yeniden başlatılmalıdır; bu kullanım profil sözleşmesinin dışındad
 
 ## Spring Boot Sınırı
 
-Spring Boot desteği iki ayrı auto-configuration katmanından oluşur. Web'den bağımsız çekirdek,
+Spring Boot desteği üç auto-configuration katmanından oluşur. Web'den bağımsız çekirdek,
 process-scoped `NativeTelemetry` yaşam döngüsünü ve standalone native binary'yi yönetir. Servlet veya
 Spring MVC koşulu yoktur. Bu nedenle veritabanı worker'ında, Kafka uygulamasında, scheduler'da, batch
-işinde ve komut satırı servisinde çalışır. İsteğe bağlı MVC katmanı ise yalnız Servlet web uygulaması
-ve MVC sınıfları varsa devreye girer. Tek bir interceptor ekler.
+işinde ve komut satırı servisinde çalışır. İsteğe bağlı HTTP katmanı embedded Tomcat varsa tek context
+valve seçer. Diğer Servlet container'larda tek taşınabilir MVC interceptor seçilir.
 
 Paketleme yine bilinçli olarak iki ayrı artifact kullanır. Bootstrap JAR içinde yalnız bir premain
 sınıfı vardır ve sınırlı argümanları property'lere aktarır. Starter, Spring Boot uygulama
@@ -125,11 +125,11 @@ Spring Boot JAR ile kullanılan `-javaagent` JAR içine konulduğunda oluşan pa
 hatasını önler. Web olmayan uygulamaya MVC, Tomcat veya Servlet bağımlılığı transitif olarak eklenmez.
 
 Başarılı istekler JNI çağrısından önce Java tarafında örneklenir. Eşleşen MVC handler'larının `5xx`
-yanıtları tam sayılır. Interceptor, normalize edilmiş route kalıbını MVC dispatch tamamlandıktan sonra
-yalnız örneklenen, yavaş veya hatalı istekte çözer. Örneklenmeyen başarılı istekte agent request
-nesnesi ayırmaz. Örneklenen veya trace açık olan istekte request üzerinde tek küçük observation tutar.
-Async redispatch için Spring MVC'nin mevcut completion akışını kullanır. Java executor, Servlet
-filter veya classpath taraması oluşturmaz. Standalone Rust
+yanıtları tam sayılır. Tomcat valve, başlangıç zamanını Tomcat'in mevcut Coyote request bilgisinden
+alır. Normalize edilmiş route kalıbını yalnız örneklenen, yavaş veya hatalı istek tamamlandığında
+çözer ve MVC interceptor yaşam döngüsüne girmez. Diğer Servlet container'lardaki taşınabilir fallback
+aynı sınırlı sampling ve tam hata sözleşmesini korur. İki adaptör de Java executor, Servlet filter veya
+classpath taraması oluşturmaz. Standalone Rust
 kütüphanesi, `256 KiB` stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint
 tablosu, trace buffer, mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.
 
