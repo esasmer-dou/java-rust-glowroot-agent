@@ -11,6 +11,7 @@ param(
     [string] $SlotBCpuSet = "2",
     [string] $RunnerCpuSet = "4-5",
     [string] $CollectorCpuSet = "6",
+    [string] $OrchestratorCpuSet = "7",
     [int] $InterPairCooldownSeconds = 3,
     [int] $PhaseCooldownSeconds = 15,
     [int] $StartupRepeats = 6,
@@ -579,14 +580,16 @@ if ($AutoSelectCpuRoles) {
     $SlotBCpuSet = $selectedRoles.application
     $RunnerCpuSet = $selectedRoles.runner
     $CollectorCpuSet = $selectedRoles.collector
+    $OrchestratorCpuSet = $selectedRoles.orchestrator
 }
-Set-ReactorCurrentProcessCpuAffinity -CpuSet $RunnerCpuSet
+Set-ReactorCurrentProcessCpuAffinity -CpuSet $OrchestratorCpuSet
 Assert-ReactorBenchmarkCpuIsolation `
         -RunnerImage $RunnerImage `
         -SlotACpuSet $SlotACpuSet `
         -SlotBCpuSet $SlotBCpuSet `
         -RunnerCpuSet $RunnerCpuSet `
         -CollectorCpuSet $CollectorCpuSet `
+        -OrchestratorCpuSet $OrchestratorCpuSet `
         -AllowSharedApplicationSlots:($ProtocolOnly -and $AutoSelectCpuRoles) `
         -AllowRunnerCollectorSiblingSharing:$AllowRunnerCollectorSiblingSharing
 

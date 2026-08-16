@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $gate = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "spring_boot_gate.ps1")
+$protocolGate = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "glowroot_gate.ps1")
 $workflow = Get-Content -Raw -LiteralPath `
         (Join-Path $projectRoot ".github/workflows/production-gate.yml")
 $release = Get-Content -Raw -LiteralPath `
@@ -35,6 +36,12 @@ $earlyDecision = Get-FunctionTextUntilMarker `
 Assert-Contains $gate 'function Start-LoadRunner' "The gate must start one persistent load runner."
 Assert-Contains $gate 'Set-ReactorCurrentProcessCpuAffinity -CpuSet \$OrchestratorCpuSet' `
         "Benchmark orchestration must not share the wrk CPU set."
+Assert-Contains $protocolGate '\$OrchestratorCpuSet = \$selectedRoles\.orchestrator' `
+        "The protocol gate must retain the auto-selected orchestrator CPU set."
+Assert-Contains $protocolGate 'Set-ReactorCurrentProcessCpuAffinity -CpuSet \$OrchestratorCpuSet' `
+        "Protocol orchestration must not run on the wrk CPU set."
+Assert-Contains $protocolGate '-OrchestratorCpuSet \$OrchestratorCpuSet' `
+        "The protocol isolation check must receive the orchestrator CPU set."
 Assert-Contains $warmup '@\("exec", \$LoadRunner, "wrk"' `
         "Warmup must use docker exec, not docker run."
 if ($warmup -match 'docker\s+run|@\("run"') {
