@@ -7,6 +7,8 @@ $workflow = Get-Content -Raw -LiteralPath `
         (Join-Path $projectRoot ".github/workflows/production-gate.yml")
 $release = Get-Content -Raw -LiteralPath `
         (Join-Path $projectRoot ".github/workflows/release.yml")
+$dockerProfiles = (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "app.Dockerfile")) + `
+        (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "spring.Dockerfile"))
 
 function Assert-Contains([string] $Text, [string] $Pattern, [string] $Message) {
     if ($Text -notmatch $Pattern) { throw $Message }
@@ -40,6 +42,14 @@ Assert-Contains $gate '\$ContainerCpuSets\[\$Name\] = \$executionCpuSet' `
         "Runtime noise accounting must use the application's actual execution CPU set."
 Assert-Contains $gate 'application_execution = Get-ApplicationExecutionCpuSet' `
         "Release evidence must record the application's actual execution CPU set."
+Assert-Contains $gate '\[bool\] \$PinSingleCpuQuotaToOneLogicalCpu = \$false' `
+        "Single-logical-CPU execution must remain an explicit diagnostic, not the release default."
+Assert-Contains $gate 'single_cpu_logical_pin = \$PinSingleCpuQuotaToOneLogicalCpu' `
+        "Release evidence must record whether the diagnostic logical-CPU pin was enabled."
+if (([regex]::Matches($dockerProfiles, '-XcompilationThreads1')).Count -ne 2 -or
+        ([regex]::Matches($dockerProfiles, '-Xgc:threads=1')).Count -ne 2) {
+    throw "Baseline/candidate benchmark images must use the same bounded OpenJ9 JIT and GC workers."
+}
 Assert-Contains $gate 'Set-ReactorCurrentProcessCpuAffinity -CpuSet \$OrchestratorCpuSet' `
         "Benchmark orchestration must not share the wrk CPU set."
 Assert-Contains $protocolGate '\$OrchestratorCpuSet = \$selectedRoles\.orchestrator' `
@@ -90,7 +100,6 @@ if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "strict_early_pass"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "maximum_pairs"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.cpu_roles\.orchestrator')).Count -ne 3 -or
-        ([regex]::Matches($release, '\.cpu_roles\.application_execution')).Count -ne 2 -or
         ([regex]::Matches($release, '\.measured_endpoint_classes == \["small-json", "raw-json"\]')).Count -ne 2 -or
         ([regex]::Matches($release, '\.smoked_endpoint_classes \| sort')).Count -ne 2 -or
         ([regex]::Matches($release, '\(\.rows \| length\) == 4')).Count -ne 2 -or

@@ -189,7 +189,6 @@ jobs:
             .warmup_stability.interleaved_rounds == 6 and
             .cpu_roles.auto_selected == true and
             .cpu_roles.selection_source == "environment" and
-            (.cpu_roles.application_execution | type == "string" and length > 0) and
             (.cpu_roles.orchestrator | type == "string" and length > 0) and
             .warmup_stability.maximum_confirmation_rounds == 14 and
             .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
@@ -232,7 +231,6 @@ jobs:
             .warmup_stability.interleaved_rounds == 6 and
             .cpu_roles.auto_selected == true and
             .cpu_roles.selection_source == "environment" and
-            (.cpu_roles.application_execution | type == "string" and length > 0) and
             (.cpu_roles.orchestrator | type == "string" and length > 0) and
             .warmup_stability.maximum_confirmation_rounds == 14 and
             .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and

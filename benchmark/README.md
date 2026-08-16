@@ -62,13 +62,16 @@ REACTOR_BENCHMARK_COLLECTOR_CPU_SET=2
 REACTOR_BENCHMARK_ORCHESTRATOR_CPU_SET=6,7
 ```
 
-The runner service itself is pinned to the orchestrator group. For a `1.0` CPU application limit,
-the complete application SMT group remains reserved from every other benchmark role, while the
-application container executes on one logical CPU from that group. This prevents sibling-parallel
-bursts followed by CFS quota throttling without allowing another benchmark role onto the reserved
-physical core. Evidence records both `cpu_roles.application` and
+The runner service itself is pinned to the orchestrator group. The complete application SMT group
+remains reserved from every other benchmark role. Release runs execute on that group behind the
+configured `1.0` CPU quota. A single-logical-CPU pin remains an explicit diagnostic switch and is not
+accepted as release evidence by default. Evidence records both `cpu_roles.application` and
 `cpu_roles.application_execution`. Preflight fails closed when any role is missing, overlaps another
 physical group, or does not reserve the required SMT siblings.
+
+Both baseline and candidate images use the same low-RSS OpenJ9 worker policy:
+`-XX:ActiveProcessorCount=1 -XcompilationThreads1 -Xgc:threads=1`. It keeps JIT enabled while
+preventing compiler and GC worker-count differences from dominating the agent delta.
 
 If a later commit changes only benchmark, workflow, or documentation files, the production workflow
 can reuse an earlier passing REST matrix with `rest_evidence_run_id`. Reuse is content-addressed, not

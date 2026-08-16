@@ -93,9 +93,10 @@ All notable changes to this project are recorded here.
 - Reserved the load runner's complete SMT sibling group for its two `wrk` event loops. The release
   gate now fails closed when a two-thread load generator is pinned to one logical CPU and could hide
   application throughput behind load-generator saturation.
-- Kept the application's complete SMT sibling group reserved while executing a one-CPU application
-  on one logical CPU from that group. This removes sibling-parallel CFS quota oscillation that could
-  make an unchanged baseline appear to lose half its throughput during sustained warmup.
+- Recorded the application's reserved and execution CPU sets separately. Single-logical-CPU pinning
+  remains diagnostic; stable evidence keeps the complete reserved group behind the one-CPU quota.
+- Limited both benchmark JVMs to one OpenJ9 compilation worker and one GC worker. JIT remains
+  enabled, while background JVM worker-count noise no longer dominates a small native-agent delta.
 - Bound release evidence to runtime Git objects instead of a repository-wide commit id. A
   benchmark-only follow-up can reuse a passing REST matrix only when the POM, bootstrap, starter,
   and packaged native artifact trees are byte-identical; protocol and Spring gates still run on the

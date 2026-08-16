@@ -21,7 +21,7 @@ param(
     [double] $MaxWarmupBorderlineMedianShiftPercent = 3.0,
     [double] $MaxWarmupMedianAbsoluteDeviationPercent = 4.0,
     [double] $CpuLimit = 1.0,
-    [bool] $PinSingleCpuQuotaToOneLogicalCpu = $true,
+    [bool] $PinSingleCpuQuotaToOneLogicalCpu = $false,
     [string] $MemoryLimit = "256m",
     [string] $SlotACpuSet = "0",
     [string] $SlotBCpuSet = "2",
@@ -1196,6 +1196,7 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     cpu_roles = [ordered]@{
         application = $SlotACpuSet
         application_execution = Get-ApplicationExecutionCpuSet -ReservedCpuSet $SlotACpuSet
+        single_cpu_logical_pin = $PinSingleCpuQuotaToOneLogicalCpu
         runner = $RunnerCpuSet
         collector = $CollectorCpuSet
         orchestrator = $OrchestratorCpuSet

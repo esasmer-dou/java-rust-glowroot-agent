@@ -161,14 +161,17 @@ sınırını aşmamalıdır. Tek bir eşleşmedeki fark tanı amacıyla raporda 
 yerine geçmez. Build bittikten sonra kalibre edilmiş runner, servis ortamında tanımlanan sabit
 uygulama, yük üretici, collector ve benchmark orchestrator CPU rollerini kullanır. Dört rol ayrı
 fiziksel gruplarda çalışır. Uygulama, yük üretici ve orchestrator rolleri kendi gruplarındaki bütün
-SMT kardeşlerini ayırır. Bir CPU ile sınırlandırılan uygulama, ayrılan grubun içindeki tek bir
-mantıksal CPU üzerinde çalışır. Diğer SMT kardeşi başka bir benchmark rolüne verilmez. Bu düzen,
-fiziksel core izolasyonunu korur ve iki SMT kardeşi üzerinde oluşan paralel CFS kota salınımını
-engeller. Kanıt dosyası ayrılan CPU grubunu ve gerçek çalışma CPU'sunu ayrı ayrı kaydeder. Böylece
-Docker ve metrik sorguları da iki `wrk` thread'inin CPU'sunu kullanmaz. Kalibre edilmemiş runner en
+SMT kardeşlerini ayırır. Release testi, ayrılan uygulama grubunu bir CPU kotasıyla kullanır. Tek bir
+mantıksal CPU'ya sabitleme yalnız tanı testidir; varsayılan release kanıtı değildir. Kanıt dosyası
+ayrılan CPU grubunu ve gerçek çalışma CPU'sunu ayrı ayrı kaydeder. Böylece Docker ve metrik sorguları
+da iki `wrk` thread'inin CPU'sunu kullanmaz. Kalibre edilmemiş runner en
 sakin grubu seçen eski yöntemi
 kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal CPU elle seçilirse
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
+
+Baseline ve candidate aynı OpenJ9 low-RSS worker ayarlarını kullanır:
+`-XX:ActiveProcessorCount=1 -XcompilationThreads1 -Xgc:threads=1`. JIT açık kalır. Amaç, JIT compiler
+ve GC thread sayısı farklarının yanlışlıkla agent maliyeti gibi ölçülmesini önlemektir.
 
 Yalnız benchmark, workflow veya doküman değiştiren sonraki bir commit, daha önce geçen REST matrisini
 run kimliğiyle kullanabilir. Workflow; ana POM, bootstrap modülü ve native dosyaları içeren Spring
