@@ -97,7 +97,7 @@ native artifacts before ABI `3` can be published.
 | Embedded native attributed ceiling | PASS | `0.694 MiB`, including measured feature code pages; `0` additional threads |
 | Embedded observed resident maximum | PASS | smaps RSS maximum `+1.817 MiB`, below the `+3 MiB` boundary |
 | Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` |
-| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; small/raw c64/c256; heavy c64/c128; REST `4.5.0`; native ABI `29` |
+| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; small/raw c64/c256; heavy c64/c128; REST `4.5.1`; native ABI `29` |
 | Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, one failed transport attempt within the 75-second observation window, continued business HTTP availability, and optional `-javaagent` bootstrap must all pass |
 | Spring performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs, three endpoint classes, exact-commit evidence |
 | Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
@@ -178,7 +178,7 @@ remain within `+3 MiB`. The source-attributed native ceiling remains a separate 
 
 ## How The Rust-Java REST Gate Works
 
-The REST gate checks out the published `rust-java-rest:4.5.0` source tag and rejects any native ABI
+The REST gate checks out the published `rust-java-rest:4.5.1` source tag and rejects any native ABI
 other than `29`. It builds one minimal production image and runs telemetry off/on sequentially on
 the same physical CPU. The matrix uses the same small JSON, raw JSON, and heavy JSON classes and the
 same c64/c256 limits as the Spring gate. Embedded telemetry may add only the single bounded exporter
@@ -223,7 +223,7 @@ Rust-Java REST production matrix:
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.5.0" `
+  -RequiredRestVersion "4.5.1" `
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
