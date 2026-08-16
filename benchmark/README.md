@@ -42,11 +42,11 @@ Use **Production Gate** only for a release candidate. The release workflow still
 successful native-Linux evidence for the exact tag commit. Do not relabel a WSL/Docker Desktop host
 as `reactor-performance-native-linux`; its warmup trend and RSS evidence are not equivalent.
 
-Choose `release` for the adaptive gate. It starts with three independent JVM pairs and stops only
-when every cell satisfies a stricter early-pass envelope. A boundary result automatically continues
-to at most six pairs. Choose `extended` to require all six pairs for a benchmark-engine
-investigation. Creating a tag reuses successful exact-commit evidence and does not run the matrix
-again.
+Choose `release` for the adaptive small/raw JSON gate. These high-request-rate paths measure the
+agent's fixed request cost without serializer/JIT instability. Dynamic heavy routes are still
+smoke-tested. Choose `extended` to add measured heavy JSON c64/c128 and require all six pairs for a
+benchmark-engine investigation. Extended evidence cannot authorize a stable package. Creating a
+tag reuses successful exact-commit release-depth evidence and does not run the matrix again.
 
 The workflow runs the Rust-Java matrix first. Spring starts only after Rust-Java passes. This is
 intentional fail-fast behavior on the single dedicated runner; a failed first runtime cannot consume
@@ -104,8 +104,7 @@ classpath behavior.
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -HeavyConcurrencyLevels "64,128" `
-  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
   -Warmup "5s" `
   -PreWarmCycles 4 `
@@ -132,7 +131,7 @@ executable-JAR startup path.
 Each process first receives four equal pre-warm cycles. It then receives six measured warmup rounds.
 Every round visits all endpoint classes in round-robin order. If the final stability window fails,
 the gate adds at most fourteen full-matrix confirmation rounds without relaxing any threshold. It
-stops as soon as the rolling window passes; the extra four rounds only protect late OpenJ9 plateaus
+stops as soon as the rolling window passes; the additional rounds only protect late OpenJ9 plateaus
 from forcing a complete matrix restart. Baseline
 and candidate therefore receive the same work at the same process age. One persistent `wrk`
 container is reused for the entire gate instead of creating a container for every sample.
@@ -152,11 +151,11 @@ SMT sibling. These are host-quality checks, not product thresholds; rerun failed
 node rather than relaxing the limits.
 
 RPS, p99, and startup use the median of baseline/candidate pair deltas. This preserves each same-core
-comparison instead of subtracting unrelated group medians. Non-2xx responses use a zero-delta gate
-for normal cells. Only the explicitly saturated embedded REST heavy JSON c256 cell receives a `0.02` percentage-
-point non-inferiority margin. The paired median, request-weighted aggregate, and peak envelope must
-all stay within the cell margin, while baseline and candidate aggregate/peak rates must remain at
-or below the absolute `0.05%` ceiling.
+comparison instead of subtracting unrelated group medians. Stable-release cells use a zero-delta
+non-2xx gate. The paired median, request-weighted aggregate, and peak envelope must all remain
+non-inferior, while baseline and candidate aggregate/peak rates stay at or below the absolute
+`0.05%` ceiling. Extended/manual saturated embedded REST heavy JSON c256+ runs may explicitly use
+the existing `0.02` percentage-point margin; that scope cannot authorize a stable package.
 The worst individual paired delta remains in the report as a noise/overload diagnostic, but cannot
 replace these population-level guards. Per-cell process RSS and cgroup maxima
 remain diagnostics because independent OpenJ9 JIT/GC residency is noisy. After all RPS and p99
@@ -185,8 +184,7 @@ thread because it shared the framework runtime.
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -HeavyConcurrencyLevels "64,128" `
-  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
   -Warmup "5s" `
   -PreWarmCycles 4 `

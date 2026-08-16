@@ -50,6 +50,9 @@ All notable changes to this project are recorded here.
   alias after the former 10-bit generation range.
 - Counted retained error-frame structures and per-string allocator metadata in the hard startup
   memory budget instead of accounting only for UTF-8 payload bytes.
+- Separated the stable agent-cost matrix from serializer/JIT stress. Stable publication measures
+  small/raw JSON at c64/c256 and still smoke-tests dynamic heavy routes; `extended` adds measured
+  heavy JSON c64/c128 but cannot authorize a stable package.
 
 ### Fixed
 
@@ -62,14 +65,15 @@ All notable changes to this project are recorded here.
   `3%` primary normalized Theil-Sen trend and at most `4%` median absolute deviation across the final
   six rounds. A `3-5%` boundary trend is accepted only when adjacent three-round medians remain within
   `3%`. Sustained JIT ramp-up still fails; a near-plateau outlier is not misclassified as a trend.
-- Interleaved all sixteen fixed rounds across endpoint classes. The calibrated one-slot release gate
+- Interleaved all six fixed rounds across measured endpoint classes. The calibrated one-slot release gate
   reverses baseline/candidate process order in alternating pairs; an explicit dual-slot gate can also
-  interleave variants. A process that is still improving can receive at most sixteen additional rounds.
+  interleave variants. A process that is still improving can receive at most fourteen additional rounds.
   Both JVMs receive identical work at the same process age, and the final six-round decision keeps
   the same strict trend and dispersion thresholds.
-- Replaced the impossible zero-error requirement for the deliberately saturated embedded REST heavy JSON c256
-  cell with a bounded `0.02` percentage-point non-inferiority margin. Normal cells remain zero-delta,
-  and every baseline/candidate aggregate and peak error rate is capped at `0.05%`.
+- Kept a bounded `0.02` percentage-point non-inferiority margin for explicit extended/manual
+  saturated embedded REST heavy JSON c256+ tests. Stable release cells remain zero-delta, every
+  baseline/candidate aggregate and peak error rate is capped at `0.05%`, and extended evidence
+  cannot authorize publication.
 - Made HTTP/SQL telemetry registration and error-stack extraction fail open. JNI inspection failure
   increments a drop counter and cannot replace or interrupt the application exception flow.
 - Replaced per-exception-class REST labels with one fixed `Java Error` identity so temporary `full`

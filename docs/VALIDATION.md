@@ -97,9 +97,9 @@ native artifacts before ABI `3` can be published.
 | Embedded configured budget | PASS | Dynamic native state is capped at `448 KiB`; total agent-attributed state and reserved native feature pages are capped at `1 MiB` |
 | Embedded resident/thread delta | RELEASE ENFORCED | Paired steady-state process RSS and cgroup delta must stay within `+3 MiB`; enabled telemetry may add only the one isolated exporter thread |
 | Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `b41b3ee27c7329295fd510bdb04eec05bc4092d6` |
-| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; small/raw c64/c256; heavy c64/c128; REST `4.5.3`; native ABI `29` |
+| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; measured small/raw c64/c256; functional heavy-route smoke; REST `4.5.3`; native ABI `29` |
 | Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, one failed transport attempt within the 75-second observation window, continued business HTTP availability, and optional `-javaagent` bootstrap must all pass |
-| Spring performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs, three endpoint classes, exact-commit evidence |
+| Spring performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs, measured small/raw c64/c256, functional heavy-route smoke, exact-commit evidence |
 | Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
 
 The two production performance jobs run only on the
@@ -109,10 +109,12 @@ labels and each job's preflight JSON, so hosted Linux, WSL, and containerized ru
 as performance evidence by accident. Use two separate runner hosts for parallel execution; use only
 one runner service per host.
 
-The workflow's `release` depth starts with three independent JVM pairs. It stops only when all cells
-pass a stricter early envelope; otherwise it continues to at most six. `extended` always runs all
-six pairs. Tagging the already-qualified exact commit reuses the evidence and does not launch the
-matrix again.
+The workflow's `release` depth measures small/raw JSON at c64/c256 and starts with three independent
+JVM pairs. It stops only when all cells pass a stricter early envelope; otherwise it continues to at
+most six. Every process still smoke-tests the dynamic heavy route. `extended` adds measured heavy
+JSON c64/c128 and always runs all six pairs, but its stress evidence cannot authorize a stable
+package. Tagging the already-qualified exact commit reuses the release-depth evidence and does not
+launch the matrix again.
 
 Local Docker uses [`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) for fast
 c64 small/raw JSON feedback. Its output is diagnostic and never satisfies the exact-commit release
@@ -135,19 +137,23 @@ The gate builds one Spring Boot image with the starter present. Baseline disable
 Candidate enables it. This keeps the application classes, dependencies, JVM flags, CPU quota, and
 memory limit identical.
 
-The matrix covers:
+The stable release matrix covers:
 
 - small dynamic JSON;
 - raw/precomputed JSON;
-- dynamic heavy JSON;
 - concurrency `64` and `256` for small/raw JSON;
-- concurrency `64` and `128` for heavy JSON, keeping the baseline below the framework's overload boundary;
+- a functional smoke request to dynamic heavy JSON for every process;
 - three-to-six independent paired baseline/candidate runs with alternating variant order.
 
+The `extended` depth adds dynamic heavy JSON at c64/c128. The agent records status, route, and
+duration; it does not parse the response body. Keeping serializer/JIT-heavy throughput out of the
+stable publish decision removes application noise without removing agent hot-path coverage.
+
 Every performance cell must keep useful HTTP 200 RPS loss within `2%`, p99 regression within `10%`,
-and additional threads at one or less. Normal cells use a zero-delta non-2xx gate. The deliberately
-saturated embedded REST heavy JSON c256 cell uses a `0.02` percentage-point non-inferiority margin. Its paired
-median, request-weighted aggregate, and peak envelope must stay within that margin. Baseline and
+and additional threads at one or less. Stable-release cells use a zero-delta non-2xx gate. An
+extended/manual saturated embedded REST heavy JSON c256+ run may explicitly use a `0.02`
+percentage-point non-inferiority margin, but cannot authorize a stable package. Its paired median,
+request-weighted aggregate, and peak envelope must stay within that margin. Baseline and
 candidate aggregate and peak error rates must also stay at or below `0.05%`. A single-pair delta
 remains visible as a diagnostic, but does not replace those population-level decisions. Build work is
 finished before CPU selection. A calibrated runner uses deterministic application, load-runner,
@@ -159,10 +165,9 @@ selection. Every steal-time window must remain within `1%`. A manually configure
 single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 
 Each application process receives four equal pre-warm cycles and six measured warmup rounds per
-endpoint. If the final decision still shows a JVM that is improving, the process may receive at most
-fourteen additional full-matrix interleaved confirmation rounds. No threshold is relaxed. The gate
-stops as soon as the rolling stability window passes, so the extra four rounds are paid only by a
-late-plateau JVM and avoid restarting the entire matrix. One persistent
+measured endpoint. If the final decision still shows a JVM that is improving, the process may
+receive at most fourteen additional full-matrix interleaved confirmation rounds. No threshold is
+relaxed. The gate stops as soon as the rolling stability window passes. One persistent
 `wrk` container is reused for the entire gate. Every round visits all configured endpoint
 classes in round-robin order. The release workflow uses one calibrated application SMT group, runs
 baseline and candidate as separate processes, and reverses their order in alternating pairs. Both
@@ -187,9 +192,9 @@ remain within `+3 MiB`. The source-attributed native ceiling remains a separate 
 
 The REST gate checks out the published `rust-java-rest:4.5.3` source tag and rejects any native ABI
 other than `29`. It builds one minimal production image and runs telemetry off/on sequentially on
-the same physical CPU. The matrix uses the same small JSON, raw JSON, and heavy JSON classes and the
-same c64/c256 limits as the Spring gate. Embedded telemetry may add only the single bounded exporter
-thread required by the architecture.
+the same physical CPU. The release matrix uses the same measured small/raw JSON c64/c256 scope as
+the Spring gate and smoke-tests dynamic heavy JSON. Embedded telemetry may add only the single
+bounded exporter thread required by the architecture.
 
 A second gate validates messages against the pinned Glowroot wire schema. It also stops the
 collector and proves that business HTTP remains available. Finally, it starts the same REST image
@@ -205,8 +210,7 @@ Spring production matrix:
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -HeavyConcurrencyLevels "64,128" `
-  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
   -Warmup "5s" `
   -PreWarmCycles 4 `
@@ -235,8 +239,7 @@ Rust-Java REST production matrix:
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -HeavyConcurrencyLevels "64,128" `
-  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
   -Warmup "5s" `
   -PreWarmCycles 4 `

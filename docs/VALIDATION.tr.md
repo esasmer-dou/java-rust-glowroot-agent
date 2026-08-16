@@ -99,9 +99,9 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Embedded konfigürasyon bütçesi | PASS | Dinamik native state en fazla `448 KiB`; agent'a atfedilen toplam state ve ayrılan native feature sayfaları en fazla `1 MiB` |
 | Embedded resident/thread farkı | RELEASE ZORUNLULUĞU | Eşleştirilmiş steady-state process RSS ve cgroup farkı en fazla `+3 MiB` olmalıdır. Açık telemetri yalnız tek izole exporter thread'i ekleyebilir. |
 | Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `b41b3ee27c7329295fd510bdb04eec05bc4092d6` revision'ından üretildi |
-| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; small/raw c64/c256; heavy c64/c128; REST `4.5.3`; native ABI `29` |
+| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; ölçülen small/raw c64/c256; functional heavy-route smoke; REST `4.5.3`; native ABI `29` |
 | Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, 75 saniyelik gözlem içinde en az bir başarısız taşıma denemesi, business HTTP erişiminin devam etmesi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
-| Spring performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu, üç endpoint sınıfı ve exact-commit kanıtı |
+| Spring performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu, ölçülen small/raw c64/c256, functional heavy-route smoke ve exact-commit kanıtı |
 | Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
 
 İki production performans job'u yalnızca
@@ -111,10 +111,12 @@ job etiketlerini ve her job tarafından üretilen preflight JSON dosyasını oku
 WSL veya container içindeki bir runner yanlışlıkla performans kanıtı olarak kullanılamaz. Paralel
 çalışma için iki ayrı runner sunucusu kullanın. Her sunucuda yalnızca bir runner servisi çalıştırın.
 
-Workflow'daki `release` seçeneği üç bağımsız JVM çiftiyle başlar. Yalnız bütün hücreler daha sıkı erken
-PASS sınırını sağlarsa durur. Sonuç sınırdaysa en fazla altı çifte otomatik devam eder. `extended`
-seçeneği altı çiftin tamamını zorunlu çalıştırır. Aynı exact commit daha önce gate'i geçtiyse tag
-oluşturmak matrisi yeniden başlatmaz; mevcut kanıt kullanılır.
+Workflow'daki `release` seçeneği small/raw JSON'u c64/c256 seviyesinde ölçer ve üç bağımsız JVM
+çiftiyle başlar. Yalnız bütün hücreler daha sıkı erken PASS sınırını sağlarsa durur. Sonuç sınırdaysa
+en fazla altı çifte otomatik devam eder. Her process dynamic heavy route'a functional smoke isteği
+gönderir. `extended` seçeneği heavy JSON c64/c128 ölçümünü ekler ve altı çiftin tamamını zorunlu
+çalıştırır. Bu stress kanıtı stable package yayınını onaylayamaz. Aynı exact commit release-depth
+gate'i geçtiyse tag oluşturmak matrisi yeniden başlatmaz; mevcut kanıt kullanılır.
 
 Hızlı local kontrol için
 [`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) kullanılır. Bu kısa test c64
@@ -137,19 +139,23 @@ Gate, starter bulunan tek bir Spring Boot image üretir. Baseline telemetriyi ka
 telemetriyi açar. Uygulama sınıfları, dependency'ler, JVM ayarları, CPU kotası ve bellek limiti aynı
 kalır.
 
-Matris şu alanları kapsar:
+Stable release matrisi şu alanları kapsar:
 
 - küçük dynamic JSON;
 - raw veya önceden hazırlanmış JSON;
-- dynamic heavy JSON;
 - small/raw JSON için `64` ve `256` concurrency;
-- baseline'ı framework overload sınırının altında tutmak için heavy JSON'da `64` ve `128` concurrency;
+- her process için dynamic heavy JSON functional smoke isteği;
 - sırası değiştirilen üç ile altı arasında bağımsız baseline/candidate çifti.
 
+`extended` seçeneği dynamic heavy JSON'u c64/c128 seviyesinde ayrıca ölçer. Agent response body'yi
+okumaz; yalnız status, route ve süre bilgisini toplar. Serializer/JIT ağırlıklı throughput'u stable
+package kararından ayırmak uygulama gürültüsünü kaldırır, agent hot-path kapsamını kaldırmaz.
+
 Her performans hücresinde başarılı HTTP 200 RPS kaybı en fazla `%2`, p99 artışı en fazla `%10` ve
-yeni thread sayısı en fazla bir olmalıdır. Normal hücrelerde non-2xx artış sınırı sıfırdır. Bilinçli
-olarak doygun çalıştırılan embedded REST heavy JSON c256 hücresinde `0,02` yüzde puanlık non-inferiority marjı
-kullanılır. Eşleştirilmiş medyan, istek sayısıyla ağırlıklandırılmış toplam ve en yüksek hata oranı
+yeni thread sayısı en fazla bir olmalıdır. Stable release hücrelerinde non-2xx artış sınırı sıfırdır.
+Extended veya elle çalıştırılan doygun embedded REST heavy JSON c256+ testinde açıkça `0,02` yüzde
+puanlık non-inferiority marjı seçilebilir. Bu test stable package yayınını onaylayamaz. Eşleştirilmiş
+medyan, istek sayısıyla ağırlıklandırılmış toplam ve en yüksek hata oranı
 bu marj içinde kalmalıdır. Baseline ve candidate toplam ve en yüksek hata oranları ayrıca `%0,05`
 sınırını aşmamalıdır. Tek bir eşleşmedeki fark tanı amacıyla raporda kalır; bu genel kararların
 yerine geçmez. Build bittikten sonra kalibre edilmiş runner, servis ortamında tanımlanan sabit
@@ -160,10 +166,10 @@ Kalibre edilmemiş runner en sakin grubu seçen eski yöntemi
 kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal CPU elle seçilirse
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
-Her uygulama süreci önce dört eşit ön ısınma döngüsü çalıştırır. Ardından endpoint başına altı ölçülen
+Her uygulama süreci önce dört eşit ön ısınma döngüsü çalıştırır. Ardından ölçülen endpoint başına altı
 ısınma turu tamamlar. Son karar JVM'in hâlâ hızlandığını gösteriyorsa en fazla on dört ek ve tam matris
 doğrulama turu çalışır. Hiçbir eşik gevşetilmez. Rolling kararlılık penceresi geçtiği anda gate durur.
-Bu nedenle son dört tur yalnız geç plato yapan JVM'de çalışır ve bütün matrisin baştan başlamasını
+Bu nedenle ek turlar yalnız geç plato yapan JVM'de çalışır ve bütün matrisin baştan başlamasını
 önler. Gate boyunca aynı `wrk` container'ı kullanılır. Her
 tur, tanımlı endpoint sınıflarını sırayla dolaşır. Release workflow'u kalibre edilmiş
 tek uygulama SMT grubunu kullanır. Baseline ve candidate ayrı süreçlerde çalışır. Her pair'de çalışma
@@ -187,9 +193,9 @@ process yaşında beş örnek alınır. Eşleştirilmiş process RSS ve cgroup m
 
 REST gate, yayınlanmış `rust-java-rest:4.5.3` source tag'ini kullanır. Native ABI `29` değilse test
 başlamaz. Tek bir minimal production image hazırlanır. Telemetri kapalı ve açık varyantlar aynı
-fiziksel CPU üzerinde sıralı çalışır. Matris; küçük JSON, raw JSON ve heavy JSON endpoint'lerini
-c64/c256 altında ölçer. Embedded telemetri yalnızca mimarinin gerektirdiği tek sınırlı exporter
-thread'ini ekleyebilir.
+fiziksel CPU üzerinde sıralı çalışır. Release matrisi Spring gate ile aynı small/raw JSON c64/c256
+kapsamını ölçer ve dynamic heavy JSON için functional smoke çalıştırır. Embedded telemetri yalnızca
+mimarinin gerektirdiği tek sınırlı exporter thread'ini ekleyebilir.
 
 İkinci gate, mesajları sabitlenen Glowroot wire şemasıyla doğrular. Collector durdurulduğunda
 business HTTP'nin çalışmaya devam ettiğini de kanıtlar. Son olarak aynı REST image, opsiyonel
@@ -205,8 +211,7 @@ Spring production matrisi:
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -HeavyConcurrencyLevels "64,128" `
-  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
   -Warmup "5s" `
   -PreWarmCycles 4 `
@@ -235,8 +240,7 @@ Rust-Java REST production matrisi:
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -HeavyConcurrencyLevels "64,128" `
-  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
   -Warmup "5s" `
   -PreWarmCycles 4 `

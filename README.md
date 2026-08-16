@@ -518,16 +518,18 @@ endpoint/concurrency cell must keep:
 
 - useful HTTP 200 RPS loss at or above `-2%`;
 - p99 regression at or below `+10%`;
-- non-2xx regression at `0` percentage points for normal cells; the explicit saturated embedded REST
-  heavy JSON c256 cell has a `0.02` percentage-point non-inferiority margin. Baseline and candidate aggregate
-  and peak error rates must still remain at or below `0.05%`;
+- non-2xx regression at `0` percentage points for every stable-release cell. Baseline and candidate
+  aggregate and peak error rates must remain at or below `0.05%`;
 - additional agent threads at most `1` for both embedded Rust-Java and standalone Spring.
 
-The stable release runs this full matrix separately for Spring Boot and Rust-Java REST. Both cover
-small JSON and precomputed raw JSON at c64/c256, plus dynamic heavy JSON at c64/c128. The release
-starts with three independent pairs. It stops only when a stricter early-pass envelope succeeds;
-otherwise it continues to six. RPS, p99, and startup use each pair's delta before the median is
-calculated. Non-2xx uses the
+The stable release runs the same per-request telemetry matrix separately for Spring Boot and
+Rust-Java REST. Both cover small JSON and precomputed raw JSON at c64/c256. These paths maximize
+request rate and expose the agent's fixed cost more strongly than a serializer-bound route. Dynamic
+heavy JSON is still called by the functional route smoke. The optional `extended` workflow adds
+measured heavy JSON at c64/c128 and always runs all six pairs, but it is stress evidence rather than
+the stable publish gate. The release starts with three independent pairs. It stops only when a
+stricter early-pass envelope succeeds; otherwise it continues to six. RPS, p99, and startup use each
+pair's delta before the median is calculated. Non-2xx uses the
 paired median, request-weighted total, peak error envelope, and the absolute `0.05%` ceiling
 together. The normal release matrix uses the zero-delta rule for every cell. The bounded `0.02`
 percentage-point margin applies only when heavy JSON is tested manually at the saturated embedded
@@ -583,8 +585,7 @@ do not publish a local dirty native build.
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -HeavyConcurrencyLevels "64,128" `
-  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
   -Warmup "5s" `
   -PreWarmCycles 4 `
@@ -605,8 +606,10 @@ do not publish a local dirty native build.
 
 This is the normal release profile. It stops after three independent JVM pairs only when every cell
 passes a stricter safety margin; otherwise it automatically continues to at most six. Select
-`extended` in the GitHub **Production Gate** workflow to require all six pairs. A release tag reuses
-the successful gate evidence for the same commit and does not rerun the matrix.
+`extended` in the GitHub **Production Gate** workflow to add dynamic heavy JSON c64/c128 and require
+all six pairs. Extended evidence is intentionally not accepted by the stable publish workflow. A
+release tag reuses the successful release-depth evidence for the same commit and does not rerun the
+matrix.
 
 Use the following additional parameters to reproduce the embedded REST matrix:
 

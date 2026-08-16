@@ -527,16 +527,19 @@ Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
 
 - başarılı HTTP 200 RPS kaybı en fazla `%2`;
 - p99 artışı en fazla `%10`;
-- normal hücrelerde non-2xx artışı `0` yüzde puanı; bilinçli olarak doygun çalıştırılan embedded REST
-  heavy JSON c256 hücresinde en fazla `0,02` yüzde puanı artış kabul edilir. Baseline ve candidate toplam ve en
-  yüksek hata oranları yine `%0,05` altında kalmalıdır;
+- stable release hücrelerinin tamamında non-2xx artışı `0` yüzde puanı olmalıdır. Baseline ve
+  candidate toplam ve en yüksek hata oranları `%0,05` altında kalmalıdır;
 - İki çalışma şeklinde de agent'a ait ek thread sayısı en fazla `1`.
 
-Stable release bu tam matrisi Spring Boot ve Rust-Java REST için ayrı çalıştırır. İki matris de
-small JSON ve önceden hazırlanmış raw JSON endpoint'lerini c64/c256 seviyesinde ölçer. Dynamic heavy
-JSON için c64/c128 kullanılır. Release üç bağımsız çiftle başlar. Daha sıkı erken PASS sınırı
-sağlanmazsa otomatik olarak altı çifte devam eder. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan
-hesaplanır. Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırılmış toplamı, en
+Stable release aynı request başına telemetri matrisini Spring Boot ve Rust-Java REST için ayrı
+çalıştırır. İki matris de küçük JSON ve önceden hazırlanmış raw JSON endpoint'lerini c64/c256
+seviyesinde ölçer. Bu yollar yüksek istek hızına ulaştığı için agent'ın sabit maliyetini serializer
+ağırlıklı bir endpoint'ten daha net gösterir. Dynamic heavy JSON functional route smoke içinde yine
+çağrılır. İsteğe bağlı `extended` workflow'u heavy JSON c64/c128 ölçümünü ekler ve altı çiftin
+tamamını çalıştırır. Bu sonuç stress kanıtıdır; stable package yayınını onaylayan gate değildir.
+Release üç bağımsız çiftle başlar. Daha sıkı erken PASS sınırı sağlanmazsa otomatik olarak altı
+çifte devam eder. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan hesaplanır.
+Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırılmış toplamı, en
 yüksek hata oranını ve mutlak `%0,05` sınırını birlikte kullanır. Normal release matrisindeki bütün
 hücrelerde sıfır artış kuralı uygulanır. `0,02` yüzde puanlık sınırlı marj yalnız heavy JSON manuel
 olarak embedded REST c256+ doygunluk bölgesinde ölçülürse geçerlidir. Doygun bir koşudaki tek fark raporda görünür; genel hata
@@ -592,8 +595,7 @@ native build yayınlamayın.
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
   -ConcurrencyLevels "64,256" `
-  -HeavyConcurrencyLevels "64,128" `
-  -EndpointClasses "small-json,raw-json,heavy-json" `
+  -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
   -Warmup "5s" `
   -PreWarmCycles 4 `
@@ -614,8 +616,9 @@ native build yayınlamayın.
 
 Bu komut normal release profilidir. Üç bağımsız JVM çiftinden sonra yalnız bütün hücreler daha sıkı
 güvenlik marjını geçerse durur. Sonuç sınırdaysa en fazla altı çifte otomatik devam eder. GitHub
-**Production Gate** workflow'unda `extended` seçilirse altı çiftin tamamı zorunlu olur. Aynı commit
-için başarılı gate kanıtı varsa release tag'i matrisi yeniden çalıştırmaz.
+**Production Gate** workflow'unda `extended` seçilirse dynamic heavy JSON c64/c128 eklenir ve altı
+çiftin tamamı zorunlu olur. Extended sonuç stable package yayınında kullanılmaz. Aynı commit için
+başarılı release-depth gate kanıtı varsa release tag'i matrisi yeniden çalıştırmaz.
 
 Embedded REST matrisini çalıştırmak için aynı komuta şu parametreleri ekleyin:
 

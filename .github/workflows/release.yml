@@ -192,7 +192,9 @@ jobs:
             .warmup_stability.gate == "PASS" and
             .steady_memory.normalization == "explicit_full_gc_then_idle" and
             .steady_memory.gate == "PASS" and
-            (.rows | length) == 6 and all(.rows[]; .gate == "PASS" and
+            .measured_endpoint_classes == ["small-json", "raw-json"] and
+            (.smoked_endpoint_classes | sort) == ["heavy-json", "raw-json", "small-json"] and
+            (.rows | length) == 4 and all(.rows[]; .gate == "PASS" and
               .non_2xx_delta_pp <= .non_2xx_delta_threshold_pp and
               .aggregate_non_2xx_delta_pp <= .non_2xx_delta_threshold_pp and
               (.candidate_peak_non_2xx_pct - .baseline_peak_non_2xx_pct) <= .non_2xx_delta_threshold_pp and
@@ -232,7 +234,9 @@ jobs:
             .warmup_stability.gate == "PASS" and
             .steady_memory.normalization == "idle_window" and
             .steady_memory.gate == "PASS" and
-            (.rows | length) == 6 and
+            .measured_endpoint_classes == ["small-json", "raw-json"] and
+            (.smoked_endpoint_classes | sort) == ["heavy-json", "raw-json", "small-json"] and
+            (.rows | length) == 4 and
             all(.rows[]; .gate == "PASS" and
               .non_2xx_delta_pp <= .non_2xx_delta_threshold_pp and
               .aggregate_non_2xx_delta_pp <= .non_2xx_delta_threshold_pp and

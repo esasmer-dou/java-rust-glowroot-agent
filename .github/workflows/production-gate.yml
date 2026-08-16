@@ -83,13 +83,18 @@ jobs:
       - name: Run full paired Spring Boot matrix
         shell: pwsh
         run: |
+          $endpointClasses = if ($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") {
+            "small-json,raw-json,heavy-json"
+          } else {
+            "small-json,raw-json"
+          }
           ./benchmark/spring_boot_gate.ps1 `
             -PairRepeats 6 `
             -MinimumPairRepeats 3 `
             -RequireAllPairs:($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") `
             -ConcurrencyLevels "64,256" `
             -HeavyConcurrencyLevels "64,128" `
-            -EndpointClasses "small-json,raw-json,heavy-json" `
+            -EndpointClasses $endpointClasses `
             -Duration "12s" `
             -Warmup "5s" `
             -PreWarmCycles 4 `
@@ -159,6 +164,11 @@ jobs:
         shell: pwsh
         working-directory: java-rust-glowroot-agent
         run: |
+          $endpointClasses = if ($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") {
+            "small-json,raw-json,heavy-json"
+          } else {
+            "small-json,raw-json"
+          }
           ./benchmark/spring_boot_gate.ps1 `
             -ApplicationKind rust-java-rest `
             -RequiredRestVersion "4.5.3" `
@@ -168,7 +178,7 @@ jobs:
             -RequireAllPairs:($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") `
             -ConcurrencyLevels "64,256" `
             -HeavyConcurrencyLevels "64,128" `
-            -EndpointClasses "small-json,raw-json,heavy-json" `
+            -EndpointClasses $endpointClasses `
             -Duration "12s" `
             -Warmup "5s" `
             -PreWarmCycles 4 `

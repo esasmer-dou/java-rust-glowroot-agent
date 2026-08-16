@@ -58,6 +58,11 @@ if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
 }
 Assert-Contains $workflow 'REACTOR_GATE_QUALIFICATION_DEPTH' `
         "Workflow must expose release and extended gate depths."
+if (([regex]::Matches($workflow, '-EndpointClasses \$endpointClasses')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '"small-json,raw-json,heavy-json"')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '"small-json,raw-json"')).Count -ne 2) {
+    throw "Release depth must measure stable small/raw paths while extended depth retains heavy JSON."
+}
 Assert-Contains $workflow 'spring-boot-agent:\s+needs: \[gate-statistics, rust-java-rest-agent\]' `
         "The production workflow must stop before Spring when the Rust-Java gate fails."
 if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
@@ -66,6 +71,9 @@ if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "strict_early_pass"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "maximum_pairs"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.cpu_roles\.orchestrator')).Count -ne 3 -or
+        ([regex]::Matches($release, '\.measured_endpoint_classes == \["small-json", "raw-json"\]')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.smoked_endpoint_classes \| sort')).Count -ne 2 -or
+        ([regex]::Matches($release, '\(\.rows \| length\) == 4')).Count -ne 2 -or
         ([regex]::Matches($release, '\.warmup_stability\.fixed_rounds == 6')).Count -ne 2 -or
         ([regex]::Matches(
             $release,

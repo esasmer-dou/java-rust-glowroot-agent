@@ -1160,6 +1160,8 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     benchmark_classification = if ($DevelopmentQuickMode) { "development-only" } else { "production" }
     release_evidence = -not $DevelopmentQuickMode
     application_kind = $ApplicationKind
+    measured_endpoint_classes = @($endpoints)
+    smoked_endpoint_classes = @($EndpointMap.Keys | Sort-Object)
     required_rest_version = if ($IsRustJavaRest) { $RequiredRestVersion } else { $null }
     required_rest_native_abi = if ($IsRustJavaRest) { $RequiredRestNativeAbi } else { $null }
     pair_repeats = $completedPairs
@@ -1248,6 +1250,7 @@ $activationDescription = if ($IsRustJavaRest) {
 $lines.Add("Application: **$ApplicationKind**. Activation: **$activationDescription**.")
 $lines.Add("Benchmark classification: **$(if ($DevelopmentQuickMode) { 'development-only; not release evidence' } else { 'production release evidence' })**.")
 $lines.Add($compatibilityDescription)
+$lines.Add("Measured endpoint classes: $($endpoints -join ', '). Functional route smoke: $(@($EndpointMap.Keys | Sort-Object) -join ', ').")
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet, orchestrator=$OrchestratorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
 $lines.Add("Paired runs: $completedPairs (minimum=$MinimumPairRepeats, maximum=$PairRepeats, decision=$(if ($stoppedAfterStrictEarlyPass) { 'strict early pass' } else { 'maximum pairs' })). Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("Warmup stability: $PreWarmCycles equal pre-warm cycles plus $MaxWarmupRounds measured rounds per endpoint/process, fully interleaved across endpoint classes$(if (-not $SequentialVariants) { ' and baseline/candidate variants' } else { '' }). One persistent wrk container is reused for the whole gate. A failing measured window receives at most $MaxWarmupConfirmationRounds additional full-matrix interleaved confirmation rounds without relaxing any threshold; this run used at most $observedMaxWarmupConfirmationRounds. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend against a $MaxWarmupRobustTrendPercent% primary gate. A trend up to $MaxWarmupBorderlineRobustTrendPercent% is accepted only when previous/recent window medians differ by at most $MaxWarmupBorderlineMedianShiftPercent%. Median absolute deviation must remain within $MaxWarmupMedianAbsoluteDeviationPercent%. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
