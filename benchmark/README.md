@@ -62,8 +62,13 @@ REACTOR_BENCHMARK_COLLECTOR_CPU_SET=2
 REACTOR_BENCHMARK_ORCHESTRATOR_CPU_SET=6,7
 ```
 
-The runner service itself is pinned to the orchestrator group. Preflight fails closed when any role
-is missing, overlaps another physical group, or does not reserve the required SMT siblings.
+The runner service itself is pinned to the orchestrator group. For a `1.0` CPU application limit,
+the complete application SMT group remains reserved from every other benchmark role, while the
+application container executes on one logical CPU from that group. This prevents sibling-parallel
+bursts followed by CFS quota throttling without allowing another benchmark role onto the reserved
+physical core. Evidence records both `cpu_roles.application` and
+`cpu_roles.application_execution`. Preflight fails closed when any role is missing, overlaps another
+physical group, or does not reserve the required SMT siblings.
 
 For development-only feedback, run a short c64 small/raw JSON matrix locally:
 

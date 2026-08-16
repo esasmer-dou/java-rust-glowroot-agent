@@ -21,6 +21,7 @@ param(
     [double] $MaxWarmupBorderlineMedianShiftPercent = 3.0,
     [double] $MaxWarmupMedianAbsoluteDeviationPercent = 4.0,
     [double] $CpuLimit = 1.0,
+    [bool] $PinSingleCpuQuotaToOneLogicalCpu = $true,
     [string] $MemoryLimit = "256m",
     [string] $SlotACpuSet = "0",
     [string] $SlotBCpuSet = "2",
@@ -282,6 +283,18 @@ function Start-LoadRunner {
     }
 }
 
+function Get-ApplicationExecutionCpuSet([string] $ReservedCpuSet) {
+    if (-not $IsLinux -or -not $PinSingleCpuQuotaToOneLogicalCpu -or $CpuLimit -gt 1.0) {
+        return $ReservedCpuSet
+    }
+    $reservedCpus = @(ConvertFrom-ReactorCpuSet -CpuSet $ReservedCpuSet)
+    if ($reservedCpus.Count -eq 0) {
+        throw "Application CPU reservation is empty."
+    }
+    # Reserve the full SMT group, but do not let a one-CPU cgroup burst across both siblings.
+    return "$($reservedCpus[0])"
+}
+
 function Invoke-Curl([string] $Url, [string] $Method = "GET") {
     $args = @("run", "--rm", "--network", $Network, "--entrypoint", "curl")
     if ($RunnerCpuSet) { $args += @("--cpuset-cpus", $RunnerCpuSet) }
@@ -529,11 +542,13 @@ function Start-App([string] $Name, [string] $CpuSet, [bool] $Enabled, [int] $Pai
         "--cpus", "$CpuLimit", "--memory", $MemoryLimit,
         "-e", "${telemetryEnvironment}=$telemetry"
     )
-    if ($CpuSet) { $args += @("--cpuset-cpus", $CpuSet) }
+    $executionCpuSet = Get-ApplicationExecutionCpuSet -ReservedCpuSet $CpuSet
+    if ($executionCpuSet) { $args += @("--cpuset-cpus", $executionCpuSet) }
     $args += $AppImage
     $started = [Diagnostics.Stopwatch]::StartNew()
     Invoke-Checked docker $args $ProjectRoot | Out-Null
-    $ContainerCpuSets[$Name] = $CpuSet
+    $ContainerCpuSets[$Name] = $executionCpuSet
+    Write-Host "Application $Name reserved CPU group $CpuSet and executes on CPU set $executionCpuSet."
     Wait-Http $Name
     $started.Stop()
     return $started.Elapsed.TotalMilliseconds
@@ -1180,6 +1195,7 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     }
     cpu_roles = [ordered]@{
         application = $SlotACpuSet
+        application_execution = Get-ApplicationExecutionCpuSet -ReservedCpuSet $SlotACpuSet
         runner = $RunnerCpuSet
         collector = $CollectorCpuSet
         orchestrator = $OrchestratorCpuSet

@@ -34,6 +34,12 @@ $earlyDecision = Get-FunctionTextUntilMarker `
         "`nPrepare-Build"
 
 Assert-Contains $gate 'function Start-LoadRunner' "The gate must start one persistent load runner."
+Assert-Contains $gate 'function Get-ApplicationExecutionCpuSet' `
+        "The gate must separate the reserved SMT group from the one-CPU execution set."
+Assert-Contains $gate '\$ContainerCpuSets\[\$Name\] = \$executionCpuSet' `
+        "Runtime noise accounting must use the application's actual execution CPU set."
+Assert-Contains $gate 'application_execution = Get-ApplicationExecutionCpuSet' `
+        "Release evidence must record the application's actual execution CPU set."
 Assert-Contains $gate 'Set-ReactorCurrentProcessCpuAffinity -CpuSet \$OrchestratorCpuSet' `
         "Benchmark orchestration must not share the wrk CPU set."
 Assert-Contains $protocolGate '\$OrchestratorCpuSet = \$selectedRoles\.orchestrator' `
@@ -78,6 +84,7 @@ if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "strict_early_pass"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "maximum_pairs"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.cpu_roles\.orchestrator')).Count -ne 3 -or
+        ([regex]::Matches($release, '\.cpu_roles\.application_execution')).Count -ne 2 -or
         ([regex]::Matches($release, '\.measured_endpoint_classes == \["small-json", "raw-json"\]')).Count -ne 2 -or
         ([regex]::Matches($release, '\.smoked_endpoint_classes \| sort')).Count -ne 2 -or
         ([regex]::Matches($release, '\(\.rows \| length\) == 4')).Count -ne 2 -or

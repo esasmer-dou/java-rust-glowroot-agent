@@ -159,8 +159,11 @@ remains visible as a diagnostic, but does not replace those population-level dec
 finished before CPU selection. A calibrated runner uses deterministic application, load-runner,
 collector, and benchmark-orchestrator CPU roles from its service environment. All four roles use
 separate physical groups. The application, load-runner, and orchestrator roles reserve every SMT
-sibling in their groups. This prevents Docker/metric polling from stealing CPU from the two `wrk`
-threads. A runner without calibrated roles falls back to the quietest-group
+sibling in their groups. A one-CPU application executes on one logical CPU inside its reserved
+group; the sibling remains unavailable to other benchmark roles. This avoids sibling-parallel CFS
+quota oscillation while preserving physical-core isolation. Evidence records the reserved and
+execution sets separately. This also prevents Docker/metric polling from stealing CPU from the two
+`wrk` threads. A runner without calibrated roles falls back to the quietest-group
 selection. Every steal-time window must remain within `1%`. A manually configured
 single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 
