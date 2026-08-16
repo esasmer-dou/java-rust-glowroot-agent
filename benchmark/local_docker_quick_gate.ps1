@@ -2,7 +2,7 @@
 param(
     [ValidateSet("spring-boot", "rust-java-rest", "all")]
     [string] $ApplicationKind = "rust-java-rest",
-    [string] $RequiredRestVersion = "4.5.3",
+    [string] $RequiredRestVersion = "4.5.4",
     [int] $RequiredRestNativeAbi = 29
 )
 

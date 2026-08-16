@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  raw-json-c64:
+  small-json-c64:
     runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
     timeout-minutes: 35
     steps:
@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: esasmer-dou/rust-java-rest
-          ref: 0f9e8417ceac3238fceaa1de5f10eca9fe1fa5ec
+          ref: a168f6b5057c85200c99c2a8ef780c25e1eb2be1
           path: rust-java-rest
 
       - name: Check out pinned Glowroot wire contract
@@ -46,21 +46,21 @@ jobs:
         run: |
           ./benchmark/performance_runner_preflight.ps1 `
             -RunnerClass reactor-performance-native-linux `
-            -EvidencePath benchmark/results/runner-preflight/focused-raw-json-c64.json
+            -EvidencePath benchmark/results/runner-preflight/focused-small-json-c64.json
 
-      - name: Run focused paired raw JSON diagnostic
+      - name: Run focused paired small JSON diagnostic
         shell: pwsh
         working-directory: java-rust-glowroot-agent
         run: |
           ./benchmark/spring_boot_gate.ps1 `
             -ApplicationKind rust-java-rest `
-            -RequiredRestVersion "4.5.3" `
+            -RequiredRestVersion "4.5.4" `
             -RequiredRestNativeAbi 29 `
             -PairRepeats 3 `
             -MinimumPairRepeats 3 `
             -RequireAllPairs `
             -ConcurrencyLevels "64" `
-            -EndpointClasses "raw-json" `
+            -EndpointClasses "small-json" `
             -Duration "12s" `
             -Warmup "5s" `
             -PreWarmCycles 2 `
@@ -83,9 +83,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: focused-raw-json-c64-diagnostic
+          name: focused-small-json-c64-diagnostic
           path: |
             java-rust-glowroot-agent/benchmark/results/rest_gate_*/
-            java-rust-glowroot-agent/benchmark/results/runner-preflight/focused-raw-json-c64.json
+            java-rust-glowroot-agent/benchmark/results/runner-preflight/focused-small-json-c64.json
           if-no-files-found: error
           retention-days: 14

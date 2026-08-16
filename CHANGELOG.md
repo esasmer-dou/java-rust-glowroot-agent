@@ -98,9 +98,9 @@ All notable changes to this project are recorded here.
 
 ### Compatibility
 
-- Agent `0.3.0` requires Glowroot native ABI `3`. The embedded path requires Rust-Java REST `4.5.3`
+- Agent `0.3.0` requires Glowroot native ABI `3`. The embedded path requires Rust-Java REST `4.5.4`
   and REST native ABI `29`.
-- Windows x64 and Linux glibc x64 binaries are produced from the same clean `rust-spring v4.5.3`
+- Windows x64 and Linux glibc x64 binaries are produced from the same clean `rust-spring v4.5.4`
   source revision and are protected by SHA-256 provenance checks.
 
 ## [0.2.1] - 2026-08-14

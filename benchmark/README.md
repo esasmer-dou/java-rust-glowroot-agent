@@ -179,7 +179,7 @@ thread because it shared the framework runtime.
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.5.3" `
+  -RequiredRestVersion "4.5.4" `
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `

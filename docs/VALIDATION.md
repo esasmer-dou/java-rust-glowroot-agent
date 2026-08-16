@@ -96,8 +96,8 @@ native artifacts before ABI `3` can be published.
 | Collector unavailable | PASS | Business HTTP remains available; backlog and reconnect behavior stay bounded |
 | Embedded configured budget | PASS | Dynamic native state is capped at `448 KiB`; total agent-attributed state and reserved native feature pages are capped at `1 MiB` |
 | Embedded resident/thread delta | RELEASE ENFORCED | Paired steady-state process RSS and cgroup delta must stay within `+3 MiB`; enabled telemetry may add only the one isolated exporter thread |
-| Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `b41b3ee27c7329295fd510bdb04eec05bc4092d6` |
-| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; measured small/raw c64/c256; functional heavy-route smoke; REST `4.5.3`; native ABI `29` |
+| Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `7c6f75f1aa6652845dcd671b850c6ec5b630e899` |
+| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; measured small/raw c64/c256; functional heavy-route smoke; REST `4.5.4`; native ABI `29` |
 | Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, one failed transport attempt within the 75-second observation window, continued business HTTP availability, and optional `-javaagent` bootstrap must all pass |
 | Spring performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs, measured small/raw c64/c256, functional heavy-route smoke, exact-commit evidence |
 | Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
@@ -190,7 +190,7 @@ remain within `+3 MiB`. The source-attributed native ceiling remains a separate 
 
 ## How The Rust-Java REST Gate Works
 
-The REST gate checks out the published `rust-java-rest:4.5.3` source tag and rejects any native ABI
+The REST gate checks out the published `rust-java-rest:4.5.4` source tag and rejects any native ABI
 other than `29`. It builds one minimal production image and runs telemetry off/on sequentially on
 the same physical CPU. The release matrix uses the same measured small/raw JSON c64/c256 scope as
 the Spring gate and smoke-tests dynamic heavy JSON. Embedded telemetry may add only the single
@@ -234,7 +234,7 @@ Rust-Java REST production matrix:
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.5.3" `
+  -RequiredRestVersion "4.5.4" `
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `

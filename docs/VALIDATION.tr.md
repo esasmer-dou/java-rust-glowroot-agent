@@ -98,8 +98,8 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Collector kapalı | PASS | Business HTTP çalışır; backlog ve reconnect davranışı sınırlı kalır |
 | Embedded konfigürasyon bütçesi | PASS | Dinamik native state en fazla `448 KiB`; agent'a atfedilen toplam state ve ayrılan native feature sayfaları en fazla `1 MiB` |
 | Embedded resident/thread farkı | RELEASE ZORUNLULUĞU | Eşleştirilmiş steady-state process RSS ve cgroup farkı en fazla `+3 MiB` olmalıdır. Açık telemetri yalnız tek izole exporter thread'i ekleyebilir. |
-| Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `b41b3ee27c7329295fd510bdb04eec05bc4092d6` revision'ından üretildi |
-| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; ölçülen small/raw c64/c256; functional heavy-route smoke; REST `4.5.3`; native ABI `29` |
+| Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `7c6f75f1aa6652845dcd671b850c6ec5b630e899` revision'ından üretildi |
+| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; ölçülen small/raw c64/c256; functional heavy-route smoke; REST `4.5.4`; native ABI `29` |
 | Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, 75 saniyelik gözlem içinde en az bir başarısız taşıma denemesi, business HTTP erişiminin devam etmesi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
 | Spring performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu, ölçülen small/raw c64/c256, functional heavy-route smoke ve exact-commit kanıtı |
 | Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
@@ -191,7 +191,7 @@ process yaşında beş örnek alınır. Eşleştirilmiş process RSS ve cgroup m
 
 ## Rust-Java REST Gate Nasıl Çalışır?
 
-REST gate, yayınlanmış `rust-java-rest:4.5.3` source tag'ini kullanır. Native ABI `29` değilse test
+REST gate, yayınlanmış `rust-java-rest:4.5.4` source tag'ini kullanır. Native ABI `29` değilse test
 başlamaz. Tek bir minimal production image hazırlanır. Telemetri kapalı ve açık varyantlar aynı
 fiziksel CPU üzerinde sıralı çalışır. Release matrisi Spring gate ile aynı small/raw JSON c64/c256
 kapsamını ölçer ve dynamic heavy JSON için functional smoke çalıştırır. Embedded telemetri yalnızca
@@ -235,7 +235,7 @@ Rust-Java REST production matrisi:
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.5.3" `
+  -RequiredRestVersion "4.5.4" `
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
