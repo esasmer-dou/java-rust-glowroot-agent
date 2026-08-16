@@ -169,9 +169,9 @@ sakin grubu seçen eski yöntemi
 kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal CPU elle seçilirse
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
-Baseline ve candidate aynı OpenJ9 low-RSS worker ayarlarını kullanır:
-`-XX:ActiveProcessorCount=1 -XcompilationThreads1 -Xgc:threads=1`. JIT açık kalır. Amaç, JIT compiler
-ve GC thread sayısı farklarının yanlışlıkla agent maliyeti gibi ölçülmesini önlemektir.
+Baseline ve candidate aynı, production kullanımını temsil eden OpenJ9 ayarlarını kullanır.
+`-XX:ActiveProcessorCount=1` uygulanır ve JIT açık kalır. Tek compiler ve tek GC worker zorlanmaz.
+Yapılan ölçüm, bu zorlamanın Spring JIT ısınmasını uzattığını gösterdi.
 
 Yalnız benchmark, workflow veya doküman değiştiren sonraki bir commit, daha önce geçen REST matrisini
 run kimliğiyle kullanabilir. Workflow; ana POM, bootstrap modülü ve native dosyaları içeren Spring
@@ -195,6 +195,12 @@ ve sonraki üç turun medyanları en fazla `%3` ayrılabilir. Her iki durumda me
 sınırını aşamaz. Bu hesap, devam eden OpenJ9 interpreter/JIT ısınmasını reddeder; plateau'ya yakın
 tekil sıçramayı kalıcı eğilim saymaz. Baseline ve candidate yine aynı sınırlı ısınma işini yapar. Tam
 aralık tanı amacıyla raporlanır ve bütün ham RPS örnekleri release kanıtına eklenir.
+
+Bir proses buna rağmen kararlı hâle gelmezse baseline ve candidate çifti birlikte geçersiz sayılır.
+Bu çiftin startup, warmup, yük ve bellek verilerinin hiçbiri release kararına girmez. İki proses de
+yeniden başlatılır. Reddedilen deneme `invalid-pair-attempts.json` içinde ayrıca saklanır. En fazla iki
+geçersiz denemeye izin verilir. Gate yine en az üç geçerli ve bağımsız çift ister. Ağ, doğruluk, HTTP
+ve performans eşiği hataları bu kuralla yeniden denenmez; doğrudan gate'i durdurur.
 
 Endpoint içindeki anlık RSS maksimumları tanılama amacıyla raporda kalır. OpenJ9 JIT/GC resident
 sayfaları bağımsız prosesler arasında iki yönde değişebilir. Bu nedenle bellek kontrollü bir noktada
@@ -223,6 +229,7 @@ Spring production matrisi:
 .\benchmark\spring_boot_gate.ps1 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
+  -MaxInvalidPairAttempts 2 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
@@ -252,6 +259,7 @@ Rust-Java REST production matrisi:
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
+  -MaxInvalidPairAttempts 2 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `

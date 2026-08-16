@@ -6,6 +6,7 @@ param(
     [int] $RequiredRestNativeAbi = 29,
     [int] $PairRepeats = 3,
     [int] $MinimumPairRepeats = 3,
+    [int] $MaxInvalidPairAttempts = 2,
     [switch] $RequireAllPairs,
     [string] $ConcurrencyLevels = "64,256",
     [string] $HeavyConcurrencyLevels = "",
@@ -56,6 +57,9 @@ $PSNativeCommandUseErrorActionPreference = $false
 if ($MinimumPairRepeats -lt 3) { throw "MinimumPairRepeats must be at least 3." }
 if ($PairRepeats -lt $MinimumPairRepeats) {
     throw "PairRepeats must be greater than or equal to MinimumPairRepeats."
+}
+if ($MaxInvalidPairAttempts -lt 0 -or $MaxInvalidPairAttempts -gt 2) {
+    throw "MaxInvalidPairAttempts must be between 0 and 2."
 }
 if ($MaxMemoryRegressionMiB -gt 3.0) { throw "The agent memory gate cannot exceed 3 MiB." }
 if ($PreWarmCycles -lt 1 -or $PreWarmCycles -gt 8) {
@@ -700,6 +704,19 @@ if ((Median -Values @(3.0, 1.0, 2.0)) -ne 2.0 -or
     throw "Median self-check failed."
 }
 
+function Reset-ReactorListToCount($List, [int] $Count) {
+    if ($List.Count -gt $Count) {
+        $List.RemoveRange($Count, $List.Count - $Count)
+    }
+}
+
+function Test-IsWarmupStabilityFailure([Management.Automation.ErrorRecord] $ErrorRecord) {
+    return $ErrorRecord.Exception.Message.StartsWith(
+        "Warmup did not stabilize for pair=",
+        [StringComparison]::Ordinal
+    )
+}
+
 function Test-EarlyReleaseDecision([int] $CompletedPairs) {
     if ($RequireAllPairs -or $CompletedPairs -lt $MinimumPairRepeats `
             -or $CompletedPairs -ge $PairRepeats) {
@@ -838,11 +855,17 @@ $records = [Collections.Generic.List[object]]::new()
 $startups = [Collections.Generic.List[object]]::new()
 $steadyMemory = [Collections.Generic.List[object]]::new()
 $warmups = [Collections.Generic.List[object]]::new()
+$invalidPairAttemptDetails = [Collections.Generic.List[object]]::new()
 $sequence = 0
 $completedPairs = 0
 $stoppedAfterStrictEarlyPass = $false
 try {
     for ($pair = 1; $pair -le $PairRepeats; $pair++) {
+        $recordCountBeforeAttempt = $records.Count
+        $startupCountBeforeAttempt = $startups.Count
+        $steadyMemoryCountBeforeAttempt = $steadyMemory.Count
+        $warmupCountBeforeAttempt = $warmups.Count
+        try {
         $cells = foreach ($endpoint in $endpoints) {
             foreach ($value in @(Get-EndpointConcurrency $endpoint)) {
                 [pscustomobject]@{ endpoint = $endpoint; concurrency = $value }
@@ -1016,6 +1039,38 @@ try {
             $stoppedAfterStrictEarlyPass = $true
             break
         }
+        } catch {
+            if (-not (Test-IsWarmupStabilityFailure -ErrorRecord $_)) {
+                throw
+            }
+
+            $failedWarmupEvidence = @($warmups | Select-Object -Skip $warmupCountBeforeAttempt)
+            $invalidPairAttemptDetails.Add([pscustomobject]@{
+                attempt = $completedPairs + $invalidPairAttemptDetails.Count + 1
+                target_pair = $pair
+                reason = $_.Exception.Message
+                warmup = $failedWarmupEvidence
+            })
+            Reset-ReactorListToCount -List $records -Count $recordCountBeforeAttempt
+            Reset-ReactorListToCount -List $startups -Count $startupCountBeforeAttempt
+            Reset-ReactorListToCount -List $steadyMemory -Count $steadyMemoryCountBeforeAttempt
+            Reset-ReactorListToCount -List $warmups -Count $warmupCountBeforeAttempt
+            Remove-Container $Baseline
+            Remove-Container $Candidate
+
+            if ($invalidPairAttemptDetails.Count -gt $MaxInvalidPairAttempts) {
+                throw ("Warmup stability retry budget exhausted after " +
+                        "$($invalidPairAttemptDetails.Count) invalid process pairs. Last failure: " +
+                        $_.Exception.Message)
+            }
+
+            Write-Warning ("Discarding unstable process pair $pair; no startup, workload, memory, " +
+                    "or warmup evidence from this pair will enter the release decision. " +
+                    "Invalid pair budget: $($invalidPairAttemptDetails.Count)/$MaxInvalidPairAttempts.")
+            Start-Sleep -Seconds 5
+            $pair--
+            continue
+        }
     }
 } catch {
     ConvertTo-Json -InputObject @($records) -Depth 6 | Set-Content `
@@ -1024,6 +1079,8 @@ try {
             (Join-Path $Results "steady-memory-partial.json") -Encoding utf8
     ConvertTo-Json -InputObject @($warmups) -Depth 6 | Set-Content `
             (Join-Path $Results "warmup.json") -Encoding utf8
+    ConvertTo-Json -InputObject @($invalidPairAttemptDetails) -Depth 8 | Set-Content `
+            (Join-Path $Results "invalid-pair-attempts.json") -Encoding utf8
     [ordered]@{
         passed = $false
         application_kind = $ApplicationKind
@@ -1170,6 +1227,8 @@ ConvertTo-Json -InputObject @($steadyMemory) -Depth 5 |
         Set-Content (Join-Path $Results "steady-memory.json") -Encoding utf8
 ConvertTo-Json -InputObject @($warmups) -Depth 5 |
         Set-Content (Join-Path $Results "warmup.json") -Encoding utf8
+ConvertTo-Json -InputObject @($invalidPairAttemptDetails) -Depth 8 |
+        Set-Content (Join-Path $Results "invalid-pair-attempts.json") -Encoding utf8
 [ordered]@{
     passed = $passedAll
     benchmark_classification = if ($DevelopmentQuickMode) { "development-only" } else { "production" }
@@ -1180,6 +1239,10 @@ ConvertTo-Json -InputObject @($warmups) -Depth 5 |
     required_rest_version = if ($IsRustJavaRest) { $RequiredRestVersion } else { $null }
     required_rest_native_abi = if ($IsRustJavaRest) { $RequiredRestNativeAbi } else { $null }
     pair_repeats = $completedPairs
+    pair_attempts = $completedPairs + $invalidPairAttemptDetails.Count
+    invalid_pair_attempts = $invalidPairAttemptDetails.Count
+    maximum_invalid_pair_attempts = $MaxInvalidPairAttempts
+    invalid_pair_policy = "discard_entire_pair_and_restart_both_variants"
     minimum_pair_repeats = $MinimumPairRepeats
     maximum_pair_repeats = $PairRepeats
     pair_decision = if ($stoppedAfterStrictEarlyPass) { "strict_early_pass" } else { "maximum_pairs" }
@@ -1269,7 +1332,7 @@ $lines.Add("Benchmark classification: **$(if ($DevelopmentQuickMode) { 'developm
 $lines.Add($compatibilityDescription)
 $lines.Add("Measured endpoint classes: $($endpoints -join ', '). Functional route smoke: $(@($EndpointMap.Keys | Sort-Object) -join ', ').")
 $lines.Add("CPU roles: application=$SlotACpuSet, runner=$RunnerCpuSet, collector=$CollectorCpuSet, orchestrator=$OrchestratorCpuSet; auto-selected=$([bool]$AutoSelectCpuRoles).")
-$lines.Add("Paired runs: $completedPairs (minimum=$MinimumPairRepeats, maximum=$PairRepeats, decision=$(if ($stoppedAfterStrictEarlyPass) { 'strict early pass' } else { 'maximum pairs' })). Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
+$lines.Add("Paired runs: $completedPairs valid from $($completedPairs + $invalidPairAttemptDetails.Count) process-pair attempts (invalid=$($invalidPairAttemptDetails.Count), maximum invalid=$MaxInvalidPairAttempts; minimum=$MinimumPairRepeats, maximum valid=$PairRepeats, decision=$(if ($stoppedAfterStrictEarlyPass) { 'strict early pass' } else { 'maximum pairs' })). An unstable process pair is discarded in full and both variants restart. Mode: $(if ($SequentialVariants) { 'same-core sequential' } else { 'dual-slot isolated' }). Startup off/on medians: $([math]::Round($startupBase,2)) / $([math]::Round($startupAgent,2)) ms; paired delta median: $([math]::Round($startupDelta,2))%.")
 $lines.Add("Warmup stability: $PreWarmCycles equal pre-warm cycles plus $MaxWarmupRounds measured rounds per endpoint/process, fully interleaved across endpoint classes$(if (-not $SequentialVariants) { ' and baseline/candidate variants' } else { '' }). One persistent wrk container is reused for the whole gate. A failing measured window receives at most $MaxWarmupConfirmationRounds additional full-matrix interleaved confirmation rounds without relaxing any threshold; this run used at most $observedMaxWarmupConfirmationRounds. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend against a $MaxWarmupRobustTrendPercent% primary gate. A trend up to $MaxWarmupBorderlineRobustTrendPercent% is accepted only when previous/recent window medians differ by at most $MaxWarmupBorderlineMedianShiftPercent%. Median absolute deviation must remain within $MaxWarmupMedianAbsoluteDeviationPercent%. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
 $lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells. The $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin applies only when embedded REST heavy-json is explicitly tested at c256+. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory normalization: $(if ($IsRustJavaRest) { 'equal idle window' } else { 'benchmark-only explicit full GC followed by an equal idle window' }). This removes unrelated GC-phase noise without changing any RPS or p99 measurement. Paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")

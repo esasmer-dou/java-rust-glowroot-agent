@@ -69,9 +69,9 @@ accepted as release evidence by default. Evidence records both `cpu_roles.applic
 `cpu_roles.application_execution`. Preflight fails closed when any role is missing, overlaps another
 physical group, or does not reserve the required SMT siblings.
 
-Both baseline and candidate images use the same low-RSS OpenJ9 worker policy:
-`-XX:ActiveProcessorCount=1 -XcompilationThreads1 -Xgc:threads=1`. It keeps JIT enabled while
-preventing compiler and GC worker-count differences from dominating the agent delta.
+Both baseline and candidate images use the same production-representative OpenJ9 policy with
+`-XX:ActiveProcessorCount=1` and JIT enabled. Forced single compiler/GC workers are not used: a
+measured trial prolonged the Spring JIT ramp and made the evidence less representative.
 
 If a later commit changes only benchmark, workflow, or documentation files, the production workflow
 can reuse an earlier passing REST matrix with `rest_evidence_run_id`. Reuse is content-addressed, not
@@ -117,6 +117,7 @@ classpath behavior.
 .\benchmark\spring_boot_gate.ps1 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
+  -MaxInvalidPairAttempts 2 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
@@ -149,6 +150,11 @@ stops as soon as the rolling window passes; the additional rounds only protect l
 from forcing a complete matrix restart. Baseline
 and candidate therefore receive the same work at the same process age. One persistent `wrk`
 container is reused for the entire gate instead of creating a container for every sample.
+If a JVM still fails the unchanged stability gate, the whole baseline/candidate process pair is
+invalid. All startup, warmup, workload, and memory records from that pair are removed, both variants
+restart, and the attempt is attached separately to the evidence. At most two invalid attempts are
+allowed. The release still requires at least three valid independent pairs; transport, HTTP,
+correctness, and threshold failures are never retried by this policy.
 The normalized Theil-Sen trend over the final six rounds normally must not exceed `3%`. A trend in
 the `3-5%` boundary band passes only when the previous/recent three-round medians differ by no more
 than `3%`. Median absolute deviation must remain within `4%` in both cases. This rejects a sustained
@@ -197,6 +203,7 @@ thread because it shared the framework runtime.
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
+  -MaxInvalidPairAttempts 2 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `

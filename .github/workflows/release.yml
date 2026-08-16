@@ -139,6 +139,7 @@ jobs:
           SPRING_SUMMARY="$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/summary.json' -type f -print -quit)"
           SPRING_STEADY="$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/steady-memory.json' -type f -print -quit)"
           SPRING_WARMUP="$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/warmup.json' -type f -print -quit)"
+          SPRING_INVALID_PAIRS="$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/invalid-pair-attempts.json' -type f -print -quit)"
           SPRING_RUNNER="$(find "$SPRING_GATE_DIR" -path '*/runner-preflight/spring-boot-agent.json' -type f -print -quit)"
           REST_REPORT="$(find "$REST_GATE_DIR" -path '*/rest_gate_*/REPORT.md' -type f -print -quit)"
           REST_SUMMARY="$(find "$REST_GATE_DIR" -path '*/rest_gate_*/summary.json' -type f -print -quit)"
@@ -148,7 +149,7 @@ jobs:
           REST_PROTOCOL_REPORT="$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/REPORT.md' -type f -print -quit)"
           REST_PROTOCOL_SUMMARY="$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/gate-summary.json' -type f -print -quit)"
           REST_RUNTIME_IDENTITY="$(find "$REST_GATE_DIR" -name 'runtime-evidence-identity.json' -type f -print -quit)"
-          for FILE in "$SPRING_REPORT" "$SPRING_SUMMARY" "$SPRING_STEADY" "$SPRING_WARMUP" "$SPRING_RUNNER" \
+          for FILE in "$SPRING_REPORT" "$SPRING_SUMMARY" "$SPRING_STEADY" "$SPRING_WARMUP" "$SPRING_INVALID_PAIRS" "$SPRING_RUNNER" \
             "$REST_REPORT" "$REST_SUMMARY" "$REST_STEADY" "$REST_WARMUP" "$REST_RUNNER" \
             "$REST_PROTOCOL_REPORT" "$REST_PROTOCOL_SUMMARY" "$REST_RUNTIME_IDENTITY"; do
             test -s "$FILE"
@@ -176,6 +177,9 @@ jobs:
           jq -e '.passed == true and .benchmark_classification == "production" and
             .release_evidence == true and .application_kind == "spring-boot" and
             .pair_repeats >= 3 and
+            .pair_attempts == (.pair_repeats + .invalid_pair_attempts) and
+            .invalid_pair_attempts <= 2 and .maximum_invalid_pair_attempts == 2 and
+            .invalid_pair_policy == "discard_entire_pair_and_restart_both_variants" and
             .minimum_pair_repeats == 3 and .maximum_pair_repeats == 6 and
             ((.pair_repeats < 6 and .pair_decision == "strict_early_pass") or
               (.pair_repeats == 6 and .pair_decision == "maximum_pairs")) and
@@ -357,6 +361,8 @@ jobs:
             release-assets/spring-boot-steady-memory.json
           cp "$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/warmup.json' -type f -print -quit)" \
             release-assets/spring-boot-warmup-stability.json
+          cp "$(find "$SPRING_GATE_DIR" -path '*/spring_gate_*/invalid-pair-attempts.json' -type f -print -quit)" \
+            release-assets/spring-boot-invalid-pair-attempts.json
           cp "$(find "$SPRING_GATE_DIR" -path '*/runner-preflight/spring-boot-agent.json' -type f -print -quit)" \
             release-assets/spring-boot-runner-preflight.json
           cp "$(find "$REST_GATE_DIR" -path '*/rest_gate_*/REPORT.md' -type f -print -quit)" \

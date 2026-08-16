@@ -7,8 +7,6 @@ $workflow = Get-Content -Raw -LiteralPath `
         (Join-Path $projectRoot ".github/workflows/production-gate.yml")
 $release = Get-Content -Raw -LiteralPath `
         (Join-Path $projectRoot ".github/workflows/release.yml")
-$dockerProfiles = (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "app.Dockerfile")) + `
-        (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "spring.Dockerfile"))
 
 function Assert-Contains([string] $Text, [string] $Pattern, [string] $Message) {
     if ($Text -notmatch $Pattern) { throw $Message }
@@ -34,6 +32,10 @@ $earlyDecision = Get-FunctionTextUntilMarker `
         $gate `
         "Test-EarlyReleaseDecision" `
         "`nPrepare-Build"
+$invalidPairHelpers = Get-FunctionTextUntilMarker `
+        $gate `
+        "Reset-ReactorListToCount" `
+        "`nfunction Test-EarlyReleaseDecision"
 
 Assert-Contains $gate 'function Start-LoadRunner' "The gate must start one persistent load runner."
 Assert-Contains $gate 'function Get-ApplicationExecutionCpuSet' `
@@ -46,10 +48,18 @@ Assert-Contains $gate '\[bool\] \$PinSingleCpuQuotaToOneLogicalCpu = \$false' `
         "Single-logical-CPU execution must remain an explicit diagnostic, not the release default."
 Assert-Contains $gate 'single_cpu_logical_pin = \$PinSingleCpuQuotaToOneLogicalCpu' `
         "Release evidence must record whether the diagnostic logical-CPU pin was enabled."
-if (([regex]::Matches($dockerProfiles, '-XcompilationThreads1')).Count -ne 2 -or
-        ([regex]::Matches($dockerProfiles, '-Xgc:threads=1')).Count -ne 2) {
-    throw "Baseline/candidate benchmark images must use the same bounded OpenJ9 JIT and GC workers."
-}
+Assert-Contains $gate '\[int\] \$MaxInvalidPairAttempts = 2' `
+        "The release gate must bound invalid process-pair replacement."
+Assert-Contains $gate 'invalid_pair_policy = "discard_entire_pair_and_restart_both_variants"' `
+        "Release evidence must describe the symmetric invalid-pair policy."
+Assert-Contains $gate 'Reset-ReactorListToCount -List \$records' `
+        "An invalid process pair must not leak workload samples into release evidence."
+Assert-Contains $gate 'Reset-ReactorListToCount -List \$startups' `
+        "An invalid process pair must not leak startup samples into release evidence."
+Assert-Contains $gate 'Reset-ReactorListToCount -List \$steadyMemory' `
+        "An invalid process pair must not leak memory samples into release evidence."
+Assert-Contains $gate 'Reset-ReactorListToCount -List \$warmups' `
+        "An invalid process pair must not leak warmup samples into release evidence."
 Assert-Contains $gate 'Set-ReactorCurrentProcessCpuAffinity -CpuSet \$OrchestratorCpuSet' `
         "Benchmark orchestration must not share the wrk CPU set."
 Assert-Contains $protocolGate '\$OrchestratorCpuSet = \$selectedRoles\.orchestrator' `
@@ -76,6 +86,7 @@ if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-PreWarmCycles 4')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-PairRepeats 6')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-MinimumPairRepeats 3')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '-MaxInvalidPairAttempts 2')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-HeavyConcurrencyLevels "64,128"')).Count -ne 2) {
     throw "Spring and Rust-Java jobs must use the same bounded adaptive warmup contract."
 }
@@ -109,6 +120,34 @@ if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
             '\.warmup_stability\.load_runner_lifecycle == "persistent_per_gate"'
         )).Count -ne 2) {
     throw "Release evidence checks must enforce the optimized production-gate contract."
+}
+Assert-Contains $release '\.pair_attempts == \(\.pair_repeats \+ \.invalid_pair_attempts\)' `
+        "Release publication must verify valid and rejected process-pair accounting."
+Assert-Contains $release '\.invalid_pair_attempts <= 2 and \.maximum_invalid_pair_attempts == 2' `
+        "Release publication must enforce the invalid process-pair budget."
+
+Invoke-Expression $invalidPairHelpers
+$rollbackProbe = [Collections.Generic.List[object]]::new()
+$rollbackProbe.Add("kept")
+$rollbackProbe.Add("discarded-1")
+$rollbackProbe.Add("discarded-2")
+Reset-ReactorListToCount -List $rollbackProbe -Count 1
+if ($rollbackProbe.Count -ne 1 -or $rollbackProbe[0] -ne "kept") {
+    throw "Invalid process-pair rollback did not preserve only pre-attempt evidence."
+}
+try {
+    throw "Warmup did not stabilize for pair=1 variant=baseline endpoint=small-json"
+} catch {
+    if (-not (Test-IsWarmupStabilityFailure -ErrorRecord $_)) {
+        throw "Warmup stability failures must be eligible for bounded pair replacement."
+    }
+}
+try {
+    throw "Warmup failed for baseline/small-json"
+} catch {
+    if (Test-IsWarmupStabilityFailure -ErrorRecord $_) {
+        throw "Transport or correctness failures must not be hidden as invalid process pairs."
+    }
 }
 
 . (Join-Path $PSScriptRoot "gate_statistics.ps1")

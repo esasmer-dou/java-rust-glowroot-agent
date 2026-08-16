@@ -166,9 +166,9 @@ separately. This also prevents Docker/metric polling from stealing CPU from the 
 selection. Every steal-time window must remain within `1%`. A manually configured
 single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 
-Baseline and candidate use identical OpenJ9 low-RSS worker limits:
-`-XX:ActiveProcessorCount=1 -XcompilationThreads1 -Xgc:threads=1`. JIT remains enabled. The goal is
-to stop compiler/GC worker-count noise from being attributed to the agent.
+Baseline and candidate use the same production-representative OpenJ9 settings with
+`-XX:ActiveProcessorCount=1` and JIT enabled. Forced single compiler/GC workers are deliberately not
+used because measured Spring evidence showed that they prolonged the JIT ramp.
 
 A benchmark/workflow-only follow-up may reuse a passing REST matrix by run id. The workflow compares
 the Git objects for the root POM, bootstrap module, and Spring starter/native module. Reuse is rejected
@@ -192,6 +192,12 @@ Median absolute deviation must remain within `4%` in both cases. This rejects a 
 interpreter/JIT ramp without failing a release for a near-plateau outlier. Baseline and candidate
 still perform the same bounded warmup work. The full range remains diagnostic, and every raw RPS
 sample is attached to the release.
+
+If a process still does not stabilize, the complete baseline/candidate pair is rejected symmetrically.
+No startup, workload, memory, or warmup sample from that pair enters the release decision. Both
+variants restart, the rejected attempt remains in `invalid-pair-attempts.json`, and at most two such
+attempts are allowed. The gate still requires at least three valid independent pairs. Network,
+correctness, HTTP, and performance-threshold failures fail immediately and are not retried.
 
 Per-cell RSS maxima remain diagnostics because OpenJ9 JIT/GC page residency can move in both
 directions between independent processes. Memory is gated at a controlled point instead: each
@@ -220,6 +226,7 @@ Spring production matrix:
 .\benchmark\spring_boot_gate.ps1 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
+  -MaxInvalidPairAttempts 2 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `
@@ -249,6 +256,7 @@ Rust-Java REST production matrix:
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `
+  -MaxInvalidPairAttempts 2 `
   -ConcurrencyLevels "64,256" `
   -EndpointClasses "small-json,raw-json" `
   -Duration "12s" `

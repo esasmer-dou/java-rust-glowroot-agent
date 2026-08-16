@@ -95,8 +95,11 @@ All notable changes to this project are recorded here.
   application throughput behind load-generator saturation.
 - Recorded the application's reserved and execution CPU sets separately. Single-logical-CPU pinning
   remains diagnostic; stable evidence keeps the complete reserved group behind the one-CPU quota.
-- Limited both benchmark JVMs to one OpenJ9 compilation worker and one GC worker. JIT remains
-  enabled, while background JVM worker-count noise no longer dominates a small native-agent delta.
+- Rejected forced single OpenJ9 compiler/GC workers after measured Spring warmup showed a prolonged
+  JIT ramp. Release images keep the same production-representative JVM policy in both variants.
+- Added symmetric, bounded invalid-process-pair replacement. A JVM that cannot satisfy the unchanged
+  warmup stability gate is discarded in full; neither variant contributes startup, workload, memory,
+  or warmup evidence, and at most two such pair attempts are allowed.
 - Bound release evidence to runtime Git objects instead of a repository-wide commit id. A
   benchmark-only follow-up can reuse a passing REST matrix only when the POM, bootstrap, starter,
   and packaged native artifact trees are byte-identical; protocol and Spring gates still run on the
@@ -121,7 +124,8 @@ All notable changes to this project are recorded here.
   artifacts with full source-revision provenance.
 - Made REST protocol, collector-down fail-open, and optional bootstrap checks release-enforced.
 - Required both Spring Boot and Rust-Java REST evidence from the exact tag commit before publish.
-- Added performance, warmup-stability, steady-memory, and protocol summaries to stable release assets.
+- Added performance, warmup-stability, rejected-pair, steady-memory, and protocol evidence to stable
+  release assets.
 - Replaced the noise-sensitive single-pair non-2xx veto with three guards: paired median and
   request-weighted aggregate must show no regression, and candidate peak error rate may not exceed
   baseline peak; worst-pair drift remains visible in release evidence.
