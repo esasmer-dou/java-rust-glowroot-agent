@@ -94,11 +94,10 @@ native artifacts before ABI `3` can be published.
 | Spring non-web integration | PASS | Real `WebApplicationType.NONE` executable starts JVM telemetry with no MVC bean or web runtime dependency |
 | Upstream Glowroot protocol | PASS | Init, aggregate, gauge, trace, and HdrHistogram payloads parsed by the pinned upstream schema |
 | Collector unavailable | PASS | Business HTTP remains available; backlog and reconnect behavior stay bounded |
-| Embedded agent-owned budget | PASS | `358,531` calculated bytes; hard state/reserve limit `384 KiB` |
-| Embedded native attributed ceiling | PASS | `0.694 MiB`, including measured feature code pages; `0` additional threads |
-| Embedded observed resident maximum | PASS | smaps RSS maximum `+1.817 MiB`, below the `+3 MiB` boundary |
-| Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` |
-| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; small/raw c64/c256; heavy c64/c128; REST `4.5.2`; native ABI `29` |
+| Embedded configured budget | PASS | Dynamic native state is capped at `448 KiB`; total agent-attributed state and reserved native feature pages are capped at `1 MiB` |
+| Embedded resident/thread delta | RELEASE ENFORCED | Paired steady-state process RSS and cgroup delta must stay within `+3 MiB`; enabled telemetry may add only the one isolated exporter thread |
+| Clean standalone native provenance | PASS | Windows/Linux binaries built from clean revision `b41b3ee27c7329295fd510bdb04eec05bc4092d6` |
+| Rust-Java REST performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs; small/raw c64/c256; heavy c64/c128; REST `4.5.3`; native ABI `29` |
 | Rust-Java REST protocol and fail-open | RELEASE ENFORCED | Upstream wire schema, one failed transport attempt within the 75-second observation window, continued business HTTP availability, and optional `-javaagent` bootstrap must all pass |
 | Spring performance matrix | RELEASE ENFORCED | Three-to-six adaptive paired runs, three endpoint classes, exact-commit evidence |
 | Spring retained memory | RELEASE ENFORCED | Same full workload and process age; after performance sampling, both variants receive one benchmark-only full GC and the same idle window; paired median RSS/cgroup delta must stay within `+3 MiB` |
@@ -118,6 +117,11 @@ matrix again.
 Local Docker uses [`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) for fast
 c64 small/raw JSON feedback. Its output is diagnostic and never satisfies the exact-commit release
 gate.
+
+The GitHub Actions `Focused Performance Diagnostic` workflow runs only the paired Rust-Java REST
+raw JSON c64 cell on the dedicated runner. It is used to reject a hot-path regression before paying
+for the full matrix. Its workflow name and artifacts are intentionally excluded from release
+qualification.
 
 The embedded footprint report remains under
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md). For stable
@@ -181,7 +185,7 @@ remain within `+3 MiB`. The source-attributed native ceiling remains a separate 
 
 ## How The Rust-Java REST Gate Works
 
-The REST gate checks out the published `rust-java-rest:4.5.2` source tag and rejects any native ABI
+The REST gate checks out the published `rust-java-rest:4.5.3` source tag and rejects any native ABI
 other than `29`. It builds one minimal production image and runs telemetry off/on sequentially on
 the same physical CPU. The matrix uses the same small JSON, raw JSON, and heavy JSON classes and the
 same c64/c256 limits as the Spring gate. Embedded telemetry may add only the single bounded exporter
@@ -226,7 +230,7 @@ Rust-Java REST production matrix:
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.5.2" `
+  -RequiredRestVersion "4.5.3" `
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `

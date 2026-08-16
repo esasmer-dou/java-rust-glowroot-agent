@@ -1,0 +1,91 @@
+name: Focused Performance Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: java-rust-glowroot-focused-performance
+  cancel-in-progress: true
+
+jobs:
+  raw-json-c64:
+    runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
+    timeout-minutes: 35
+    steps:
+      - name: Check out agent source
+        uses: actions/checkout@v5
+        with:
+          path: java-rust-glowroot-agent
+
+      - name: Check out exact Rust-Java REST candidate
+        uses: actions/checkout@v5
+        with:
+          repository: esasmer-dou/rust-java-rest
+          ref: 0f9e8417ceac3238fceaa1de5f10eca9fe1fa5ec
+          path: rust-java-rest
+
+      - name: Check out pinned Glowroot wire contract
+        uses: actions/checkout@v5
+        with:
+          repository: glowroot/glowroot
+          ref: 622dc6f800228cccc6fa37b0ed9e779446d7c41e
+          path: glowroot
+
+      - name: Set up Semeru OpenJ9 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: semeru
+          java-version: "21"
+
+      - name: Verify dedicated native Linux runner
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        run: |
+          ./benchmark/performance_runner_preflight.ps1 `
+            -RunnerClass reactor-performance-native-linux `
+            -EvidencePath benchmark/results/runner-preflight/focused-raw-json-c64.json
+
+      - name: Run focused paired raw JSON diagnostic
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        run: |
+          ./benchmark/spring_boot_gate.ps1 `
+            -ApplicationKind rust-java-rest `
+            -RequiredRestVersion "4.5.3" `
+            -RequiredRestNativeAbi 29 `
+            -PairRepeats 3 `
+            -MinimumPairRepeats 3 `
+            -RequireAllPairs `
+            -ConcurrencyLevels "64" `
+            -EndpointClasses "raw-json" `
+            -Duration "12s" `
+            -Warmup "5s" `
+            -PreWarmCycles 2 `
+            -MinWarmupRounds 3 `
+            -MaxWarmupRounds 6 `
+            -MaxWarmupConfirmationRounds 6 `
+            -MaxWarmupRobustTrendPercent 3 `
+            -MaxWarmupBorderlineRobustTrendPercent 5 `
+            -MaxWarmupBorderlineMedianShiftPercent 3 `
+            -MaxWarmupMedianAbsoluteDeviationPercent 4 `
+            -MaxNon2xxDeltaPercentagePoints 0 `
+            -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+            -MaxAbsoluteNon2xxPercent 0.05 `
+            -MemoryLimit "128m" `
+            -AllowedThreadDelta 1 `
+            -AutoSelectCpuRoles `
+            -FailOnGate
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-raw-json-c64-diagnostic
+          path: |
+            java-rust-glowroot-agent/benchmark/results/rest_gate_*/
+            java-rust-glowroot-agent/benchmark/results/runner-preflight/focused-raw-json-c64.json
+          if-no-files-found: error
+          retention-days: 14

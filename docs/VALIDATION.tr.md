@@ -96,11 +96,10 @@ matrisi ve temiz Windows/Linux native paketleri tamamlanmalıdır.
 | Spring web olmayan entegrasyon | PASS | Gerçek `WebApplicationType.NONE` uygulaması MVC bean'i veya web runtime dependency'si olmadan JVM telemetrisini başlatır |
 | Upstream Glowroot protokolü | PASS | Init, aggregate, gauge, trace ve HdrHistogram mesajları sabitlenen upstream şema ile okundu |
 | Collector kapalı | PASS | Business HTTP çalışır; backlog ve reconnect davranışı sınırlı kalır |
-| Embedded agent-owned bütçe | PASS | Hesaplanan `358.531` byte; sert state/rezerv sınırı `384 KiB` |
-| Embedded native atfedilen üst sınır | PASS | Kod sayfaları dahil `0,694 MiB`; ek thread `0` |
-| Embedded resident maksimum | PASS | smaps RSS maksimumu `+1,817 MiB`; `+3 MiB` sınırının altında |
-| Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `a1ed7f0dde4f7903b66589ed5d5a759d6b9c9802` revision'ından üretildi |
-| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; small/raw c64/c256; heavy c64/c128; REST `4.5.2`; native ABI `29` |
+| Embedded konfigürasyon bütçesi | PASS | Dinamik native state en fazla `448 KiB`; agent'a atfedilen toplam state ve ayrılan native feature sayfaları en fazla `1 MiB` |
+| Embedded resident/thread farkı | RELEASE ZORUNLULUĞU | Eşleştirilmiş steady-state process RSS ve cgroup farkı en fazla `+3 MiB` olmalıdır. Açık telemetri yalnız tek izole exporter thread'i ekleyebilir. |
+| Temiz standalone native kaynak | PASS | Windows/Linux binary'leri temiz `b41b3ee27c7329295fd510bdb04eec05bc4092d6` revision'ından üretildi |
+| Rust-Java REST performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu; small/raw c64/c256; heavy c64/c128; REST `4.5.3`; native ABI `29` |
 | Rust-Java REST protokol ve fail-open | RELEASE ZORUNLULUĞU | Upstream wire şeması, 75 saniyelik gözlem içinde en az bir başarısız taşıma denemesi, business HTTP erişiminin devam etmesi ve opsiyonel `-javaagent` bootstrap birlikte geçmelidir |
 | Spring performans matrisi | RELEASE ZORUNLULUĞU | Üç ile altı arasında adaptif eşleştirilmiş koşu, üç endpoint sınıfı ve exact-commit kanıtı |
 | Spring tutulan bellek | RELEASE ZORUNLULUĞU | Aynı tam yük ve süreç yaşı kullanılır. Performans örneklerinden sonra iki varyanta da yalnız yük testi için bir tam GC ve aynı boşta bekleme penceresi uygulanır. RSS/cgroup eşleştirilmiş medyan farkı en fazla `+3 MiB` olmalıdır. |
@@ -120,6 +119,11 @@ oluşturmak matrisi yeniden başlatmaz; mevcut kanıt kullanılır.
 Hızlı local kontrol için
 [`local_docker_quick_gate.ps1`](../benchmark/local_docker_quick_gate.ps1) kullanılır. Bu kısa test c64
 small/raw JSON akışını ölçer. Sonucu yalnız tanı amaçlıdır ve exact-commit release gate'ini karşılamaz.
+
+GitHub Actions içindeki `Focused Performance Diagnostic` workflow'u, dedicated runner üzerinde
+yalnız eşleştirilmiş Rust-Java REST raw JSON c64 hücresini çalıştırır. Tam matristen önce hot-path
+regresyonunu hızlıca elemek için kullanılır. Workflow adı ve artifact'leri bilinçli olarak release
+yeterlilik kontrolünün dışında tutulur.
 
 Embedded footprint raporu
 [`evidence/0.1.0-rc1/footprint-report.md`](evidence/0.1.0-rc1/footprint-report.md) dosyasındadır.
@@ -181,7 +185,7 @@ process yaşında beş örnek alınır. Eşleştirilmiş process RSS ve cgroup m
 
 ## Rust-Java REST Gate Nasıl Çalışır?
 
-REST gate, yayınlanmış `rust-java-rest:4.5.2` source tag'ini kullanır. Native ABI `29` değilse test
+REST gate, yayınlanmış `rust-java-rest:4.5.3` source tag'ini kullanır. Native ABI `29` değilse test
 başlamaz. Tek bir minimal production image hazırlanır. Telemetri kapalı ve açık varyantlar aynı
 fiziksel CPU üzerinde sıralı çalışır. Matris; küçük JSON, raw JSON ve heavy JSON endpoint'lerini
 c64/c256 altında ölçer. Embedded telemetri yalnızca mimarinin gerektirdiği tek sınırlı exporter
@@ -226,7 +230,7 @@ Rust-Java REST production matrisi:
 ```powershell
 .\benchmark\spring_boot_gate.ps1 `
   -ApplicationKind rust-java-rest `
-  -RequiredRestVersion "4.5.2" `
+  -RequiredRestVersion "4.5.3" `
   -RequiredRestNativeAbi 29 `
   -PairRepeats 6 `
   -MinimumPairRepeats 3 `

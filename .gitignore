@@ -6,6 +6,7 @@
 /glowroot-upstream/
 /.release-native-clean/
 /.release-staging/
+/.release-temp/
 /.idea/
 /.vscode/
 /*.iml

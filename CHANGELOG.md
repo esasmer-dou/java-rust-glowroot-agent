@@ -27,8 +27,12 @@ All notable changes to this project are recorded here.
 
 - Moved the exporter and profile-release loop onto one isolated `256 KiB` Rust thread in both Spring
   and Rust-Java REST. Telemetry no longer consumes Hyper workers or application executors.
+- Packed the embedded REST request capture state into one 32-bit value and simplified the exact
+  rotating sample window. Sampled aggregates, periodic-route coverage, and exact 5xx accounting
+  remain unchanged.
 - Validated collector reachability when the isolated exporter starts and lowered its operating-
-  system scheduling priority. Embedded REST releases that startup probe and reconnects only for a
+  system scheduling priority. Linux uses low-priority batch scheduling and Windows uses its lowest
+  normal thread priority. Embedded REST releases that startup probe and reconnects only for a
   bounded export window; standalone Spring reuses one bounded connection.
 - Moved Spring MVC synchronous request sampling state into one reusable per-thread primitive holder.
   Normal synchronous requests no longer touch the Servlet attribute table, and sampled synchronous
@@ -90,9 +94,9 @@ All notable changes to this project are recorded here.
 
 ### Compatibility
 
-- Agent `0.3.0` requires Glowroot native ABI `3`. The embedded path requires Rust-Java REST `4.5.2`
+- Agent `0.3.0` requires Glowroot native ABI `3`. The embedded path requires Rust-Java REST `4.5.3`
   and REST native ABI `29`.
-- Windows x64 and Linux glibc x64 binaries are produced from the same clean `rust-spring v4.5.2`
+- Windows x64 and Linux glibc x64 binaries are produced from the same clean `rust-spring v4.5.3`
   source revision and are protected by SHA-256 provenance checks.
 
 ## [0.2.1] - 2026-08-14
