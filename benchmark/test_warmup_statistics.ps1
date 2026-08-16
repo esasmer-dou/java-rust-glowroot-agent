@@ -46,6 +46,12 @@ Assert-Warmup $false `
 Assert-Warmup $true `
         @(78501.34, 78451.49, 78510.0, 78490.0, 78520.0, 78480.0) `
         "A confirmed stable execution level must pass without relaxing thresholds."
+Assert-Warmup $false `
+        @(18279.39, 19304.13, 21120.07, 21682.69, 21391.04, 21510.27) `
+        "A late OpenJ9 ramp must remain blocked at the old confirmation boundary."
+Assert-Warmup $true `
+        @(21120.07, 21682.69, 21391.04, 21510.27, 21480.0, 21520.0) `
+        "A bounded rolling window must accept the same process after a confirmed plateau."
 
 $insufficientFailed = $false
 try {

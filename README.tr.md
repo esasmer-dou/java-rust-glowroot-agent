@@ -598,7 +598,7 @@ native build yayınlamayın.
   -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
-  -MaxWarmupConfirmationRounds 10 `
+  -MaxWarmupConfirmationRounds 14 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `

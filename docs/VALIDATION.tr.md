@@ -157,8 +157,10 @@ kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantı
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
 Her uygulama süreci önce dört eşit ön ısınma döngüsü çalıştırır. Ardından endpoint başına altı ölçülen
-ısınma turu tamamlar. Son karar JVM'in hâlâ hızlandığını gösteriyorsa en fazla on ek ve tam matris
-doğrulama turu çalışır. Hiçbir eşik gevşetilmez. Gate boyunca aynı `wrk` container'ı kullanılır. Her
+ısınma turu tamamlar. Son karar JVM'in hâlâ hızlandığını gösteriyorsa en fazla on dört ek ve tam matris
+doğrulama turu çalışır. Hiçbir eşik gevşetilmez. Rolling kararlılık penceresi geçtiği anda gate durur.
+Bu nedenle son dört tur yalnız geç plato yapan JVM'de çalışır ve bütün matrisin baştan başlamasını
+önler. Gate boyunca aynı `wrk` container'ı kullanılır. Her
 tur, tanımlı endpoint sınıflarını sırayla dolaşır. Release workflow'u kalibre edilmiş
 tek uygulama SMT grubunu kullanır. Baseline ve candidate ayrı süreçlerde çalışır. Her pair'de çalışma
 sırası ters çevrilir. Böylece iki JVM aynı işi aynı süreç yaşında alır ve aynı fiziksel CPU için
@@ -206,7 +208,7 @@ Spring production matrisi:
   -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
-  -MaxWarmupConfirmationRounds 10 `
+  -MaxWarmupConfirmationRounds 14 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -236,7 +238,7 @@ Rust-Java REST production matrisi:
   -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
-  -MaxWarmupConfirmationRounds 10 `
+  -MaxWarmupConfirmationRounds 14 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `

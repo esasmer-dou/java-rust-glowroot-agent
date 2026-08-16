@@ -49,7 +49,7 @@ Assert-Contains $gate '@\(\$Baseline, \$Candidate, \$Collector, \$LoadRunner\)' 
         "Gate cleanup must remove the persistent load runner."
 
 if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
-        ([regex]::Matches($workflow, '-MaxWarmupConfirmationRounds 10')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '-MaxWarmupConfirmationRounds 14')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-PreWarmCycles 4')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-PairRepeats 6')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-MinimumPairRepeats 3')).Count -ne 2 -or

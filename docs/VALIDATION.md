@@ -156,7 +156,9 @@ single-logical-CPU run also keeps the paired SMT-sibling activity delta within `
 
 Each application process receives four equal pre-warm cycles and six measured warmup rounds per
 endpoint. If the final decision still shows a JVM that is improving, the process may receive at most
-ten additional full-matrix interleaved confirmation rounds. No threshold is relaxed. One persistent
+fourteen additional full-matrix interleaved confirmation rounds. No threshold is relaxed. The gate
+stops as soon as the rolling stability window passes, so the extra four rounds are paid only by a
+late-plateau JVM and avoid restarting the entire matrix. One persistent
 `wrk` container is reused for the entire gate. Every round visits all configured endpoint
 classes in round-robin order. The release workflow uses one calibrated application SMT group, runs
 baseline and candidate as separate processes, and reverses their order in alternating pairs. Both
@@ -206,7 +208,7 @@ Spring production matrix:
   -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
-  -MaxWarmupConfirmationRounds 10 `
+  -MaxWarmupConfirmationRounds 14 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -236,7 +238,7 @@ Rust-Java REST production matrix:
   -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
-  -MaxWarmupConfirmationRounds 10 `
+  -MaxWarmupConfirmationRounds 14 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `

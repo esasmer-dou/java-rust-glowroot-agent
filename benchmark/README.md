@@ -111,7 +111,7 @@ classpath behavior.
   -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
-  -MaxWarmupConfirmationRounds 10 `
+  -MaxWarmupConfirmationRounds 14 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
@@ -131,7 +131,9 @@ executable-JAR startup path.
 
 Each process first receives four equal pre-warm cycles. It then receives six measured warmup rounds.
 Every round visits all endpoint classes in round-robin order. If the final stability window fails,
-the gate adds at most ten full-matrix confirmation rounds without relaxing any threshold. Baseline
+the gate adds at most fourteen full-matrix confirmation rounds without relaxing any threshold. It
+stops as soon as the rolling window passes; the extra four rounds only protect late OpenJ9 plateaus
+from forcing a complete matrix restart. Baseline
 and candidate therefore receive the same work at the same process age. One persistent `wrk`
 container is reused for the entire gate instead of creating a container for every sample.
 The normalized Theil-Sen trend over the final six rounds normally must not exceed `3%`. A trend in
@@ -190,7 +192,7 @@ thread because it shared the framework runtime.
   -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
-  -MaxWarmupConfirmationRounds 10 `
+  -MaxWarmupConfirmationRounds 14 `
   -MaxWarmupRobustTrendPercent 3 `
   -MaxWarmupBorderlineRobustTrendPercent 5 `
   -MaxWarmupBorderlineMedianShiftPercent 3 `
