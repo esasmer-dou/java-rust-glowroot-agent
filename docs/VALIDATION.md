@@ -167,6 +167,11 @@ execution sets separately. This also prevents Docker/metric polling from stealin
 selection. Every steal-time window must remain within `1%`. A manually configured
 single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 
+A benchmark/workflow-only follow-up may reuse a passing REST matrix by run id. The workflow compares
+the Git objects for the root POM, bootstrap module, and Spring starter/native module. Reuse is rejected
+if any runtime object differs. The release includes this identity manifest, while protocol and Spring
+gates still execute on the release commit.
+
 Each application process receives four equal pre-warm cycles and six measured warmup rounds per
 measured endpoint. If the final decision still shows a JVM that is improving, the process may
 receive at most fourteen additional full-matrix interleaved confirmation rounds. No threshold is

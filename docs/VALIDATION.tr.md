@@ -170,6 +170,12 @@ sakin grubu seçen eski yöntemi
 kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal CPU elle seçilirse
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
+Yalnız benchmark, workflow veya doküman değiştiren sonraki bir commit, daha önce geçen REST matrisini
+run kimliğiyle kullanabilir. Workflow; ana POM, bootstrap modülü ve native dosyaları içeren Spring
+starter modülünün Git object değerlerini birebir karşılaştırır. Runtime tarafında tek dosya bile
+değişirse yeniden kullanım reddedilir. Kimlik kanıtı release dosyalarına eklenir. Protokol ve Spring
+gate'leri yine release commit'i üzerinde çalışır.
+
 Her uygulama süreci önce dört eşit ön ısınma döngüsü çalıştırır. Ardından ölçülen endpoint başına altı
 ısınma turu tamamlar. Son karar JVM'in hâlâ hızlandığını gösteriyorsa en fazla on dört ek ve tam matris
 doğrulama turu çalışır. Hiçbir eşik gevşetilmez. Rolling kararlılık penceresi geçtiği anda gate durur.

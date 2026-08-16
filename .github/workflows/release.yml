@@ -147,11 +147,22 @@ jobs:
           REST_RUNNER="$(find "$REST_GATE_DIR" -path '*/runner-preflight/rust-java-rest-agent.json' -type f -print -quit)"
           REST_PROTOCOL_REPORT="$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/REPORT.md' -type f -print -quit)"
           REST_PROTOCOL_SUMMARY="$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/gate-summary.json' -type f -print -quit)"
+          REST_RUNTIME_IDENTITY="$(find "$REST_GATE_DIR" -name 'runtime-evidence-identity.json' -type f -print -quit)"
           for FILE in "$SPRING_REPORT" "$SPRING_SUMMARY" "$SPRING_STEADY" "$SPRING_WARMUP" "$SPRING_RUNNER" \
             "$REST_REPORT" "$REST_SUMMARY" "$REST_STEADY" "$REST_WARMUP" "$REST_RUNNER" \
-            "$REST_PROTOCOL_REPORT" "$REST_PROTOCOL_SUMMARY"; do
+            "$REST_PROTOCOL_REPORT" "$REST_PROTOCOL_SUMMARY" "$REST_RUNTIME_IDENTITY"; do
             test -s "$FILE"
           done
+          CURRENT_COMMIT="$(git rev-parse HEAD)"
+          jq -e --arg current "$CURRENT_COMMIT" '.schema == 1 and .passed == true and
+            .current_commit == $current and
+            .required_rest_version == "4.5.4" and .required_rest_native_abi == 29 and
+            (.evidence_commit | type == "string" and length == 40) and
+            (.evidence_run_id | type == "string" and length > 0) and
+            (.runtime_objects | length) == 3 and
+            all(.runtime_objects[]; .matches == true and
+              (.current_object | type == "string" and length == 40) and
+              .current_object == .evidence_object)' "$REST_RUNTIME_IDENTITY" >/dev/null
           for RUNNER_EVIDENCE in "$SPRING_RUNNER" "$REST_RUNNER"; do
             jq -e '.schema == 1 and .passed == true and
               .runner_class == "reactor-performance-native-linux" and
@@ -362,6 +373,8 @@ jobs:
             release-assets/rust-java-rest-runner-preflight.json
           cp "$(find "$REST_GATE_DIR" -path '*/glowroot_gate_*/gate-summary.json' -type f -print -quit)" \
             release-assets/rust-java-rest-protocol-gate-summary.json
+          cp "$(find "$REST_GATE_DIR" -name 'runtime-evidence-identity.json' -type f -print -quit)" \
+            release-assets/rust-java-rest-runtime-evidence-identity.json
           (cd release-assets && sha256sum ./* > SHA256SUMS)
           test -s release-assets/native-provenance.properties
 

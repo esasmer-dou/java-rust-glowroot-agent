@@ -96,6 +96,10 @@ All notable changes to this project are recorded here.
 - Kept the application's complete SMT sibling group reserved while executing a one-CPU application
   on one logical CPU from that group. This removes sibling-parallel CFS quota oscillation that could
   make an unchanged baseline appear to lose half its throughput during sustained warmup.
+- Bound release evidence to runtime Git objects instead of a repository-wide commit id. A
+  benchmark-only follow-up can reuse a passing REST matrix only when the POM, bootstrap, starter,
+  and packaged native artifact trees are byte-identical; protocol and Spring gates still run on the
+  release commit.
 - Removed the monitor lock from registered Spring MVC route lookups and shortened the dominant
   unsampled successful completion path without changing exact `5xx` or async accounting.
 

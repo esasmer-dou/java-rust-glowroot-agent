@@ -71,6 +71,12 @@ if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
 }
 Assert-Contains $workflow 'REACTOR_GATE_QUALIFICATION_DEPTH' `
         "Workflow must expose release and extended gate depths."
+Assert-Contains $workflow 'rest_evidence_run_id:' `
+        "Workflow must support content-addressed reuse of a passing REST matrix."
+Assert-Contains $workflow 'runtime_evidence_identity\.ps1' `
+        "Reused REST evidence must be verified against the current runtime tree."
+Assert-Contains $release 'runtime-evidence-identity\.json' `
+        "Release publication must require the runtime evidence identity manifest."
 if (([regex]::Matches($workflow, '-EndpointClasses \$endpointClasses')).Count -ne 2 -or
         ([regex]::Matches($workflow, '"small-json,raw-json,heavy-json"')).Count -ne 2 -or
         ([regex]::Matches($workflow, '"small-json,raw-json"')).Count -ne 2) {

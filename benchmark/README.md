@@ -70,6 +70,12 @@ physical core. Evidence records both `cpu_roles.application` and
 `cpu_roles.application_execution`. Preflight fails closed when any role is missing, overlaps another
 physical group, or does not reserve the required SMT siblings.
 
+If a later commit changes only benchmark, workflow, or documentation files, the production workflow
+can reuse an earlier passing REST matrix with `rest_evidence_run_id`. Reuse is content-addressed, not
+trust-based: `pom.xml`, `agent-bootstrap`, and `spring-boot-starter` Git objects must match exactly,
+including packaged native binaries. Any runtime change fails closed and requires a new matrix. The
+current commit still runs protocol and Spring integration gates.
+
 For development-only feedback, run a short c64 small/raw JSON matrix locally:
 
 ```powershell
