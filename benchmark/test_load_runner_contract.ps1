@@ -50,7 +50,7 @@ Assert-Contains $gate '@\(\$Baseline, \$Candidate, \$Collector, \$LoadRunner\)' 
 
 if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-MaxWarmupConfirmationRounds 10')).Count -ne 2 -or
-        ([regex]::Matches($workflow, '-PreWarmCycles 2')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '-PreWarmCycles 4')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-PairRepeats 6')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-MinimumPairRepeats 3')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-HeavyConcurrencyLevels "64,128"')).Count -ne 2) {

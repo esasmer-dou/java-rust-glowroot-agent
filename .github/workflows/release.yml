@@ -172,7 +172,7 @@ jobs:
             .non_2xx_threshold_percentage_points == 0 and
             .saturated_non_2xx_threshold_percentage_points == 0.02 and
             .absolute_non_2xx_ceiling_percent == 0.05 and
-            .warmup_stability.prewarm_cycles == 2 and
+            .warmup_stability.prewarm_cycles == 4 and
             .warmup_stability.load_runner_lifecycle == "persistent_per_gate" and
             .warmup_stability.fixed_rounds == 6 and
             .warmup_stability.interleaved_rounds == 6 and
@@ -212,7 +212,7 @@ jobs:
             .non_2xx_threshold_percentage_points == 0 and
             .saturated_non_2xx_threshold_percentage_points == 0.02 and
             .absolute_non_2xx_ceiling_percent == 0.05 and
-            .warmup_stability.prewarm_cycles == 2 and
+            .warmup_stability.prewarm_cycles == 4 and
             .warmup_stability.load_runner_lifecycle == "persistent_per_gate" and
             .warmup_stability.fixed_rounds == 6 and
             .warmup_stability.interleaved_rounds == 6 and

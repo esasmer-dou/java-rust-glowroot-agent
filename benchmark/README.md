@@ -108,7 +108,7 @@ classpath behavior.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
-  -PreWarmCycles 2 `
+  -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
   -MaxWarmupConfirmationRounds 10 `
@@ -129,7 +129,7 @@ starts OpenJ9's instrumentation subsystem and is reported separately; it does no
 starter-only resident-memory certification. CI still verifies bootstrap argument mapping and the
 executable-JAR startup path.
 
-Each process first receives two equal pre-warm cycles. It then receives six measured warmup rounds.
+Each process first receives four equal pre-warm cycles. It then receives six measured warmup rounds.
 Every round visits all endpoint classes in round-robin order. If the final stability window fails,
 the gate adds at most ten full-matrix confirmation rounds without relaxing any threshold. Baseline
 and candidate therefore receive the same work at the same process age. One persistent `wrk`
@@ -187,7 +187,7 @@ thread because it shared the framework runtime.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
-  -PreWarmCycles 2 `
+  -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
   -MaxWarmupConfirmationRounds 10 `

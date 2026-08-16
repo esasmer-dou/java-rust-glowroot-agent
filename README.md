@@ -586,7 +586,7 @@ do not publish a local dirty native build.
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
-  -PreWarmCycles 2 `
+  -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
   -MaxWarmupConfirmationRounds 10 `

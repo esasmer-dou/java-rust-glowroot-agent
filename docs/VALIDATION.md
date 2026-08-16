@@ -153,7 +153,7 @@ threads. A runner without calibrated roles falls back to the quietest-group
 selection. Every steal-time window must remain within `1%`. A manually configured
 single-logical-CPU run also keeps the paired SMT-sibling activity delta within `10%`.
 
-Each application process receives two equal pre-warm cycles and six measured warmup rounds per
+Each application process receives four equal pre-warm cycles and six measured warmup rounds per
 endpoint. If the final decision still shows a JVM that is improving, the process may receive at most
 ten additional full-matrix interleaved confirmation rounds. No threshold is relaxed. One persistent
 `wrk` container is reused for the entire gate. Every round visits all configured endpoint
@@ -202,7 +202,7 @@ Spring production matrix:
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
-  -PreWarmCycles 2 `
+  -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
   -MaxWarmupConfirmationRounds 10 `
@@ -232,7 +232,7 @@ Rust-Java REST production matrix:
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
-  -PreWarmCycles 2 `
+  -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
   -MaxWarmupConfirmationRounds 10 `

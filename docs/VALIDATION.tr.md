@@ -155,7 +155,7 @@ Kalibre edilmemiş runner en sakin grubu seçen eski yöntemi
 kullanır. Bütün steal-time aralıkları `%1` içinde kalmalıdır. Tek mantıksal CPU elle seçilirse
 eşleştirilmiş SMT kardeşi aktivite farkı da `%10` içinde kalmalıdır.
 
-Her uygulama süreci önce iki eşit ön ısınma döngüsü çalıştırır. Ardından endpoint başına altı ölçülen
+Her uygulama süreci önce dört eşit ön ısınma döngüsü çalıştırır. Ardından endpoint başına altı ölçülen
 ısınma turu tamamlar. Son karar JVM'in hâlâ hızlandığını gösteriyorsa en fazla on ek ve tam matris
 doğrulama turu çalışır. Hiçbir eşik gevşetilmez. Gate boyunca aynı `wrk` container'ı kullanılır. Her
 tur, tanımlı endpoint sınıflarını sırayla dolaşır. Release workflow'u kalibre edilmiş
@@ -202,7 +202,7 @@ Spring production matrisi:
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
-  -PreWarmCycles 2 `
+  -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
   -MaxWarmupConfirmationRounds 10 `
@@ -232,7 +232,7 @@ Rust-Java REST production matrisi:
   -EndpointClasses "small-json,raw-json,heavy-json" `
   -Duration "12s" `
   -Warmup "5s" `
-  -PreWarmCycles 2 `
+  -PreWarmCycles 4 `
   -MinWarmupRounds 3 `
   -MaxWarmupRounds 6 `
   -MaxWarmupConfirmationRounds 10 `
