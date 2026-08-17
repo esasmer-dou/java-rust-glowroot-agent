@@ -1,3 +1,0 @@
-com.reactor.glowroot.agent.spring.RustGlowrootSpringAutoConfiguration
-com.reactor.glowroot.agent.spring.RustGlowrootTomcatAutoConfiguration
-com.reactor.glowroot.agent.spring.RustGlowrootMvcAutoConfiguration

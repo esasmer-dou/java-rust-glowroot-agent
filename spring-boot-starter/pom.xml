@@ -7,45 +7,39 @@
   <parent>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-glowroot-parent</artifactId>
-    <version>0.3.0</version>
+    <version>0.4.0</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
   <name>java-rust-glowroot-spring-boot-starter</name>
-  <description>Opt-in Spring Boot native telemetry runtime with an optional Servlet MVC adapter.</description>
+  <description>One dependency for the bounded native runtime and optimized Spring MVC server adapters.</description>
 
   <dependencies>
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-autoconfigure</artifactId>
-      <version>${spring.boot.version}</version>
-      <optional>true</optional>
+      <groupId>com.reactor</groupId>
+      <artifactId>java-rust-glowroot-spring-runtime</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-webmvc</artifactId>
-      <version>${spring.framework.version}</version>
-      <optional>true</optional>
+      <groupId>com.reactor</groupId>
+      <artifactId>java-rust-glowroot-spring-mvc-adapter</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.apache.tomcat.embed</groupId>
-      <artifactId>tomcat-embed-core</artifactId>
-      <version>${tomcat.embed.version}</version>
-      <scope>provided</scope>
-      <optional>true</optional>
+      <groupId>com.reactor</groupId>
+      <artifactId>java-rust-glowroot-spring-tomcat-adapter</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>${junit.version}</version>
-      <scope>test</scope>
+      <groupId>com.reactor</groupId>
+      <artifactId>java-rust-glowroot-spring-jetty-adapter</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-test</artifactId>
-      <version>${spring.framework.version}</version>
-      <scope>test</scope>
+      <groupId>com.reactor</groupId>
+      <artifactId>java-rust-glowroot-spring-undertow-adapter</artifactId>
+      <version>${project.version}</version>
     </dependency>
   </dependencies>
 
@@ -53,12 +47,7 @@
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
-        <version>3.4.2</version>
         <configuration>
           <archive>
             <manifestEntries>
@@ -67,10 +56,6 @@
             </manifestEntries>
           </archive>
         </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

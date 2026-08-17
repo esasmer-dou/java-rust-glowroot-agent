@@ -112,43 +112,56 @@ pod yeniden başlatılmalıdır; bu kullanım profil sözleşmesinin dışındad
 
 ## Spring Boot Sınırı
 
-Spring Boot desteği üç auto-configuration katmanından oluşur. Web'den bağımsız çekirdek,
-process-scoped `NativeTelemetry` yaşam döngüsünü ve standalone native binary'yi yönetir. Servlet veya
-Spring MVC koşulu yoktur. Bu nedenle veritabanı worker'ında, Kafka uygulamasında, scheduler'da, batch
-işinde ve komut satırı servisinde çalışır. İsteğe bağlı HTTP katmanı embedded Tomcat varsa tek context
-valve seçer. Diğer Servlet container'larda tek taşınabilir MVC interceptor seçilir.
+Spring Boot desteğinde web'den bağımsız native çekirdek ve açık framework sınırları vardır. Çekirdek,
+process-scoped `NativeTelemetry` yaşam döngüsünü ve standalone native binary'yi yönetir. Web koşulu
+yoktur. Bu nedenle veritabanı worker'ında, Kafka uygulamasında, scheduler'da, batch işinde ve komut
+satırı servisinde çalışır. Desteklenen her Servlet motoru en düşük maliyetli tamamlanma noktasını
+kullanır: Tomcat context Valve, Jetty RequestLog veya Undertow exchange completion listener. Reaktif
+HTTP desteği ayrı WebFlux artifact'ında bulunur ve sınırlı tek `WebFilter` kullanır.
 
-Paketleme yine bilinçli olarak iki ayrı artifact kullanır. Bootstrap JAR içinde yalnız bir premain
-sınıfı vardır ve sınırlı argümanları property'lere aktarır. Starter, Spring Boot uygulama
-classloader'ında kalır; çekirdeği ve isteğe bağlı adaptörü taşır. Bu ayrım, Spring sınıfları executable
-Spring Boot JAR ile kullanılan `-javaagent` JAR içine konulduğunda oluşan parent/child classloader
-hatasını önler. Web olmayan uygulamaya MVC, Tomcat veya Servlet bağımlılığı transitif olarak eklenmez.
+Paketleme; bootstrap, native runtime, taşınabilir MVC fallback ve sunucu adaptörlerini ayırır. Servlet
+MVC kullanan kullanıcı yine tek ana starter ekler. İç adaptör JAR'larındaki sunucu API'leri `provided`
+ve `optional` olarak tanımlıdır. Bu nedenle agent uygulamaya motor getirmez. Yalnız sınıfı ve server
+factory'si zaten bulunan adaptör açılır. WebFlux artifact'ı yalnız reaktif uygulamaya eklenir. Bu
+ayrım, Spring sınıfları executable Spring Boot JAR ile kullanılan `-javaagent` JAR içine konulduğunda
+oluşan parent/child classloader hatasını önler. Ayrıca Servlet uygulamasına WebFlux veya seçilmeyen
+bir sunucu motoru gelmez. CI üç ayrı MVC uygulaması ile Reactor Netty WebFlux uygulaması üretir;
+seçilmeyen bir motor arşive girerse build durur.
 
-Başarılı istekler JNI çağrısından önce Java tarafında örneklenir. Eşleşen MVC handler'larının `5xx`
-yanıtları tam sayılır. Tomcat valve, başlangıç zamanını Tomcat'in mevcut Coyote request bilgisinden
-alır. Normalize edilmiş route kalıbını yalnız örneklenen, yavaş veya hatalı istek tamamlandığında
-çözer ve MVC interceptor yaşam döngüsüne girmez. Diğer Servlet container'lardaki taşınabilir fallback
-aynı sınırlı sampling ve tam hata sözleşmesini korur. İki adaptör de Java executor, Servlet filter veya
-classpath taraması oluşturmaz. Standalone Rust
-kütüphanesi, `256 KiB` stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint
-tablosu, trace buffer, mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.
+Başarılı istekler JNI çağrısından önce Java tarafında örneklenir. Yaygın olan örneklenmeyen başarılı
+yol; route'a, request attribute'a veya native state'e erişmeden döner. Örneklenen, yavaş, hatalı,
+asenkron ve bulunamayan istekler Spring'in normalize edilmiş route bilgisini seçilen sunucunun
+tamamlanma noktasından çözer. Her desteklenen motorda `5xx` tam sayılır. WebFlux filter da reaktif
+yanıt commit edilirken aynı sınırlı route, durum ve hata sözleşmesini uygular. İstek başına reaktif
+gözlem yalnız ayrı seçilen WebFlux modülünde bulunur. Hiçbir adaptör Java executor, Servlet filter,
+request wrapper veya classpath taraması oluşturmaz. Standalone Rust kütüphanesi, `256 KiB`
+stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint tablosu, trace buffer,
+mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.
 
-Spring sınırı son eşleşen route'u, response status bilgisini, async tamamlanmayı ve gerekirse
-`Throwable` referansını okur. Bu bilgiler ancak Spring MVC dispatch tamamlandıktan sonra oluşur.
+Spring sınırı son eşleşen route'u, response status bilgisini, tamamlanmayı ve gerekirse `Throwable`
+referansını okur. Bu bilgiler ancak framework dispatch tamamlandıktan sonra oluşur.
 Adaptör toplama, encode, ağ, JMX polling veya dosya işlemi yapmaz. Bu sabit maliyetli sınırı Rust
 başlangıç çağrısına çevirmek her request'e yeni JNI maliyeti ekler. JVMTI weaving ise tam agent
 footprint'ini geri getirir. Hot-path sözleşmesi nedeniyle iki seçenek de kullanılmaz.
 
-Adapter; bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty veya genel event bus kullanmaz. `0.3.0`
-sürümü Servlet MVC HTTP izlemeyi destekler, WebFlux HTTP izlemeyi desteklemez. Spring'e özel method,
-JDBC, JMX veya profiler instrumentation gerekiyorsa tam Glowroot agent kullanın. Sınırlı profiller
-yalnız açık SQL slotu, seçilmiş JVM bellek/GC ölçümü, sınırlı hata stack bilgisi ve yetkili tanılama
-işlemi ekler.
+Hata ayrıntısının sahibi de Rust'tır. Aktif profil hata trace'i istiyorsa uygulama thread'i yalnız
+zayıf bir JNI referansı oluşturur ve sınırlı native kuyruğa bırakır. İzole exporter bu referansı
+güvenli biçimde açar, sınırlı JNI local frame oluşturur ve exception sınıfını, mesajını ve ayarlanan
+sayıda stack satırını okur. Bekleyen referanslar ile hazırlanmış trace'ler aynı sert
+`error_trace_capacity` sınırını paylaşır. İki kuyruk ayrı ayrı tam kapasite kullanamaz. Referans
+okunmadan önce GC tarafından temizlenirse veya backpressure nedeniyle kabul edilmezse drop sayacı
+artar. Uygulama yanıtı değişmez. Zayıf referans bilinçli bir seçimdir; isteğe bağlı trace için
+büyük bir Java exception nesne grafiği bellekte tutulmaz.
+
+Adaptörler bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty veya genel event bus kullanmaz. Reactor
+Netty'yi agent değil, WebFlux uygulaması sağlar. Spring'e özel method, JDBC, JMX veya profiler
+instrumentation gerekiyorsa tam Glowroot agent kullanın. Sınırlı profiller yalnız açık SQL slotu,
+seçilmiş JVM bellek/GC ölçümü, sınırlı hata stack bilgisi ve yetkili tanılama işlemi ekler.
 
 MVC olmadığında aynı native exporter process RSS/thread ölçümlerini ve gönderim sağlığını toplamaya
 devam eder. `jvm` profili JVM bellek/GC ölçümlerini ekler. `sql` ve `full`, tekrar kullanılan açık SQL
 statement olaylarını kabul eder. `diagnostic`, sınırlı ve yetkili dump komutlarını kabul eder.
-`0.3.0` Kafka kaydı veya scheduler job adını kendiliğinden bulmaz ve metotları weave etmez. Bu sınır
+`0.4.0` Kafka kaydı veya scheduler job adını kendiliğinden bulmaz ve metotları weave etmez. Bu sınır
 bilinçlidir. Otomatik ve genel metot instrumentation; transformer, class metadata, allocation ve Java
 agent maliyetini yeniden getirir.
 
@@ -170,9 +183,10 @@ Java bean listesi veya profile ait bridge callback'i yoktur. Linux glibc ortamı
 `malloc_trim(0)` yalnız izole agent thread'i üzerinde çalışır. Windows bütün process'in working set'ini
 zorla boşaltmaz; allocator sahipliği bırakılır ve OS iadesi daha sonra gerçekleşir.
 
-Yakalanmayan REST handler hataları tek bir sabit native `Java Error` kimliği kullanır. Exception
-sınıfı, mesajı ve stack satırları yalnız sınırlı profil kuyruğunda yaşar. Yeni exception sınıfları
-kalıcı route slotu tüketmez ve `micro` profiline dönüldüğünde etiket metni bırakmaz.
+Yakalanmayan REST handler hataları tek bir sabit native `Java Error` kimliği kullanır. Önce zayıf
+bekleyen referans, ardından çıkarılan exception sınıfı, mesajı ve stack satırları ortak sınırlı profil
+kuyruğunda yaşar. Yeni exception sınıfları kalıcı route slotu tüketmez ve `micro` profiline
+dönüldüğünde etiket metni bırakmaz.
 
 `malloc_trim(0)` Hyper worker'ları dışında çalışır; ancak glibc trim işlemi process genelindedir. Bu
 işlem yalnız seyrek bir kontrol düzlemi adımıdır. Her request sırasında çağrılmamalıdır. Profil

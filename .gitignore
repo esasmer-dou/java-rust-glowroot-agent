@@ -1,8 +1,5 @@
 /target/
 **/target/
-/benchmark/context/
-/benchmark/spring-context/
-/benchmark/results/
 /glowroot-upstream/
 /.release-native-clean/
 /.release-staging/
@@ -10,3 +7,25 @@
 /.idea/
 /.vscode/
 /*.iml
+
+# Local engineering and collaboration artifacts
+/benchmark/
+/scripts/performance-runner/
+/docs/evidence/
+/docs/UPSTREAM_ANALYSIS.md
+/docs/UPSTREAM_ANALYSIS.tr.md
+/docs/VALIDATION.md
+/docs/VALIDATION.tr.md
+/.github/workflows/focused-performance-diagnostic.yml
+/.github/workflows/performance-runner-smoke.yml
+/.github/workflows/production-gate.yml
+/.github/workflows/production-runner-preflight.yml
+/.agents/
+/.codex/
+/AGENTS.md
+/PROJECT_MEMORY.md
+/MEMORY.md
+/HANDOFF.md
+/docs/PROJECT_MEMORY.md
+/docs/MEMORY.md
+/docs/HANDOFF.md

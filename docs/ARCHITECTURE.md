@@ -113,43 +113,57 @@ profile's contract.
 
 ## Spring Boot Boundary
 
-Spring Boot support has three auto-configuration layers. The web-independent core owns the
-process-scoped `NativeTelemetry` lifecycle and standalone native binary. It has no Servlet or Spring
-MVC condition and therefore starts in database workers, Kafka applications, schedulers, batch jobs,
-and command-line services. The optional HTTP layer selects one Tomcat context valve when embedded
-Tomcat is present. Other Servlet containers select one portable MVC interceptor instead.
+Spring Boot support has a web-independent native core and explicit framework edges. The core owns
+the process-scoped `NativeTelemetry` lifecycle and standalone native binary. It has no web
+application condition and therefore starts in database workers, Kafka applications, schedulers,
+batch jobs, and command-line services. Each supported Servlet engine uses its lowest practical
+completion edge: a Tomcat context Valve, Jetty RequestLog, or Undertow exchange completion listener.
+Reactive HTTP support is isolated in the optional WebFlux artifact and uses one bounded `WebFilter`.
 
-Packaging still uses two deliberately separate artifacts. The bootstrap JAR contains one premain
-class and only maps bounded arguments to properties. The starter stays in Spring Boot's application
-classloader and owns the core plus optional adapter. This split avoids the parent/child classloader
-failure caused by putting Spring classes in a `-javaagent` JAR used with an executable Spring Boot
-archive. MVC, Tomcat, and Servlet dependencies are not transitively added to a non-web application.
+Packaging separates bootstrap, native runtime, portable MVC fallback, and server adapters. Users of
+Servlet MVC still add one umbrella starter. Its internal adapter JARs declare every server API as
+`provided` and `optional`, so they do not bring an engine into the application. Only the adapter
+whose classes and server factory already exist is activated. The WebFlux artifact is added only to
+reactive applications. This split avoids the parent/child classloader failure caused by putting
+Spring classes in a `-javaagent` JAR and prevents Servlet applications from receiving WebFlux or an
+unselected server engine. CI packages three isolated MVC applications plus a Reactor Netty WebFlux
+application and rejects every unselected engine.
 
-Successful requests are sampled in Java before JNI. Mapped MVC handler `5xx` responses remain exact.
-The Tomcat valve obtains request start time from Tomcat's existing Coyote request and resolves
-Spring's normalized route pattern after completion only for a sampled, slow, or failed request. It
-does not enter the MVC interceptor lifecycle. The portable fallback keeps the same bounded sampling
-and exact error contract for other Servlet containers. Both adapters create no Java executor,
-Servlet filter, or classpath scan. The standalone Rust library runs one current-thread
-Tokio exporter on a `256 KiB` stack. Every queue, route table, trace buffer, message, and DNS address
-set is bounded by the same native engine contract.
+Successful requests are sampled in Java before JNI. The dominant unsampled success returns before
+route resolution, request attributes, or native state. Sampled, slow, failed, asynchronous, and
+not-found requests resolve Spring's normalized route from the selected server completion hook.
+Exact `5xx` accounting is preserved on every supported engine. The WebFlux filter applies the same
+bounded route/status/error contract at reactive response commit; its per-request reactive
+observation is confined to the separately selected module. No adapter creates a Java executor,
+Servlet filter, request wrapper, or classpath scan. The standalone Rust library runs one
+current-thread Tokio exporter on a `256 KiB` stack. Every queue, route table, trace buffer, message,
+and DNS address set is bounded by the same native engine contract.
 
-The Spring boundary still reads the final mapped route, response status, async completion, and an
-optional `Throwable`, because those values exist only after Spring MVC dispatch. It performs no
+The Spring boundary still reads the final mapped route, response status, completion, and an optional
+`Throwable`, because those values exist only after framework dispatch. It performs no
 aggregation, encoding, networking, JMX polling, or file I/O. Replacing this constant-time edge with
 a Rust start call would add JNI to every request; replacing it with JVMTI weaving would recreate the
 full-agent footprint. Both are rejected by the hot-path contract.
 
-The adapter does not use bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty, or a general-purpose
-event bus. Version `0.3.0` supports Servlet MVC HTTP interception, not WebFlux HTTP interception. Use
-the full Glowroot agent when Spring-specific arbitrary method weaving, automatic JDBC proxying,
-arbitrary JMX discovery, or profiling is required. The bounded runtime profiles add only explicit
-SQL slots, selected JVM memory/GC gauges, bounded error stacks, and authorized on-demand diagnostics.
+Error detail is also Rust-owned. When the active profile requests error traces, the application
+thread creates only a JNI weak reference and offers it to the bounded native queue. The isolated
+exporter upgrades that reference, opens a bounded JNI local frame, and reads the exception class,
+message, and configured number of frames. Pending references and materialized traces share one hard
+`error_trace_capacity`; they cannot each consume the configured capacity. A reference collected
+before extraction or rejected by backpressure increments the drop counter and does not change the
+business response. A weak reference is intentional: telemetry must not retain an arbitrary Java
+exception graph merely to improve an optional trace.
+
+The adapters do not use bytecode weaving, Byte Buddy/ASM, Java gRPC/Netty, or a general-purpose
+event bus. Reactor Netty is supplied by the WebFlux application, never by the agent. Use the full
+Glowroot agent when Spring-specific arbitrary method weaving, automatic JDBC proxying, arbitrary JMX
+discovery, or profiling is required. The bounded runtime profiles add only explicit SQL slots,
+selected JVM memory/GC gauges, bounded error stacks, and authorized on-demand diagnostics.
 
 Without MVC, the same native exporter still records process RSS/thread gauges and exporter health.
 The `jvm` profile adds JVM memory/GC gauges; `sql` and `full` accept explicit reusable SQL statement
 events; `diagnostic` accepts bounded authorized dump commands. Kafka record and scheduler job names
-are not inferred or woven in `0.3.0`. This is deliberate: automatic arbitrary-method instrumentation
+are not inferred or woven in `0.4.0`. This is deliberate: automatic arbitrary-method instrumentation
 would reintroduce transformer, class metadata, allocation, and Java-agent costs.
 
 ## Dynamic Profile Lifecycle
@@ -171,9 +185,10 @@ Linux glibc runs `malloc_trim(0)` only on the isolated agent thread after the fi
 Windows does not force a process-wide working-set eviction; allocator ownership is released and OS
 reclaim remains deferred.
 
-Uncaught REST handler errors use one fixed native `Java Error` identity. Exception class, message,
-and frames live only in the bounded profile queue. New exception classes therefore cannot consume
-permanent route slots or leave label strings behind after returning to `micro`.
+Uncaught REST handler errors use one fixed native `Java Error` identity. The weak pending reference
+and then the extracted class, message, and frames live only in the shared bounded profile queue.
+New exception classes therefore cannot consume permanent route slots or leave label strings behind
+after returning to `micro`.
 
 `malloc_trim(0)` runs outside Hyper workers, but glibc trimming is process-wide. It is a rare
 control-plane action and must never be triggered per request. A lower post-switch RSS can include

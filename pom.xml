@@ -6,12 +6,18 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-parent</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <packaging>pom</packaging>
 
   <modules>
     <module>agent-bootstrap</module>
+    <module>spring-runtime-core</module>
+    <module>spring-mvc-adapter</module>
+    <module>spring-tomcat-adapter</module>
+    <module>spring-jetty-adapter</module>
+    <module>spring-undertow-adapter</module>
     <module>spring-boot-starter</module>
+    <module>spring-webflux-adapter</module>
   </modules>
 
   <name>java-rust-glowroot-parent</name>
@@ -41,7 +47,10 @@
     <maven.source.plugin.version>3.3.1</maven.source.plugin.version>
     <spring.boot.version>3.5.5</spring.boot.version>
     <spring.framework.version>6.2.7</spring.framework.version>
-    <tomcat.embed.version>10.1.44</tomcat.embed.version>
+    <jakarta.servlet.version>6.0.0</jakarta.servlet.version>
+    <tomcat.version>10.1.44</tomcat.version>
+    <jetty.version>12.0.25</jetty.version>
+    <undertow.version>2.3.18.Final</undertow.version>
   </properties>
 
   <distributionManagement>

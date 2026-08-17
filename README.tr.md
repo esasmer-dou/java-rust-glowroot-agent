@@ -16,10 +16,12 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 ## İçindekiler
 
 - [Çalışma Şeklini Seçin](#çalışma-şeklini-seçin)
+- [Sample Projelerde Kullanım](#sample-projelerde-kullanım)
 - [Hangi Verileri Alırsınız?](#hangi-verileri-alırsınız)
 - [İş Yükü Nerede Çalışır?](#iş-yükü-nerede-çalışır)
 - [Rust-Java REST Kurulumu](#rust-java-rest-kurulumu)
 - [Spring Boot Kurulumu](#spring-boot-kurulumu)
+- [GitHub Packages](#github-packages)
 - [Kubernetes](#kubernetes)
 - [Ayarlar](#ayarlar)
 - [Çalışma Profilleri](#çalışma-profilleri)
@@ -36,8 +38,10 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 | Uygulama | Uygulamaya eklenecek paket | Native çalışma şekli | Ek telemetri thread'i |
 | --- | --- | --- | ---: |
 | Rust-Java REST `4.5.4` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
-| Spring Boot `3.x`, web veya web olmayan | `java-rust-glowroot-spring-boot-starter:0.3.0` | Küçük standalone agent kütüphanesini yükler | `1` |
-| `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.3.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Aynı tek exporter kullanılır; bootstrap eklemez |
+| Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.4.0` | Küçük standalone agent kütüphanesini ve uygun isteğe bağlı sunucu adaptörünü yükler | `1` |
+| Spring Boot `3.x`, web olmayan | Minimum: `java-rust-glowroot-spring-runtime:0.4.0`; ana starter da çalışır | Minimum kurulumda yalnız web'den bağımsız standalone agent kütüphanesini yükler | `1` |
+| Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.4.0` | Aynı standalone native runtime'ı kullanır | `1` |
+| `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.4.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Aynı tek exporter kullanılır; bootstrap eklemez |
 
 Bootstrap JAR yalnızca `-javaagent:key=value` değerlerini property'lere aktarır. İçinde tek sınıf
 vardır. Native binary, transformer ve runtime dependency yoktur. Spring starter ayrı JAR olarak
@@ -46,8 +50,29 @@ kalır. Böylece Spring Boot executable JAR classloader sınırı bozulmaz.
 Mevcut Glowroot collector, kullanıcı arayüzü ve veritabanı değişmez.
 
 > **Uyumluluk sınırı:** Çalışma sırasında profil değiştirme özelliği REST native ABI `29` ve
-> Glowroot ABI `3` gerektirir. Agent `0.3.0` ile Rust-Java REST `4.5.4` kullanın. Eski bir paketten
+> Glowroot ABI `3` gerektirir. Agent `0.4.0` ile Rust-Java REST `4.5.4` kullanın. Eski bir paketten
 > DLL/SO kopyalamayın.
+
+## Sample Projelerde Kullanım
+
+Sample projeler telemetriyi varsayılan olarak açmaz. Böylece normal hızlı başlangıç için Glowroot
+Central zorunlu olmaz.
+
+| Sample | Agent yolu | Beklenen davranış |
+|---|---|---|
+| [`rest-sample-cache-reader`](https://github.com/esasmer-dou/rest-sample-cache-reader) | Rust-Java REST içindeki runtime | Property ile açılır; HTTP ve native Redis read toplamları alınır |
+| [`rest-sample-dubbo-consumer`](https://github.com/esasmer-dou/rest-sample-dubbo-consumer) | Rust-Java REST içindeki runtime | Property ile açılır; HTTP ve native Dubbo toplamları alınır |
+| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | `0.4.0` bağımsız plain-Java runtime sunmaz; bootstrap tek başına yeterli değildir |
+| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | `0.4.0`, resmi Java provider runtime'ını instrument etmez |
+
+Yalnız telemetri almak için plain-Java sample'a Spring Boot veya REST server eklemeyin. Uygulama
+gerçek bir iş ihtiyacı nedeniyle zaten Spring Boot kullanıyorsa non-web starter'ı kullanın. Aksi
+halde daha küçük runtime'ı koruyun ve bağımsız standalone runtime hazırlanana kadar platform
+ölçümlerini kullanın.
+
+Reader ve consumer README dosyalarında lokal ve Kubernetes için kopyalanabilir örnekler vardır. Yeni
+production deployment'ında agent `0.4.0` açılmadan önce uygulamayı Rust-Java REST `4.5.4` hattına
+hizalayın.
 
 ## Hangi Verileri Alırsınız?
 
@@ -74,29 +99,36 @@ ileten sabit maliyetli sınırdır.
 
 | Alan | Sorumlu | Yapılan iş |
 | --- | --- | --- |
-| Toplama ve gönderim | Rust | Sınırlı route/SQL state'i, örnekleme toplamları, kuyruklar, protobuf encode, h2, reconnect, timeout ve drop politikası; tek düşük öncelikli batch exporter üzerinde çalışır |
+| Toplama ve gönderim | Rust | Sınırlı route/SQL state'i, örnekleme toplamları, kuyruklar, protobuf encode, collector için HTTP/2 taşıması, reconnect, timeout ve drop politikası; tek düşük öncelikli batch exporter üzerinde çalışır |
 | JVM ölçümleri | Rust | İzole exporter, JNI global referanslarını bulur ve sahiplenir; seçilen MXBean metotlarını çağırır, değerleri toplar ve gauge mesajını üretir |
+| Hata ayrıntısı | Rust | Hatalı Java isteği yalnız sınırlı ve zayıf bir `Throwable` referansı iletir. Sınıf, mesaj ve stack satırlarını daha sonra izole exporter okur; uygulama request thread'i stack üzerinde dolaşmaz |
 | Tanılama | Rust | Komut kuyruğu, JNI çağrısı, sınırlı yürütme, dosya yazma, atomik yayın, hata temizliği ve sayaçlar Rust'ta kalır |
 | Profil yaşam döngüsü | Rust | İsteğe bağlı state ayrılır, emekliye alınır, bırakılır ve gerekirse Hyper ile uygulama worker'larından uzakta trim edilir |
-| İsteğe bağlı Spring HTTP sınırı | Java, yalnız sabit maliyetli geçiş | Tomcat'te tek context valve, diğer Servlet container'larda taşınabilir MVC interceptor kullanılır. Rust'a yalnız eşleşen route, HTTP status, tamamlanma süresi ve gerekirse `Throwable` referansı verilir |
+| İsteğe bağlı Spring MVC sınırı | Java, yalnız sabit maliyetli geçiş | Uygulamanın mevcut sunucusuna uygun adaptör tamamlanmayı kaydeder: Tomcat Valve, Jetty RequestLog veya Undertow completion listener. Normalize edilmiş route, durum, süre ve gerekirse hata referansı Rust'a iletilir |
+| İsteğe bağlı Spring WebFlux sınırı | Java, sınırlı reaktif callback | Ayrı WebFlux modülü yalnız reaktif yaşam döngüsünün gerektirdiği state'i tutar. Yanıt commit edilirken normalize edilmiş route'u okur ve sınırlı olayı Rust'a iletir. Reactor Netty eklemez veya seçmez |
 | JVM iç işlemleri | JVM, Rust tarafından çağrılır | Veri JVM içinde olduğu için MXBean ve dump API'leri JVM'de çalışır; Java yardımcı sınıfı, polling thread'i, cache veya direct-buffer callback'i yoktur |
 
 Native yaşam döngüsü Spring Web'e bağlı değildir. Veritabanı worker'ı, Kafka uygulaması, scheduler
 veya komut satırı Spring Boot servisi; MVC, Servlet container ya da Java telemetri executor'ı
 eklemeden process ve seçilen profile ait JVM/SQL verisini gönderebilir.
 
-Rust-Java REST HTTP telemetrisi doğrudan Rust server içinde kaydedilir. Embedded Tomcat kullanan
-Spring Boot uygulamasında tek context valve, Spring MVC interceptor yaşam döngüsüne girmeden isteğin
-tamamlanmasını izler. Son eşleşen controller route'u yine Spring'in request attribute değerinden
-alınır. Diğer Servlet container'larda taşınabilir MVC interceptor fallback'i kullanılır. Bu son route
-okumasını Rust'a taşımak request başında ek JNI çağrısı veya genel bytecode weaving gerektireceği için
-bilinçli olarak yapılmaz.
+Rust-Java REST HTTP telemetrisi doğrudan Rust sunucusunda kaydedilir. Spring Boot Servlet
+uygulamaları mevcut sunucunun doğrudan tamamlanma noktasını kullanır. Ana starter yalnız küçük iç
+adaptör JAR'larını taşır. Sunucu API'leri `provided` ve `optional` kaldığı için agent Tomcat, Jetty
+veya Undertow eklemez ve sunucu seçmez. Örneklenmeyen başarılı isteklerin yaygın yolu; route, request
+attribute veya JNI erişiminden önce döner. Örneklenen, yavaş, hatalı, asenkron ve bulunamayan
+istekler bütün desteklenen motorlarda aynı sınırlı event sözleşmesinden geçer. Hata oluştuğunda Java
+`Throwable.getMessage()` veya `Throwable.getStackTrace()` çağırmaz. Rust, zayıf JNI referansını aynı
+sert trace kapasitesi içinde kuyruğa alır. Ayrıntıyı izole exporter çözer. Referans GC tarafından
+temizlenirse veya kuyruk dolarsa yalnız isteğe bağlı hata ayrıntısı atılır ve drop sayacı artar.
+Uygulama isteği bekletilmez ve büyük exception nesne grafiği bellekte tutulmaz. Bu geçiş `micro` ve
+`jvm` profillerinde yoktur. Hata trace kapasitesi sıfır olduğunda da çalışmaz.
 
 Bu agent, bütün Glowroot özelliklerinin küçük bir kopyası değildir. Rastgele Java metotlarını
 işaretlemez. Her JDBC nesnesini proxy ile sarmaz. Profiler, log toplama ve uzaktan enstrümantasyon
-eklemez. Bu özellikler gerekiyorsa tam Glowroot agent kullanın. `0.3.0` sürümü Spring WebFlux HTTP
-isteklerini izlemez. İsteğe bağlı HTTP adaptörü Servlet MVC içindir. Web'den bağımsız runtime bir
-WebFlux uygulamasında yine çalışır; yalnız WebFlux route verisini toplamaz.
+eklemez. Bu özellikler gerekiyorsa tam Glowroot agent kullanın. WebFlux route telemetrisi ayrı ve
+isteğe bağlı bir artifact içinde yer alır. Böylece Servlet uygulamasına `spring-webflux` veya Reactor
+Netty; WebFlux uygulamasına da agent üzerinden MVC ya da Servlet motoru eklenmez.
 
 ## Rust-Java REST Kurulumu
 
@@ -135,7 +167,7 @@ ayarların aynı Rust engine'e nasıl aktarıldığını değiştirir:
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.3.0.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.0.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
   -jar catalog-api.jar
 ```
 
@@ -147,7 +179,7 @@ java \
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
 </dependency>
 ```
 
@@ -168,18 +200,113 @@ Mevcut Spring Boot uygulamasını başlatın:
 java -jar orders-api.jar
 ```
 
-Embedded Tomcat kullanıldığında auto-configuration tek bir sınırlı context valve ekler. Spring'in
-seçtiği `/orders/{id}` gibi normalize edilmiş endpoint kalıbını istek tamamlandıktan sonra okur.
-Servlet filter eklemez, MVC interceptor yaşam döngüsüne girmez, uygulama sınıflarını taramaz ve Java
-worker pool oluşturmaz. Jetty, Undertow ve diğer Servlet container'larda taşınabilir MVC interceptor
-fallback'i kullanılır. İki yolda da durum kodları, yakalanmamış hatalar ve async tamamlanma doğru
-şekilde kaydedilir.
+Uygulama kendi embedded sunucusunu seçmeye devam eder. Auto-configuration, uygulamada zaten bulunan
+sunucuyu algılar ve yalnız ilgili doğrudan adaptörü açar. Her sunucu API'si kendi adaptör modülünde
+`provided` ve `optional` kalır. Bu nedenle ana starter sunucu motoru eklemez ve Spring Boot'un sunucu
+seçimini değiştirmez.
 
-### 2. Web olmayan uygulamalar
+| Uygulama runtime'ı | Agent HTTP yolu | Agent'ın eklediği server bağımlılığı | Desteklenen akış |
+| --- | --- | --- | --- |
+| Spring MVC + Tomcat | Doğrudan context Valve (`tomcat-valve`) | Yok | Senkron, asenkron, eşlenen durum, exception, 404, sınırlı route ve yavaş/hata telemetrisi |
+| Spring MVC + Jetty | Doğrudan completion RequestLog (`jetty-request-log`) | Yok | Tomcat ile aynı özellik seti |
+| Spring MVC + Undertow | Doğrudan exchange completion listener (`undertow-completion-listener`) | Yok | Tomcat ile aynı özellik seti |
+| Spring WebFlux | Ayrı ve isteğe bağlı `WebFilter` | Yok | Aynı HTTP yaşam döngüsü; Reactor Netty ile test edildi |
 
-Aynı starter'ı scheduler, Kafka worker, batch process veya yalnız veritabanı kullanan Spring Boot
-uygulamasına ekleyin. `spring-webmvc`, Tomcat veya Servlet API eklemeyin. Starter'ın MVC yüzeyi
-isteğe bağlıdır. Native çekirdek bu bağımlılıklar olmadan başlar.
+Jetty kullanırken server seçimini uygulama POM'u yapar:
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-web</artifactId>
+  <exclusions>
+    <exclusion>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-tomcat</artifactId>
+    </exclusion>
+  </exclusions>
+</dependency>
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-jetty</artifactId>
+</dependency>
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
+  <version>0.4.0</version>
+</dependency>
+```
+
+Undertow için aynı Tomcat exclusion'ını koruyun ve Undertow starter'ını seçin:
+
+```xml
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-web</artifactId>
+  <exclusions>
+    <exclusion>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-tomcat</artifactId>
+    </exclusion>
+  </exclusions>
+</dependency>
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-undertow</artifactId>
+</dependency>
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
+  <version>0.4.0</version>
+</dependency>
+```
+
+Üç Servlet motoru da `/orders/{id}` gibi normalize edilmiş Spring route bilgisini yalnız kayıt
+gerektiğinde okur. Doğrudan tamamlanma adaptörleri Java worker pool, uygulama sınıfı taraması veya
+request wrapper eklemez. Bilinmeyen bir Servlet motoru için taşınabilir MVC interceptor yalnız
+güvenlik fallback'i olarak kalır; Tomcat, Jetty ve Undertow bu fallback'i kullanmaz. Senkron ve
+asenkron yanıtlar, eşlenen durum kodları, yakalanmayan hatalar ve bulunamayan route'lar aynı yaşam
+döngüsü kontrolünden geçer.
+
+### 2. WebFlux uygulamaları
+
+Reaktif yüzeyi ayrı tutun. Bu adaptörü yalnız WebFlux uygulamasına ekleyin:
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-glowroot-spring-webflux-adapter</artifactId>
+  <version>0.4.0</version>
+</dependency>
+<dependency>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-webflux</artifactId>
+</dependency>
+```
+
+Adaptör ortak native Spring runtime'ını getirir. Reactor Netty'yi getirmez. Reaktif server seçimini
+uygulamanın `spring-boot-starter-webflux` bağımlılığı yapar. Yalnız telemetri almak için
+`spring-boot-starter-web` eklemeyin. MVC ile aynı `reactor.glowroot.*` ayarlarını kullanın.
+
+### 3. Web olmayan uygulamalar
+
+En küçük classpath için scheduler, Kafka worker, batch process, komut satırı uygulaması veya yalnız
+veritabanı kullanan Spring Boot uygulamasına sadece web'den bağımsız runtime paketini ekleyin:
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-glowroot-spring-runtime</artifactId>
+  <version>0.4.0</version>
+</dependency>
+```
+
+Kurum genelinde bütün Spring Boot servislerinde aynı dependency kullanılmak istenirse
+`java-rust-glowroot-spring-boot-starter` paketi de çalışır. Bu pakette küçük adaptör JAR'ları bulunur.
+Ancak sunucu API'leri `provided` ve `optional` olarak tanımlıdır. Web olmayan uygulamada hiçbir HTTP
+adaptörü açılmaz. En küçük production classpath öncelikliyse yalnız runtime paketini seçin.
+
+Sadece telemetri almak için `spring-webmvc`, WebFlux, Tomcat, Jetty, Undertow, Reactor Netty veya
+Servlet API eklemeyin. Runtime auto-configuration web koşulu taşımaz ve web yüzeyi olmadan başlar.
 
 ```properties
 spring.main.web-application-type=none
@@ -190,6 +317,13 @@ reactor.glowroot.agent.id=invoice-worker::pod-1
 reactor.glowroot.application.name=invoice-worker
 ```
 
+Process veya JVM ölçümleri için uygulama kodu yazmanız gerekmez. Spring application context'i
+oluşturduğunda process-scoped tek bir `NativeTelemetry` bean'i paketli DLL/SO dosyasını yükler,
+Glowroot ABI `3` değerini doğrular ve izole tek Rust exporter başlatır. Spring context kapatılınca
+exporter da durur. `reactor.glowroot.enabled=false` olduğunda bean oluşturulmaz. Native kütüphane
+yüklenmez; exporter thread'i, route tablosu, SQL tablosu, trace kuyruğu veya collector bağlantısı
+ayrılmaz.
+
 | Profil | Web sunucusu olmadan alınan veri |
 | --- | --- |
 | `micro` | Process RSS, işletim sistemi thread sayısı, exporter/reconnect/drop durumu |
@@ -198,28 +332,37 @@ reactor.glowroot.application.name=invoice-worker
 | `full` | JVM ölçümleri, açık SQL ölçümleri ve sınırlı hata stack bilgisi |
 | `diagnostic` | `full` verisine ek olarak yetkili thread dump, heap histogram ve heap dump komutları |
 
-Starter, Kafka topic veya scheduler job adını tahmin etmez. Her Java metoduna bytecode weaving de
-uygulamaz. Bu nedenle `0.3.0` sürümünde Kafka veya scheduler business işlem süresi otomatik
-toplanmaz. Process ve JVM verisi otomatik alınır. Veritabanı süresini aşağıdaki tekrar kullanılabilen
-`SqlStatement` API'si ile açıkça kaydedebilirsiniz. Böylece hot path öngörülebilir kalır ve ek bir
-framework-specific Java agent katmanı oluşmaz.
+Runtime; Kafka topic, scheduler job, batch step veya rastgele business metodu sınırını tahmin etmez.
+Metotlara bytecode weaving uygulamaz. Bu nedenle `0.4.0` sürümünde Kafka, scheduler ve batch işlem
+süreleri otomatik toplanmaz. Process ve JVM verisi otomatik alınır. Veritabanı süresini aşağıdaki
+tekrar kullanılabilen `SqlStatement` API'si ile açıkça kaydedebilirsiniz. Böylece hot path
+öngörülebilir kalır ve framework'e özel ağır bir Java agent katmanı oluşmaz.
 
-`reactor.glowroot.spring.enabled=false` isteğe bağlı iki Spring HTTP adaptörünü de kapatır. Web
-uygulamasında HTTP verisini kapatıp process/JVM/SQL verisini açık bırakmak için kullanabilirsiniz.
-Tomcat üzerinde taşınabilir MVC fallback'ini zorlamak veya karşılaştırmak için
-`reactor.glowroot.spring.tomcat-native.enabled=false` kullanın. Native runtime'ı ve exporter
-thread'ini tamamen kapatmak için `reactor.glowroot.enabled=false` kullanın.
+| Uygulama türü | Önerilen profil | Otomatik alınan veri | Uygulamada açıkça yapılacak işlem |
+| --- | --- | --- | --- |
+| Kafka consumer veya producer | Normalde `micro`; olay sırasında geçici `jvm` | Process ve exporter durumu; `jvm` profilinde JVM/GC | Topic veya mesaj işleme süresi otomatik alınmaz |
+| Scheduler veya Spring Batch | Normalde `micro`; inceleme sırasında `jvm` veya `full` | Process, exporter durumu ve seçilen JVM/GC ölçümleri | Job ve step süresi otomatik alınmaz |
+| Veritabanı worker'ı | Normalde `micro`; inceleme sırasında `sql` veya `full` | Process ve isteğe bağlı JVM/GC | Seçilen repository işlemleri için tekrar kullanılan `SqlStatement` tanımlanır |
+| Komut satırı veya arka plan servisi | `micro` | Process ve exporter durumu | HTTP transaction yoktur; yalnız gerekli sınırlı domain metric'leri açıkça eklenir |
 
-### 3. İsteğe bağlı erken başlangıç bootstrap'ı
+`reactor.glowroot.spring.enabled=false`, Spring HTTP telemetrisini kapatır. Process/JVM/SQL
+telemetrisi çalışmaya devam eder. Native runtime'ı ve exporter thread'ini tamamen kapatmak için
+`reactor.glowroot.enabled=false` kullanın.
+
+### 4. İsteğe bağlı erken başlangıç bootstrap'ı
 
 Deployment standardınız `-javaagent` bekliyorsa veya process başlangıç bilgisini Spring'den önce
 almak istiyorsanız bootstrap paketini de ekleyin:
+
+Bootstrap telemetri runtime'ı değildir. Uygulamada `java-rust-glowroot-spring-runtime` veya Spring
+Boot starter bulunmaya devam etmelidir. Bootstrap yalnız erken JVM argümanlarını ve process başlangıç
+bilgisini aynı runtime'a aktarır. Tek başına native kütüphane yüklemez ve veri göndermez.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-agent</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -228,7 +371,7 @@ Bootstrap JAR'ını executable Spring Boot JAR'ın dışında tutun. JVM'e dosya
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.3.0.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.0.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
   -jar orders-api.jar
 ```
 
@@ -323,8 +466,7 @@ tire yerine alt çizgi kullanın. Örnek: `reactor.glowroot.max-export-bytes`,
 | `reactor.glowroot.max-routes` | `64` | 1-64 | Bellekte tutulacak en fazla endpoint sayısı |
 | `reactor.glowroot.max-export-bytes` | `65536` | 16384-65536 | Tek collector mesajının en büyük boyutu |
 | `reactor.glowroot.spring.enabled` | `true` | boolean | İsteğe bağlı Spring HTTP adaptörünü açar; native çekirdeği `reactor.glowroot.enabled` yönetir |
-| `reactor.glowroot.spring.tomcat-native.enabled` | `true` | boolean | Daha düşük maliyetli Tomcat context valve yolunu kullanır. Yalnız taşınabilir MVC fallback'ini zorlamak için `false` yapın |
-| `reactor.glowroot.spring.order` | `-2147483548` | integer | Taşınabilir MVC fallback sırası; eski `interceptor-order` ve `filter-order` adları da çalışır |
+| `reactor.glowroot.spring.order` | `-2147483548` | integer | Taşınabilir MVC fallback veya isteğe bağlı WebFlux filter sırası; doğrudan Tomcat, Jetty ve Undertow adaptörleri sıralama gerektirmez |
 | `reactor.glowroot.native.extract-dir` | kullanıcı home dizini | dizin | Spring standalone native çıkarma dizini |
 | `reactor.glowroot.native.path` | boş | mevcut DLL/SO yolu | Geliştirme ve staging override değeri; production'da paketli binary kullanın |
 
@@ -503,7 +645,10 @@ controller'ına inject edin ve `diagnosticsJson()` sonucunu döndürün. Starter
 endpoint'i açmaz.
 
 `connected`, `export_failure`, `dropped_intervals`, `dropped_transactions`, `dropped_traces`,
-`dropped_routes`, `reconnects` ve `last_error_code` alanlarını izleyin. Profil geçişinde ayrıca
+`pending_error_captures`, `queued_error_traces`, `dropped_error_traces`, `dropped_routes`,
+`reconnects` ve `last_error_code` alanlarını izleyin. `pending_error_captures`, izole Rust exporter'ı
+bekleyen hata sayısıdır. Bu sayı tanımlı sınırı aşmamalı ve trafik sıçramasından sonra sıfıra
+dönmelidir. Profil geçişinde ayrıca
 `active_profile`, `active_profile_memory_ceiling_bytes`, `retired_profile_memory_ceiling_bytes`,
 `jvm_probe_registered`, `jvm_probe_owned_global_refs`, `profile_release_pending`, `profile_released_transition`,
 `profile_release_timeouts`, `profile_last_release_micros`, `profile_max_release_micros` ve
@@ -555,10 +700,9 @@ yönetim ve hata sınıfları tek seferlik JVM ısınma state'i oluşturabilir. 
 kapalıyken fail-open ve opsiyonel bootstrap ayrıca zorunlu
 olarak test edilir.
 
-[Doğrulama Kanıtı](docs/VALIDATION.tr.md),
-[Mimari ve Production Sınırı](docs/ARCHITECTURE.tr.md) ve
-[Benchmark Rehberi](benchmark/README.md) belgelerine bakın. Kullanıcıya açık değişiklikler ve
-uyumluluk ayrıntıları için [0.3.0 sürüm notlarını](docs/releases/0.3.0.tr.md) okuyun.
+[Mimari ve Production Sınırı](docs/ARCHITECTURE.tr.md) belgesine bakın. Kullanıcıya açık değişiklikler
+ve uyumluluk ayrıntıları için [0.4.0 sürüm notlarını](docs/releases/0.4.0.tr.md) okuyun. İç benchmark
+araçları ve ham kanıt dosyaları bilinçli olarak public repoda tutulmaz.
 
 ## Uyumluluk
 
@@ -566,8 +710,9 @@ uyumluluk ayrıntıları için [0.3.0 sürüm notlarını](docs/releases/0.3.0.t
 | --- | ---: | --- |
 | Java | `21` | Ana test JVM'i Semeru OpenJ9'dur |
 | Rust-Java REST | `4.5.4` | REST ABI `29`, Glowroot ABI `3` |
-| Agent bootstrap | `0.3.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
-| Spring Boot starter | `0.3.0` | Spring Boot `3.x`; web'den bağımsız çekirdek, Tomcat valve hızlı yolu ve taşınabilir Servlet MVC fallback'i |
+| Agent bootstrap | `0.4.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
+| Spring Boot starter | `0.4.0` | Spring Boot `3.x`; web'den bağımsız çekirdek ve Tomcat, Jetty, Undertow için doğrudan tam yaşam döngüsü adaptörleri; sunucu motoru bağımlılığı yoktur |
+| Spring WebFlux adaptörü | `0.4.0` | Ayrı ve isteğe bağlı `WebFilter`; Reactor Netty veya Servlet motoru bağımlılığı yoktur |
 | Standalone native kaynak | `rust-spring v4.5.4` | Glowroot ABI `3`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |
@@ -587,53 +732,16 @@ mvn -B -ntp clean verify
 
 Maven reactor şu dosyaları üretir:
 
-- `agent-bootstrap/target/java-rust-glowroot-agent-0.3.0.jar`
-- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.3.0.jar`
+- `agent-bootstrap/target/java-rust-glowroot-agent-0.4.0.jar`
+- `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.4.0.jar`
+- `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.4.0.jar`
+- `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.4.0.jar`
+- `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.4.0.jar`
+- `spring-undertow-adapter/target/java-rust-glowroot-spring-undertow-adapter-0.4.0.jar`
+- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.4.0.jar`
+- `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.4.0.jar`
 
 Native DLL/SO yalnız `native-provenance.properties` içinde yazan temiz `rust-spring` commit'inden
-üretilir. Doğrulanmış CI artifact'lerini `scripts/sync-native-artifacts.ps1` ile alın. Yerel dirty
-native build yayınlamayın.
-
-```powershell
-.\benchmark\spring_boot_gate.ps1 `
-  -PairRepeats 6 `
-  -MinimumPairRepeats 3 `
-  -ConcurrencyLevels "64,256" `
-  -EndpointClasses "small-json,raw-json" `
-  -Duration "12s" `
-  -Warmup "5s" `
-  -PreWarmCycles 4 `
-  -MinWarmupRounds 3 `
-  -MaxWarmupRounds 6 `
-  -MaxWarmupConfirmationRounds 14 `
-  -MaxWarmupRobustTrendPercent 3 `
-  -MaxWarmupBorderlineRobustTrendPercent 5 `
-  -MaxWarmupBorderlineMedianShiftPercent 3 `
-  -MaxWarmupMedianAbsoluteDeviationPercent 4 `
-  -MaxNon2xxDeltaPercentagePoints 0 `
-  -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
-  -MaxAbsoluteNon2xxPercent 0.05 `
-  -AutoSelectCpuRoles `
-  -AllowRunnerCollectorSiblingSharing `
-  -FailOnGate
-```
-
-Bu komut normal release profilidir. Üç bağımsız JVM çiftinden sonra yalnız bütün hücreler daha sıkı
-güvenlik marjını geçerse durur. Sonuç sınırdaysa en fazla altı çifte otomatik devam eder. GitHub
-**Production Gate** workflow'unda `extended` seçilirse dynamic heavy JSON c64/c128 eklenir ve altı
-çiftin tamamı zorunlu olur. Extended sonuç stable package yayınında kullanılmaz. Aynı commit için
-başarılı release-depth gate kanıtı varsa release tag'i matrisi yeniden çalıştırmaz.
-
-Embedded REST matrisini çalıştırmak için aynı komuta şu parametreleri ekleyin:
-
-```powershell
--ApplicationKind rust-java-rest `
--RequiredRestVersion "4.5.4" `
--RequiredRestNativeAbi 29 `
--MemoryLimit "128m" `
--AllowedThreadDelta 1
-```
-
-Tam kopyala-yapıştır komutları için [Doğrulama Kanıtı](docs/VALIDATION.tr.md) belgesine bakın.
-
-Mock collector yalnız test içindir. Glowroot Central yerine production ortamına kurmayın.
+üretilir. `scripts/sync-native-artifacts.ps1`, tekrarlanabilir release build'inin parçası olduğu için
+repoda kalır. İç yük üreticileri, ham benchmark kanıtları ve lokal runner ayarları public repo dışında
+tutulur.

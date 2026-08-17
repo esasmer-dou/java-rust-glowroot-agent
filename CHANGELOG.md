@@ -4,6 +4,32 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
+### Added
+
+- Added a separate optional Spring WebFlux `WebFilter` artifact. It preserves bounded route sampling,
+  exact `5xx`, asynchronous completion, fail-open behavior, and does not add Reactor Netty.
+- Added executable Tomcat, Jetty, Undertow, and Reactor Netty lifecycle/load gates covering
+  synchronous `200`, asynchronous `200`, `500`, `404`, native route registration, and zero non-2xx.
+- Added a fail-closed dependency-isolation gate that rejects any Tomcat, Jetty, or Undertow engine
+  dependency in the main starter and rejects unselected engines in executable applications.
+
+### Changed
+
+- Added equal direct full-lifecycle adapters for all supported Spring web runtimes: Tomcat context
+  Valve, Jetty completion RequestLog, Undertow exchange completion listener, and WebFlux WebFilter.
+  The dominant unsampled success returns before route resolution, request attributes, or JNI.
+- Split native runtime, portable MVC fallback, and every server adapter into small artifacts. The
+  one-dependency MVC starter includes only these adapter JARs; all server APIs remain `provided` and
+  `optional`, so the agent does not add or select a server engine.
+- Documented `java-rust-glowroot-spring-runtime` as the minimum dependency for non-web Spring Boot
+  workers, including profile behavior, disabled-runtime allocation boundaries, and explicit SQL and
+  business-operation instrumentation limits.
+- Made unstable warmup block quantitative benchmark claims in development mode as well as release
+  mode; noisy OpenJ9/container ramp-up can no longer be reported as a passing performance result.
+- Moved Spring exception class, message, and stack traversal off application request threads. Java
+  now hands Rust a bounded weak JNI reference; the isolated exporter materializes optional error
+  detail under one shared hard capacity, so telemetry cannot retain arbitrary exception graphs.
+
 ## [0.3.0] - 2026-08-16
 
 ### Added
@@ -194,6 +220,7 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.3.0...HEAD
 [0.1.0-rc1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.1.0-rc1
 [0.2.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.0
 [0.2.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.1
