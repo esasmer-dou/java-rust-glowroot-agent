@@ -94,6 +94,10 @@ resident gate intentionally includes this noise; it does not replace the source 
 Each important endpoint and concurrency cell must also stay within `-2%` RPS and `+10%` p99 gates.
 An unstable run is `INCONCLUSIVE`.
 
+Linux binary compatibility is a separate release invariant. Published x64 `.so` files are linked
+with a fixed `glibc 2.17` symbol ceiling, checked with `readelf`, and loaded on both Debian Stretch
+and Bookworm. The hosted runner's current GLIBC version is never the release compatibility floor.
+
 Release evidence also compares the previous published framework with the new framework plus the
 enabled agent. This second comparison includes native code-page growth that a same-image on/off
 comparison cannot expose.

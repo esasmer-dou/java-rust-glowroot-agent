@@ -20,7 +20,9 @@ param(
 
     [string] $NativeSourceDirectory = (Join-Path $PSScriptRoot "..\..\rust-spring"),
 
-    [int] $GlowrootAbi = 3
+    [int] $GlowrootAbi = 3,
+
+    [string] $LinuxMinimumGlibc = "2.17"
 )
 
 $ErrorActionPreference = "Stop"
@@ -78,6 +80,9 @@ $linuxMeta = Read-BuildMetadata $linuxMetaPath "linux-x64-rust-glowroot-agent"
 if ($windowsMeta.'source.revision' -ne $sourceRevision -or $linuxMeta.'source.revision' -ne $sourceRevision) {
     throw "Native artifacts were not built from the clean checked-out revision $sourceRevision"
 }
+if ($linuxMeta.'glibc.minimum' -ne $LinuxMinimumGlibc) {
+    throw "Linux native metadata must declare glibc.minimum=$LinuxMinimumGlibc"
+}
 
 $windowsHash = Assert-ArtifactChecksum $windowsSource $windowsChecksumPath
 $linuxHash = Assert-ArtifactChecksum $linuxSource $linuxChecksumPath
@@ -95,6 +100,7 @@ crate.version=0.1.0
 source.revision=$sourceRevision
 windows-x64.sha256=$windowsHash
 linux-x64.sha256=$linuxHash
+linux-x64.glibc-minimum=$LinuxMinimumGlibc
 "@
 [IO.File]::WriteAllText(
         (Join-Path $resources "native-provenance.properties"),

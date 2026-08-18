@@ -74,11 +74,15 @@ jobs:
           MANIFEST="spring-runtime-core/src/main/resources/native/native-provenance.properties"
           grep -qx 'schema=1' "$MANIFEST"
           grep -qx 'glowroot.abi=3' "$MANIFEST"
+          grep -qx 'linux-x64.glibc-minimum=2.17' "$MANIFEST"
           grep -Eq '^source.revision=[0-9a-f]{40}$' "$MANIFEST"
           WINDOWS_EXPECTED="$(sed -n 's/^windows-x64.sha256=//p' "$MANIFEST")"
           LINUX_EXPECTED="$(sed -n 's/^linux-x64.sha256=//p' "$MANIFEST")"
           test "$(sha256sum spring-runtime-core/src/main/resources/native/windows-x64/rust_glowroot_agent.dll | awk '{print $1}')" = "$WINDOWS_EXPECTED"
           test "$(sha256sum spring-runtime-core/src/main/resources/native/linux-x64/librust_glowroot_agent.so | awk '{print $1}')" = "$LINUX_EXPECTED"
+          bash scripts/verify-linux-native-compatibility.sh \
+            spring-runtime-core/src/main/resources/native/linux-x64/librust_glowroot_agent.so \
+            2.17
 
       - name: Remove incomplete Maven package versions
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.repair_partial_package }}

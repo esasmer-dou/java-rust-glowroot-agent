@@ -93,6 +93,10 @@ olarak kapsar; kaynak allocation sözleşmesinin yerine geçmez. Her önemli end
 hücresi ayrıca en fazla `%2` RPS kaybı ve `%10` p99 artışı sınırını geçmelidir. Kararsız koşu
 `INCONCLUSIVE` sayılır.
 
+Linux binary uyumluluğu ayrı bir release kuralıdır. Yayınlanan x64 `.so` dosyaları sabit
+`glibc 2.17` sembol sınırıyla link edilir. `readelf` ile kontrol edilir ve Debian Stretch ile
+Bookworm üzerinde yüklenir. GitHub runner'ın güncel GLIBC sürümü release uyumluluk sınırı olamaz.
+
 Release kanıtında son yayınlanan framework ile yeni framework ve açık ajan ayrıca karşılaştırılır.
 Bu ikinci karşılaştırma, aynı-image açma/kapatma testinin gösteremediği native kod sayfası büyümesini
 de ölçer.

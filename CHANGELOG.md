@@ -4,6 +4,22 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-18
+
+### Fixed
+
+- Linked Linux x64 native artifacts with a fixed `glibc 2.17` symbol ceiling instead of inheriting
+  the hosted runner's newer GLIBC surface.
+- Added fail-closed release checks for GLIBC symbol versions, native provenance, and loadability on
+  Debian Stretch and Debian Bookworm.
+- Documented final-image verification and the requirement to use the same immutable custom-JRE
+  image in builder and runtime stages.
+
+### Compatibility
+
+- REST ABI remains `29` and Glowroot ABI remains `3`.
+- Telemetry behavior, thread count, allocation limits, and Java integration are unchanged.
+
 ## [0.4.0] - 2026-08-18
 
 ### Added
@@ -234,7 +250,8 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.3.0...v0.4.0
 [0.1.0-rc1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.1.0-rc1
 [0.2.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.0

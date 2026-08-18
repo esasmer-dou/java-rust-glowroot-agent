@@ -22,6 +22,7 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 - [Spring Boot Setup](#spring-boot-setup)
 - [GitHub Packages](#github-packages)
 - [Kubernetes](#kubernetes)
+- [Linux Container Compatibility](#linux-container-compatibility)
 - [Configuration](#configuration)
 - [Runtime Profiles](#runtime-profiles)
 - [Switch Profiles Without Restarting](#switch-profiles-without-restarting)
@@ -36,11 +37,11 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 | Application | Add to the application | Native runtime | Extra telemetry thread |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.5.5` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
-| Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.4.0` | Loads the small standalone agent library and the matching optional server adapter | `1` |
-| Spring Boot `3.x`, non-web | Minimum: `java-rust-glowroot-spring-runtime:0.4.0`; the umbrella starter also works | Loads only the web-independent standalone agent library in the minimum setup | `1` |
-| Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.4.0` | Uses the same standalone native runtime | `1` |
-| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.4.0` bootstrap | Same runtime as the row above | Same single exporter; bootstrap adds none |
+| Rust-Java REST `4.5.6` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
+| Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.4.1` | Loads the small standalone agent library and the matching optional server adapter | `1` |
+| Spring Boot `3.x`, non-web | Minimum: `java-rust-glowroot-spring-runtime:0.4.1`; the umbrella starter also works | Loads only the web-independent standalone agent library in the minimum setup | `1` |
+| Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.4.1` | Uses the same standalone native runtime | `1` |
+| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.4.1` bootstrap | Same runtime as the row above | Same single exporter; bootstrap adds none |
 
 The bootstrap JAR only maps `-javaagent:key=value` arguments to properties. It contains one class,
 no native binary, no transformer, and no runtime dependency. The Spring starter is a separate JAR
@@ -49,7 +50,7 @@ so Spring classes never cross the executable-JAR classloader boundary.
 The existing Glowroot collector, UI, and database stay unchanged.
 
 > **Compatibility boundary:** runtime profile switching requires REST native ABI `29` and Glowroot
-> ABI `3`. Use agent `0.4.0` with Rust-Java REST `4.5.5`. Do not copy DLL/SO files from an older
+> ABI `3`. Use agent `0.4.1` with Rust-Java REST `4.5.6`. Do not copy DLL/SO files from an older
 > package.
 
 ## Sample Projects
@@ -61,8 +62,8 @@ Glowroot Central deployment.
 |---|---|---|
 | [`rest-sample-cache-reader`](https://github.com/esasmer-dou/rest-sample-cache-reader) | Embedded Rust-Java REST runtime | Enable through properties; HTTP and native Redis read aggregates are available |
 | [`rest-sample-dubbo-consumer`](https://github.com/esasmer-dou/rest-sample-dubbo-consumer) | Embedded Rust-Java REST runtime | Enable through properties; HTTP and native Dubbo aggregates are available |
-| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | Release `0.4.0` does not provide a standalone plain-Java runtime; bootstrap alone is insufficient |
-| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | Release `0.4.0` does not instrument the official Java provider runtime |
+| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | Release `0.4.1` does not provide a standalone plain-Java runtime; bootstrap alone is insufficient |
+| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | Release `0.4.1` does not instrument the official Java provider runtime |
 
 Do not add Spring Boot or a REST server to a plain-Java sample only to obtain telemetry. If an
 application already uses Spring Boot for a real application requirement, use the non-web starter.
@@ -70,7 +71,7 @@ Otherwise keep the smaller runtime and use platform-level metrics until a dedica
 runtime is available.
 
 The reader and consumer READMEs contain copy-paste local and Kubernetes examples. For a new
-production deployment, align them to Rust-Java REST `4.5.5` before enabling agent `0.4.0`.
+production deployment, align them to Rust-Java REST `4.5.6` before enabling agent `0.4.1`.
 
 ## What You Get
 
@@ -131,14 +132,14 @@ from the agent.
 
 ## Rust-Java REST Setup
 
-Use the coordinated `4.5.5` framework line. It contains Glowroot native ABI `3` and validates the
+Use the coordinated `4.5.6` framework line. It contains Glowroot native ABI `3` and validates the
 native provenance before the HTTP server starts.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.5.5</version>
+  <version>4.5.6</version>
 </dependency>
 ```
 
@@ -166,7 +167,7 @@ configuration reaches the same embedded Rust engine:
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.0.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.1.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
   -jar catalog-api.jar
 ```
 
@@ -178,7 +179,7 @@ java \
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -231,7 +232,7 @@ For Jetty, the application owns this dependency choice:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -255,7 +256,7 @@ For Undertow, keep the same exclusion and select Undertow instead:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -274,7 +275,7 @@ Keep the reactive surface separate. Add the optional adapter only to a WebFlux a
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-webflux-adapter</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 <dependency>
   <groupId>org.springframework.boot</groupId>
@@ -296,7 +297,7 @@ process, command-line process, or database-only Spring Boot application:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-runtime</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -333,7 +334,7 @@ exporter thread, route table, SQL table, trace queue, or collector connection is
 
 The runtime does not guess Kafka topic names, scheduler job names, batch step names, or arbitrary
 business-method boundaries. It does not weave methods. Kafka, scheduler, and batch operation timing
-is therefore not automatic in `0.4.0`. Process and JVM evidence is automatic. Database timing is
+is therefore not automatic in `0.4.1`. Process and JVM evidence is automatic. Database timing is
 explicit through the reusable `SqlStatement` API shown below. This keeps the hot path predictable
 and avoids a framework-specific Java agent layer.
 
@@ -361,7 +362,7 @@ start metadata to the same runtime; by itself it does not load a native library 
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-agent</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -370,7 +371,7 @@ Keep the bootstrap JAR outside the executable Spring Boot JAR and pass its file 
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.0.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.1.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
   -jar orders-api.jar
 ```
 
@@ -434,6 +435,47 @@ Use a stable `ClusterIP` Service or a localhost sidecar for the collector. DNS i
 startup and at most four addresses are retained. Restart the pod when the collector DNS target
 changes. Do not expose the plain collector port to the internet. Use a service mesh or localhost
 TLS sidecar when encryption or mTLS is required.
+
+## Linux Container Compatibility
+
+Release `0.4.1` supports Linux x64 images with `glibc 2.17` or newer. The release build has a fixed
+GLIBC symbol ceiling and is loaded in both Debian Stretch (`glibc 2.24`) and Debian Bookworm
+(`glibc 2.36`) before publication. This is a build-time compatibility change. It adds no runtime
+thread, allocation, or JNI call.
+
+Check the **final application image**, not only the JRE builder image:
+
+```bash
+docker run --rm --entrypoint sh YOUR_IMAGE -lc 'getconf GNU_LIBC_VERSION'
+docker run --rm --entrypoint sh YOUR_IMAGE -lc \
+  'ldd /u01/applications/nmc-store-common/glowroot/librust_glowroot_agent.so'
+```
+
+If an image declared as Bookworm reports `GLIBC_2.25 not found`, the running final image is not the
+shown Bookworm filesystem. Bookworm provides GLIBC `2.36`. Check the deployed image digest, stale
+custom-image tags, and the final `FROM` line.
+
+Use one immutable custom-JRE image for both application stages:
+
+```dockerfile
+ARG JRE_IMAGE=zenia.azurecr.io/example/custom-jre21:1.1.1
+
+FROM ${JRE_IMAGE} AS builder
+# Extract the application layers here.
+
+FROM ${JRE_IMAGE}
+ARG APP_HOME=/u01/applications/nmc-store-common
+WORKDIR ${APP_HOME}
+
+COPY glowroot/librust_glowroot_agent.so ${APP_HOME}/glowroot/
+RUN getconf GNU_LIBC_VERSION \
+ && ldd ${APP_HOME}/glowroot/librust_glowroot_agent.so \
+ && ! ldd ${APP_HOME}/glowroot/librust_glowroot_agent.so | grep -q 'not found'
+```
+
+Do not mix custom JRE tags such as `1.0.0` in the builder and `1.1.0` in the final stage. The builder
+may pass while production runs against a different libc. Prefer an immutable digest when the image
+registry supports it.
 
 ## Configuration
 
@@ -693,7 +735,7 @@ compatibility, collector-down fail-open, and
 the optional bootstrap are separate mandatory checks.
 
 See [Architecture And Production Boundary](docs/ARCHITECTURE.md). User-facing changes and
-compatibility details are in the [0.4.0 release notes](docs/releases/0.4.0.md). Internal benchmark
+compatibility details are in the [0.4.1 release notes](docs/releases/0.4.1.md). Internal benchmark
 tools and raw evidence are intentionally not part of the public repository.
 
 ## Compatibility
@@ -701,11 +743,11 @@ tools and raw evidence are intentionally not part of the public repository.
 | Component | Release | Contract |
 | --- | ---: | --- |
 | Java | `21` | Semeru OpenJ9 is the primary tested JVM |
-| Rust-Java REST | `4.5.5` | REST ABI `29`, Glowroot ABI `3` |
-| Agent bootstrap | `0.4.0` | One class; works with either supported runtime |
-| Spring Boot starter | `0.4.0` | Spring Boot `3.x`; web-independent core plus direct full-lifecycle adapters for Tomcat, Jetty, and Undertow; no server engine dependency |
-| Spring WebFlux adapter | `0.4.0` | Separate optional `WebFilter`; no Reactor Netty or Servlet engine dependency |
-| Standalone native source | `rust-spring v4.5.5` | Glowroot ABI `3`; clean CI DLL/SO |
+| Rust-Java REST | `4.5.6` | REST ABI `29`, Glowroot ABI `3` |
+| Agent bootstrap | `0.4.1` | One class; works with either supported runtime |
+| Spring Boot starter | `0.4.1` | Spring Boot `3.x`; web-independent core plus direct full-lifecycle adapters for Tomcat, Jetty, and Undertow; no server engine dependency |
+| Spring WebFlux adapter | `0.4.1` | Separate optional `WebFilter`; no Reactor Netty or Servlet engine dependency |
+| Standalone native source | `rust-spring v4.5.6` | Glowroot ABI `3`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
 
@@ -724,14 +766,14 @@ mvn -B -ntp clean verify
 
 The Maven reactor builds:
 
-- `agent-bootstrap/target/java-rust-glowroot-agent-0.4.0.jar`
-- `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.4.0.jar`
-- `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.4.0.jar`
-- `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.4.0.jar`
-- `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.4.0.jar`
-- `spring-undertow-adapter/target/java-rust-glowroot-spring-undertow-adapter-0.4.0.jar`
-- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.4.0.jar`
-- `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.4.0.jar`
+- `agent-bootstrap/target/java-rust-glowroot-agent-0.4.1.jar`
+- `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.4.1.jar`
+- `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.4.1.jar`
+- `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.4.1.jar`
+- `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.4.1.jar`
+- `spring-undertow-adapter/target/java-rust-glowroot-spring-undertow-adapter-0.4.1.jar`
+- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.4.1.jar`
+- `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.4.1.jar`
 
 The native DLL/SO are built only from the clean `rust-spring` commit recorded in
 `native-provenance.properties`. `scripts/sync-native-artifacts.ps1` is retained because it is part of

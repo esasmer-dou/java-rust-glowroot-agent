@@ -23,6 +23,7 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 - [Spring Boot Kurulumu](#spring-boot-kurulumu)
 - [GitHub Packages](#github-packages)
 - [Kubernetes](#kubernetes)
+- [Linux Container Uyumluluğu](#linux-container-uyumluluğu)
 - [Ayarlar](#ayarlar)
 - [Çalışma Profilleri](#çalışma-profilleri)
 - [Uygulamayı Yeniden Başlatmadan Profil Değiştirme](#uygulamayı-yeniden-başlatmadan-profil-değiştirme)
@@ -37,11 +38,11 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 
 | Uygulama | Uygulamaya eklenecek paket | Native çalışma şekli | Ek telemetri thread'i |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.5.5` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
-| Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.4.0` | Küçük standalone agent kütüphanesini ve uygun isteğe bağlı sunucu adaptörünü yükler | `1` |
-| Spring Boot `3.x`, web olmayan | Minimum: `java-rust-glowroot-spring-runtime:0.4.0`; ana starter da çalışır | Minimum kurulumda yalnız web'den bağımsız standalone agent kütüphanesini yükler | `1` |
-| Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.4.0` | Aynı standalone native runtime'ı kullanır | `1` |
-| `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.4.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Aynı tek exporter kullanılır; bootstrap eklemez |
+| Rust-Java REST `4.5.6` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
+| Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.4.1` | Küçük standalone agent kütüphanesini ve uygun isteğe bağlı sunucu adaptörünü yükler | `1` |
+| Spring Boot `3.x`, web olmayan | Minimum: `java-rust-glowroot-spring-runtime:0.4.1`; ana starter da çalışır | Minimum kurulumda yalnız web'den bağımsız standalone agent kütüphanesini yükler | `1` |
+| Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.4.1` | Aynı standalone native runtime'ı kullanır | `1` |
+| `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.4.1` bootstrap | Yukarıdaki çalışma şekli değişmez | Aynı tek exporter kullanılır; bootstrap eklemez |
 
 Bootstrap JAR yalnızca `-javaagent:key=value` değerlerini property'lere aktarır. İçinde tek sınıf
 vardır. Native binary, transformer ve runtime dependency yoktur. Spring starter ayrı JAR olarak
@@ -50,7 +51,7 @@ kalır. Böylece Spring Boot executable JAR classloader sınırı bozulmaz.
 Mevcut Glowroot collector, kullanıcı arayüzü ve veritabanı değişmez.
 
 > **Uyumluluk sınırı:** Çalışma sırasında profil değiştirme özelliği REST native ABI `29` ve
-> Glowroot ABI `3` gerektirir. Agent `0.4.0` ile Rust-Java REST `4.5.5` kullanın. Eski bir paketten
+> Glowroot ABI `3` gerektirir. Agent `0.4.1` ile Rust-Java REST `4.5.6` kullanın. Eski bir paketten
 > DLL/SO kopyalamayın.
 
 ## Sample Projelerde Kullanım
@@ -62,8 +63,8 @@ Central zorunlu olmaz.
 |---|---|---|
 | [`rest-sample-cache-reader`](https://github.com/esasmer-dou/rest-sample-cache-reader) | Rust-Java REST içindeki runtime | Property ile açılır; HTTP ve native Redis read toplamları alınır |
 | [`rest-sample-dubbo-consumer`](https://github.com/esasmer-dou/rest-sample-dubbo-consumer) | Rust-Java REST içindeki runtime | Property ile açılır; HTTP ve native Dubbo toplamları alınır |
-| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | `0.4.0` bağımsız plain-Java runtime sunmaz; bootstrap tek başına yeterli değildir |
-| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | `0.4.0`, resmi Java provider runtime'ını instrument etmez |
+| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | `0.4.1` bağımsız plain-Java runtime sunmaz; bootstrap tek başına yeterli değildir |
+| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | `0.4.1`, resmi Java provider runtime'ını instrument etmez |
 
 Yalnız telemetri almak için plain-Java sample'a Spring Boot veya REST server eklemeyin. Uygulama
 gerçek bir iş ihtiyacı nedeniyle zaten Spring Boot kullanıyorsa non-web starter'ı kullanın. Aksi
@@ -71,7 +72,7 @@ halde daha küçük runtime'ı koruyun ve bağımsız standalone runtime hazırl
 ölçümlerini kullanın.
 
 Reader ve consumer README dosyalarında lokal ve Kubernetes için kopyalanabilir örnekler vardır. Yeni
-production deployment'ında agent `0.4.0` açılmadan önce uygulamayı Rust-Java REST `4.5.5` hattına
+production deployment'ında agent `0.4.1` açılmadan önce uygulamayı Rust-Java REST `4.5.6` hattına
 hizalayın.
 
 ## Hangi Verileri Alırsınız?
@@ -132,14 +133,14 @@ Netty; WebFlux uygulamasına da agent üzerinden MVC ya da Servlet motoru eklenm
 
 ## Rust-Java REST Kurulumu
 
-Uyumlu `4.5.5` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `3` içerir. Native dosyanın
+Uyumlu `4.5.6` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `3` içerir. Native dosyanın
 kaynak revision ve ABI bilgisi HTTP server başlamadan doğrulanır.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.5.5</version>
+  <version>4.5.6</version>
 </dependency>
 ```
 
@@ -167,7 +168,7 @@ ayarların aynı Rust engine'e nasıl aktarıldığını değiştirir:
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.0.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.1.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
   -jar catalog-api.jar
 ```
 
@@ -179,7 +180,7 @@ java \
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -232,7 +233,7 @@ Jetty kullanırken server seçimini uygulama POM'u yapar:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -256,7 +257,7 @@ Undertow için aynı Tomcat exclusion'ını koruyun ve Undertow starter'ını se
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -275,7 +276,7 @@ Reaktif yüzeyi ayrı tutun. Bu adaptörü yalnız WebFlux uygulamasına ekleyin
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-webflux-adapter</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 <dependency>
   <groupId>org.springframework.boot</groupId>
@@ -296,7 +297,7 @@ veritabanı kullanan Spring Boot uygulamasına sadece web'den bağımsız runtim
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-runtime</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -333,7 +334,7 @@ ayrılmaz.
 | `diagnostic` | `full` verisine ek olarak yetkili thread dump, heap histogram ve heap dump komutları |
 
 Runtime; Kafka topic, scheduler job, batch step veya rastgele business metodu sınırını tahmin etmez.
-Metotlara bytecode weaving uygulamaz. Bu nedenle `0.4.0` sürümünde Kafka, scheduler ve batch işlem
+Metotlara bytecode weaving uygulamaz. Bu nedenle `0.4.1` sürümünde Kafka, scheduler ve batch işlem
 süreleri otomatik toplanmaz. Process ve JVM verisi otomatik alınır. Veritabanı süresini aşağıdaki
 tekrar kullanılabilen `SqlStatement` API'si ile açıkça kaydedebilirsiniz. Böylece hot path
 öngörülebilir kalır ve framework'e özel ağır bir Java agent katmanı oluşmaz.
@@ -362,7 +363,7 @@ bilgisini aynı runtime'a aktarır. Tek başına native kütüphane yüklemez ve
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-agent</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -371,7 +372,7 @@ Bootstrap JAR'ını executable Spring Boot JAR'ın dışında tutun. JVM'e dosya
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.0.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.4.1.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
   -jar orders-api.jar
 ```
 
@@ -436,6 +437,47 @@ Collector için sabit bir `ClusterIP` Service veya localhost sidecar kullanın. 
 sırasında çözülür. En fazla dört adres tutulur. Collector DNS hedefi değişirse pod'u yeniden
 başlatın. Düz collector portunu internete açmayın. TLS veya mTLS gerekiyorsa service mesh ya da
 localhost TLS sidecar kullanın.
+
+## Linux Container Uyumluluğu
+
+`0.4.1` sürümü, `glibc 2.17` veya daha yeni Linux x64 image'larını destekler. Release build'i sabit
+bir GLIBC sembol sınırıyla üretilir. Yayından önce Debian Stretch (`glibc 2.24`) ve Debian Bookworm
+(`glibc 2.36`) içinde yüklenir. Bu yalnız build zamanı uyumluluk değişikliğidir. Runtime'a yeni
+thread, allocation veya JNI çağrısı eklemez.
+
+Yalnız JRE builder image'ını değil, **son uygulama image'ını** kontrol edin:
+
+```bash
+docker run --rm --entrypoint sh YOUR_IMAGE -lc 'getconf GNU_LIBC_VERSION'
+docker run --rm --entrypoint sh YOUR_IMAGE -lc \
+  'ldd /u01/applications/nmc-store-common/glowroot/librust_glowroot_agent.so'
+```
+
+Bookworm olarak tanımlanan bir image `GLIBC_2.25 not found` hatası veriyorsa çalışan son image,
+gösterilen Bookworm dosya sistemi değildir. Bookworm GLIBC `2.36` sağlar. Deployment'taki image
+digest'ini, yeniden kullanılan custom image tag'lerini ve son `FROM` satırını kontrol edin.
+
+Uygulamanın iki aşamasında da aynı ve değiştirilmeyen custom JRE image'ını kullanın:
+
+```dockerfile
+ARG JRE_IMAGE=zenia.azurecr.io/example/custom-jre21:1.1.1
+
+FROM ${JRE_IMAGE} AS builder
+# Uygulama katmanlarını burada çıkarın.
+
+FROM ${JRE_IMAGE}
+ARG APP_HOME=/u01/applications/nmc-store-common
+WORKDIR ${APP_HOME}
+
+COPY glowroot/librust_glowroot_agent.so ${APP_HOME}/glowroot/
+RUN getconf GNU_LIBC_VERSION \
+ && ldd ${APP_HOME}/glowroot/librust_glowroot_agent.so \
+ && ! ldd ${APP_HOME}/glowroot/librust_glowroot_agent.so | grep -q 'not found'
+```
+
+Builder aşamasında `1.0.0`, final aşamasında `1.1.0` gibi farklı custom JRE tag'leri kullanmayın.
+Builder geçse bile production farklı bir libc ile çalışabilir. Registry destekliyorsa değiştirilemez
+image digest'i kullanın.
 
 ## Ayarlar
 
@@ -701,7 +743,7 @@ kapalıyken fail-open ve opsiyonel bootstrap ayrıca zorunlu
 olarak test edilir.
 
 [Mimari ve Production Sınırı](docs/ARCHITECTURE.tr.md) belgesine bakın. Kullanıcıya açık değişiklikler
-ve uyumluluk ayrıntıları için [0.4.0 sürüm notlarını](docs/releases/0.4.0.tr.md) okuyun. İç benchmark
+ve uyumluluk ayrıntıları için [0.4.1 sürüm notlarını](docs/releases/0.4.1.tr.md) okuyun. İç benchmark
 araçları ve ham kanıt dosyaları bilinçli olarak public repoda tutulmaz.
 
 ## Uyumluluk
@@ -709,11 +751,11 @@ araçları ve ham kanıt dosyaları bilinçli olarak public repoda tutulmaz.
 | Bileşen | Sürüm | Sözleşme |
 | --- | ---: | --- |
 | Java | `21` | Ana test JVM'i Semeru OpenJ9'dur |
-| Rust-Java REST | `4.5.5` | REST ABI `29`, Glowroot ABI `3` |
-| Agent bootstrap | `0.4.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
-| Spring Boot starter | `0.4.0` | Spring Boot `3.x`; web'den bağımsız çekirdek ve Tomcat, Jetty, Undertow için doğrudan tam yaşam döngüsü adaptörleri; sunucu motoru bağımlılığı yoktur |
-| Spring WebFlux adaptörü | `0.4.0` | Ayrı ve isteğe bağlı `WebFilter`; Reactor Netty veya Servlet motoru bağımlılığı yoktur |
-| Standalone native kaynak | `rust-spring v4.5.5` | Glowroot ABI `3`; temiz CI DLL/SO |
+| Rust-Java REST | `4.5.6` | REST ABI `29`, Glowroot ABI `3` |
+| Agent bootstrap | `0.4.1` | Tek sınıf; iki desteklenen ortamda da çalışır |
+| Spring Boot starter | `0.4.1` | Spring Boot `3.x`; web'den bağımsız çekirdek ve Tomcat, Jetty, Undertow için doğrudan tam yaşam döngüsü adaptörleri; sunucu motoru bağımlılığı yoktur |
+| Spring WebFlux adaptörü | `0.4.1` | Ayrı ve isteğe bağlı `WebFilter`; Reactor Netty veya Servlet motoru bağımlılığı yoktur |
+| Standalone native kaynak | `rust-spring v4.5.6` | Glowroot ABI `3`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |
 
@@ -732,14 +774,14 @@ mvn -B -ntp clean verify
 
 Maven reactor şu dosyaları üretir:
 
-- `agent-bootstrap/target/java-rust-glowroot-agent-0.4.0.jar`
-- `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.4.0.jar`
-- `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.4.0.jar`
-- `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.4.0.jar`
-- `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.4.0.jar`
-- `spring-undertow-adapter/target/java-rust-glowroot-spring-undertow-adapter-0.4.0.jar`
-- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.4.0.jar`
-- `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.4.0.jar`
+- `agent-bootstrap/target/java-rust-glowroot-agent-0.4.1.jar`
+- `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.4.1.jar`
+- `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.4.1.jar`
+- `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.4.1.jar`
+- `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.4.1.jar`
+- `spring-undertow-adapter/target/java-rust-glowroot-spring-undertow-adapter-0.4.1.jar`
+- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.4.1.jar`
+- `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.4.1.jar`
 
 Native DLL/SO yalnız `native-provenance.properties` içinde yazan temiz `rust-spring` commit'inden
 üretilir. `scripts/sync-native-artifacts.ps1`, tekrarlanabilir release build'inin parçası olduğu için

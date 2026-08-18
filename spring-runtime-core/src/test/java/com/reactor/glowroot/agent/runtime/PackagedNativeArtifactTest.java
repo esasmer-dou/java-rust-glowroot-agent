@@ -29,6 +29,7 @@ class PackagedNativeArtifactTest {
         assertNotNull(revision);
         assertTrue(revision.matches("[0-9a-f]{40}"), "source revision must be a full Git SHA");
         assertFalse(revision.contains("dirty"));
+        assertEquals("2.17", provenance.getProperty("linux-x64.glibc-minimum"));
         verify(loader, provenance, "windows-x64", "rust_glowroot_agent.dll");
         verify(loader, provenance, "linux-x64", "librust_glowroot_agent.so");
     }
