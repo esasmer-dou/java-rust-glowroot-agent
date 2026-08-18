@@ -4,6 +4,8 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-18
+
 ### Added
 
 - Added a separate optional Spring WebFlux `WebFilter` artifact. It preserves bounded route sampling,
@@ -29,6 +31,18 @@ All notable changes to this project are recorded here.
 - Moved Spring exception class, message, and stack traversal off application request threads. Java
   now hands Rust a bounded weak JNI reference; the isolated exporter materializes optional error
   detail under one shared hard capacity, so telemetry cannot retain arbitrary exception graphs.
+- Moved WebFlux telemetry completion after the downstream terminal signal and replaced the
+  callback chain with one bounded subscriber wrapper. Final status, async completion, exact errors,
+  and normalized routes remain intact without extending the response critical path.
+- Bypassed DNS resolution for literal collector IP addresses and corrected the Windows process
+  thread gauge in the coordinated native runtime.
+
+### Validated
+
+- Passed randomized Semeru OpenJ9 telemetry-off/on A/B gates within the stable limits of at most
+  `2%` useful-RPS loss, `10%` p99 regression, and `3 MiB` process-RSS growth.
+- Passed Tomcat, Jetty, Undertow, Reactor Netty, non-web Spring, dependency isolation, native
+  provenance, and all-module Maven release gates.
 
 ## [0.3.0] - 2026-08-16
 
@@ -220,7 +234,8 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.3.0...v0.4.0
 [0.1.0-rc1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.1.0-rc1
 [0.2.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.0
 [0.2.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.2.1

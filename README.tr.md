@@ -37,7 +37,7 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 
 | Uygulama | Uygulamaya eklenecek paket | Native çalışma şekli | Ek telemetri thread'i |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.5.4` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
+| Rust-Java REST `4.5.5` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
 | Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.4.0` | Küçük standalone agent kütüphanesini ve uygun isteğe bağlı sunucu adaptörünü yükler | `1` |
 | Spring Boot `3.x`, web olmayan | Minimum: `java-rust-glowroot-spring-runtime:0.4.0`; ana starter da çalışır | Minimum kurulumda yalnız web'den bağımsız standalone agent kütüphanesini yükler | `1` |
 | Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.4.0` | Aynı standalone native runtime'ı kullanır | `1` |
@@ -50,7 +50,7 @@ kalır. Böylece Spring Boot executable JAR classloader sınırı bozulmaz.
 Mevcut Glowroot collector, kullanıcı arayüzü ve veritabanı değişmez.
 
 > **Uyumluluk sınırı:** Çalışma sırasında profil değiştirme özelliği REST native ABI `29` ve
-> Glowroot ABI `3` gerektirir. Agent `0.4.0` ile Rust-Java REST `4.5.4` kullanın. Eski bir paketten
+> Glowroot ABI `3` gerektirir. Agent `0.4.0` ile Rust-Java REST `4.5.5` kullanın. Eski bir paketten
 > DLL/SO kopyalamayın.
 
 ## Sample Projelerde Kullanım
@@ -71,7 +71,7 @@ halde daha küçük runtime'ı koruyun ve bağımsız standalone runtime hazırl
 ölçümlerini kullanın.
 
 Reader ve consumer README dosyalarında lokal ve Kubernetes için kopyalanabilir örnekler vardır. Yeni
-production deployment'ında agent `0.4.0` açılmadan önce uygulamayı Rust-Java REST `4.5.4` hattına
+production deployment'ında agent `0.4.0` açılmadan önce uygulamayı Rust-Java REST `4.5.5` hattına
 hizalayın.
 
 ## Hangi Verileri Alırsınız?
@@ -132,14 +132,14 @@ Netty; WebFlux uygulamasına da agent üzerinden MVC ya da Servlet motoru eklenm
 
 ## Rust-Java REST Kurulumu
 
-Uyumlu `4.5.4` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `3` içerir. Native dosyanın
+Uyumlu `4.5.5` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `3` içerir. Native dosyanın
 kaynak revision ve ABI bilgisi HTTP server başlamadan doğrulanır.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.5.4</version>
+  <version>4.5.5</version>
 </dependency>
 ```
 
@@ -709,11 +709,11 @@ araçları ve ham kanıt dosyaları bilinçli olarak public repoda tutulmaz.
 | Bileşen | Sürüm | Sözleşme |
 | --- | ---: | --- |
 | Java | `21` | Ana test JVM'i Semeru OpenJ9'dur |
-| Rust-Java REST | `4.5.4` | REST ABI `29`, Glowroot ABI `3` |
+| Rust-Java REST | `4.5.5` | REST ABI `29`, Glowroot ABI `3` |
 | Agent bootstrap | `0.4.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
 | Spring Boot starter | `0.4.0` | Spring Boot `3.x`; web'den bağımsız çekirdek ve Tomcat, Jetty, Undertow için doğrudan tam yaşam döngüsü adaptörleri; sunucu motoru bağımlılığı yoktur |
 | Spring WebFlux adaptörü | `0.4.0` | Ayrı ve isteğe bağlı `WebFilter`; Reactor Netty veya Servlet motoru bağımlılığı yoktur |
-| Standalone native kaynak | `rust-spring v4.5.4` | Glowroot ABI `3`; temiz CI DLL/SO |
+| Standalone native kaynak | `rust-spring v4.5.5` | Glowroot ABI `3`; temiz CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf uyumluluk gate'i |
 | Native platform | Windows x64, Linux glibc x64 | Temiz CI build DLL/SO ve SHA-256 provenance |
 

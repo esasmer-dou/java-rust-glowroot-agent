@@ -118,6 +118,27 @@ class RustGlowrootWebFilterTest {
         assertEquals(404, recorder.records.getFirst().status());
     }
 
+    @Test
+    void nativeLinkageFailureDoesNotAlterTheApplicationCompletion() {
+        HttpTelemetrySink failingSink = new HttpTelemetrySink() {
+            @Override
+            public int registerHttpRoute(String method, String route) {
+                throw new UnsatisfiedLinkError("native runtime unavailable");
+            }
+
+            @Override
+            public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {}
+        };
+        RustGlowrootWebFilter filter = new RustGlowrootWebFilter(failingSink, config(1, 0, 4));
+        MockServerWebExchange exchange = exchange("/orders/42");
+        exchange.getAttributes().put(
+                HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE,
+                PathPatternParser.defaultInstance.parse("/orders/{id}"));
+
+        StepVerifier.create(filter.filter(exchange, current -> current.getResponse().setComplete()))
+                .verifyComplete();
+    }
+
     private static MockServerWebExchange exchange(String path) {
         return MockServerWebExchange.from(MockServerHttpRequest.get(path).build());
     }

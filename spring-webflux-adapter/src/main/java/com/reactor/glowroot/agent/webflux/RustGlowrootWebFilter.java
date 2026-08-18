@@ -10,12 +10,10 @@ import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
+import org.reactivestreams.Subscription;
+import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Mono;
-
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
+import reactor.util.context.Context;
 
 /** Optional bounded WebFlux adapter with no dependency on a reactive server implementation. */
 public final class RustGlowrootWebFilter implements WebFilter, Ordered {
@@ -56,31 +54,45 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         int flags = telemetry.beginObservation();
-        Observation observation = new Observation(
-                exchange,
-                flags,
-                flags == 0 ? 0L : System.nanoTime());
-        exchange.getResponse().beforeCommit(observation);
+        long startedAtNanos = flags == 0 ? 0L : System.nanoTime();
         try {
-            return chain.filter(exchange).doOnError(observation);
+            return new ObservedMono(
+                    chain.filter(exchange),
+                    exchange,
+                    flags,
+                    startedAtNanos);
         } catch (RuntimeException | Error error) {
-            observation.accept(error);
+            completeFailOpen(exchange, flags, startedAtNanos, error);
             throw error;
         }
     }
 
-    private void complete(Observation observation) {
-        ServerWebExchange exchange = observation.exchange;
+    private void completeFailOpen(
+            ServerWebExchange exchange,
+            int flags,
+            long startedAtNanos,
+            Throwable error) {
+        try {
+            complete(exchange, flags, startedAtNanos, error);
+        } catch (RuntimeException | LinkageError ignored) {
+            // Native telemetry failures must not alter the application signal.
+        }
+    }
+
+    private void complete(
+            ServerWebExchange exchange,
+            int flags,
+            long startedAtNanos,
+            Throwable error) {
         HttpStatusCode responseStatus = exchange.getResponse().getStatusCode();
         int status = responseStatus == null ? 200 : responseStatus.value();
-        Throwable error = observation.error;
-        long durationNanos = observation.startedAtNanos == 0L
+        long durationNanos = startedAtNanos == 0L
                 ? 0L
-                : Math.max(0L, System.nanoTime() - observation.startedAtNanos);
-        if (!telemetry.shouldRecord(observation.flags, status, durationNanos, error)) return;
+                : Math.max(0L, System.nanoTime() - startedAtNanos);
+        if (!telemetry.shouldRecord(flags, status, durationNanos, error)) return;
 
         telemetry.record(
-                observation.flags,
+                flags,
                 exchange.getRequest().getMethod().name(),
                 exchange.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE),
                 status,
@@ -88,50 +100,73 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
                 error);
     }
 
-    private final class Observation implements Supplier<Mono<Void>>, Consumer<Throwable> {
-        private static final VarHandle COMPLETED;
-
-        static {
-            try {
-                COMPLETED = MethodHandles.lookup().findVarHandle(
-                        Observation.class,
-                        "completed",
-                        int.class);
-            } catch (ReflectiveOperationException error) {
-                throw new ExceptionInInitializerError(error);
-            }
-        }
-
+    private final class ObservedMono extends Mono<Void> {
+        private final Mono<Void> source;
         private final ServerWebExchange exchange;
         private final int flags;
         private final long startedAtNanos;
-        private Throwable error;
-        @SuppressWarnings("unused")
-        private volatile int completed;
 
-        private Observation(
+        private ObservedMono(
+                Mono<Void> source,
                 ServerWebExchange exchange,
                 int flags,
                 long startedAtNanos) {
+            this.source = source;
             this.exchange = exchange;
             this.flags = flags;
             this.startedAtNanos = startedAtNanos;
         }
 
         @Override
-        public Mono<Void> get() {
-            completeOnce();
-            return Mono.empty();
+        public void subscribe(CoreSubscriber<? super Void> actual) {
+            source.subscribe(new CompletionSubscriber(actual, this));
+        }
+    }
+
+    private final class CompletionSubscriber implements CoreSubscriber<Void> {
+        private final CoreSubscriber<? super Void> actual;
+        private final ObservedMono observation;
+
+        private CompletionSubscriber(
+                CoreSubscriber<? super Void> actual,
+                ObservedMono observation) {
+            this.actual = actual;
+            this.observation = observation;
         }
 
         @Override
-        public void accept(Throwable error) {
-            this.error = error;
-            completeOnce();
+        public Context currentContext() {
+            return actual.currentContext();
         }
 
-        private void completeOnce() {
-            if (COMPLETED.compareAndSet(this, 0, 1)) complete(this);
+        @Override
+        public void onSubscribe(Subscription subscription) {
+            actual.onSubscribe(subscription);
+        }
+
+        @Override
+        public void onNext(Void ignored) {
+            actual.onNext(ignored);
+        }
+
+        @Override
+        public void onError(Throwable error) {
+            actual.onError(error);
+            completeAfterSignal(observation, error);
+        }
+
+        @Override
+        public void onComplete() {
+            actual.onComplete();
+            completeAfterSignal(observation, null);
+        }
+
+        private void completeAfterSignal(ObservedMono observation, Throwable error) {
+            completeFailOpen(
+                    observation.exchange,
+                    observation.flags,
+                    observation.startedAtNanos,
+                    error);
         }
     }
 }

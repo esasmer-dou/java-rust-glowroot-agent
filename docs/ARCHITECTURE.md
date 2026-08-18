@@ -133,8 +133,10 @@ Successful requests are sampled in Java before JNI. The dominant unsampled succe
 route resolution, request attributes, or native state. Sampled, slow, failed, asynchronous, and
 not-found requests resolve Spring's normalized route from the selected server completion hook.
 Exact `5xx` accounting is preserved on every supported engine. The WebFlux filter applies the same
-bounded route/status/error contract at reactive response commit; its per-request reactive
-observation is confined to the separately selected module. No adapter creates a Java executor,
+bounded route/status/error contract at the reactive terminal signal. It forwards that signal to the
+application first and records telemetry immediately afterwards, so exporter work does not extend the
+response critical path. Its per-request observation is confined to the separately selected module.
+No adapter creates a Java executor,
 Servlet filter, request wrapper, or classpath scan. The standalone Rust library runs one
 current-thread Tokio exporter on a `256 KiB` stack. Every queue, route table, trace buffer, message,
 and DNS address set is bounded by the same native engine contract.

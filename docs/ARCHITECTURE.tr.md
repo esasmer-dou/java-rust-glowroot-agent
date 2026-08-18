@@ -131,9 +131,11 @@ seçilmeyen bir motor arşive girerse build durur.
 Başarılı istekler JNI çağrısından önce Java tarafında örneklenir. Yaygın olan örneklenmeyen başarılı
 yol; route'a, request attribute'a veya native state'e erişmeden döner. Örneklenen, yavaş, hatalı,
 asenkron ve bulunamayan istekler Spring'in normalize edilmiş route bilgisini seçilen sunucunun
-tamamlanma noktasından çözer. Her desteklenen motorda `5xx` tam sayılır. WebFlux filter da reaktif
-yanıt commit edilirken aynı sınırlı route, durum ve hata sözleşmesini uygular. İstek başına reaktif
-gözlem yalnız ayrı seçilen WebFlux modülünde bulunur. Hiçbir adaptör Java executor, Servlet filter,
+tamamlanma noktasından çözer. Her desteklenen motorda `5xx` tam sayılır. WebFlux filter aynı sınırlı
+route, durum ve hata sözleşmesini reaktif terminal sinyalinde uygular. Önce uygulamanın terminal
+sinyalini iletir, hemen ardından telemetriyi kaydeder. Böylece exporter işi yanıtın kritik yolunu
+uzatmaz. İstek başına gözlem yalnız ayrı seçilen WebFlux modülünde bulunur. Hiçbir adaptör Java
+executor, Servlet filter,
 request wrapper veya classpath taraması oluşturmaz. Standalone Rust kütüphanesi, `256 KiB`
 stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint tablosu, trace buffer,
 mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.

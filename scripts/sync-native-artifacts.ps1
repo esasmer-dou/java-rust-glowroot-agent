@@ -81,7 +81,7 @@ if ($windowsMeta.'source.revision' -ne $sourceRevision -or $linuxMeta.'source.re
 
 $windowsHash = Assert-ArtifactChecksum $windowsSource $windowsChecksumPath
 $linuxHash = Assert-ArtifactChecksum $linuxSource $linuxChecksumPath
-$resources = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\spring-boot-starter\src\main\resources\native"))
+$resources = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\spring-runtime-core\src\main\resources\native"))
 $windowsDirectory = Join-Path $resources "windows-x64"
 $linuxDirectory = Join-Path $resources "linux-x64"
 New-Item -ItemType Directory -Force -Path $resources, $windowsDirectory, $linuxDirectory | Out-Null

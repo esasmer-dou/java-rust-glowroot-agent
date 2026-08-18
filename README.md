@@ -36,7 +36,7 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 | Application | Add to the application | Native runtime | Extra telemetry thread |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.5.4` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
+| Rust-Java REST `4.5.5` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
 | Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.4.0` | Loads the small standalone agent library and the matching optional server adapter | `1` |
 | Spring Boot `3.x`, non-web | Minimum: `java-rust-glowroot-spring-runtime:0.4.0`; the umbrella starter also works | Loads only the web-independent standalone agent library in the minimum setup | `1` |
 | Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.4.0` | Uses the same standalone native runtime | `1` |
@@ -49,7 +49,7 @@ so Spring classes never cross the executable-JAR classloader boundary.
 The existing Glowroot collector, UI, and database stay unchanged.
 
 > **Compatibility boundary:** runtime profile switching requires REST native ABI `29` and Glowroot
-> ABI `3`. Use agent `0.4.0` with Rust-Java REST `4.5.4`. Do not copy DLL/SO files from an older
+> ABI `3`. Use agent `0.4.0` with Rust-Java REST `4.5.5`. Do not copy DLL/SO files from an older
 > package.
 
 ## Sample Projects
@@ -70,7 +70,7 @@ Otherwise keep the smaller runtime and use platform-level metrics until a dedica
 runtime is available.
 
 The reader and consumer READMEs contain copy-paste local and Kubernetes examples. For a new
-production deployment, align them to Rust-Java REST `4.5.4` before enabling agent `0.4.0`.
+production deployment, align them to Rust-Java REST `4.5.5` before enabling agent `0.4.0`.
 
 ## What You Get
 
@@ -131,14 +131,14 @@ from the agent.
 
 ## Rust-Java REST Setup
 
-Use the coordinated `4.5.4` framework line. It contains Glowroot native ABI `3` and validates the
+Use the coordinated `4.5.5` framework line. It contains Glowroot native ABI `3` and validates the
 native provenance before the HTTP server starts.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.5.4</version>
+  <version>4.5.5</version>
 </dependency>
 ```
 
@@ -701,11 +701,11 @@ tools and raw evidence are intentionally not part of the public repository.
 | Component | Release | Contract |
 | --- | ---: | --- |
 | Java | `21` | Semeru OpenJ9 is the primary tested JVM |
-| Rust-Java REST | `4.5.4` | REST ABI `29`, Glowroot ABI `3` |
+| Rust-Java REST | `4.5.5` | REST ABI `29`, Glowroot ABI `3` |
 | Agent bootstrap | `0.4.0` | One class; works with either supported runtime |
 | Spring Boot starter | `0.4.0` | Spring Boot `3.x`; web-independent core plus direct full-lifecycle adapters for Tomcat, Jetty, and Undertow; no server engine dependency |
 | Spring WebFlux adapter | `0.4.0` | Separate optional `WebFilter`; no Reactor Netty or Servlet engine dependency |
-| Standalone native source | `rust-spring v4.5.4` | Glowroot ABI `3`; clean CI DLL/SO |
+| Standalone native source | `rust-spring v4.5.5` | Glowroot ABI `3`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
 
