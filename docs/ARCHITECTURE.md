@@ -35,7 +35,8 @@ flowchart LR
 
 - Java `premain` only establishes configuration. It installs no transformer.
 - Route names are assigned once during startup. Request paths do not allocate metric names.
-- Successful HTTP requests use weighted bounded sampling. HTTP `5xx` remains exact.
+- Every completed HTTP request updates an exact bounded route aggregate. Sampling applies only to
+  optional trace detail; it never changes Average, Percentile, Throughput, or error totals.
 - HTTP trace samples contain route name, status, and timing only. Request bodies, query values,
   headers, bind values, and business payloads are not copied. Explicit SQL slots retain only a
   normalized bounded statement label.
@@ -133,17 +134,19 @@ Spring classes in a `-javaagent` JAR and prevents Servlet applications from rece
 unselected server engine. CI packages three isolated MVC applications plus a Reactor Netty WebFlux
 application and rejects every unselected engine.
 
-Successful requests are sampled in Java before JNI. The dominant unsampled success returns before
-route resolution, request attributes, or native state. Sampled, slow, failed, asynchronous, and
-not-found requests resolve Spring's normalized route from the selected server completion hook.
-Exact `5xx` accounting is preserved on every supported engine. The WebFlux filter applies the same
-bounded route/status/error contract at the reactive terminal signal. It forwards that signal to the
-application first and records telemetry immediately afterwards, so exporter work does not extend the
-response critical path. Its per-request observation is confined to the separately selected module.
-No adapter creates a Java executor,
+Every completed request updates one exact route aggregate through a constant-time Java-to-Rust
+boundary. Glowroot Central's summary, overview, histogram, and throughput tables require these
+complete counts and durations. Optional trace sampling is decided in Java, but it never removes a
+request from those aggregates. Failed, asynchronous, and not-found requests use the same contract on
+every supported engine. The WebFlux filter records at the reactive terminal signal after forwarding
+the application signal, so exporter work does not extend response production. No adapter creates a Java executor,
 Servlet filter, request wrapper, or classpath scan. The standalone Rust library runs one
 current-thread Tokio exporter on a `256 KiB` stack. Every queue, route table, trace buffer, message,
 and DNS address set is bounded by the same native engine contract.
+
+The transaction type is `Web`, matching upstream Glowroot. A transaction name contains only the
+normalized route (`/orders/*`), not the HTTP method. One `max-routes` slot is reserved for
+`<route-limit-exceeded>` so cardinality pressure stays bounded without silently losing requests.
 
 The Spring boundary still reads the final mapped route, response status, completion, and an optional
 `Throwable`, because those values exist only after framework dispatch. It performs no

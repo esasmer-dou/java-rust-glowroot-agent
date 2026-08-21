@@ -20,7 +20,7 @@ param(
 
     [string] $NativeSourceDirectory = (Join-Path $PSScriptRoot "..\..\rust-spring"),
 
-    [int] $GlowrootAbi = 3,
+    [int] $GlowrootAbi = 4,
 
     [string] $LinuxMinimumGlibc = "2.17"
 )

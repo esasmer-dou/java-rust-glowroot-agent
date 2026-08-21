@@ -93,7 +93,6 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
 
         telemetry.record(
                 flags,
-                exchange.getRequest().getMethod().name(),
                 exchange.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE),
                 status,
                 durationNanos,

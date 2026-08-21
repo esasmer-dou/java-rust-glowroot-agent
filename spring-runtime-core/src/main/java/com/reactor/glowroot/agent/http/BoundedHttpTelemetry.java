@@ -5,21 +5,24 @@ import com.reactor.glowroot.agent.runtime.TelemetryConfig;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
-/** Shared allocation-bounded HTTP sampler and native route registry. */
+/** Shared allocation-bounded HTTP aggregate, trace sampler, and native route registry. */
 public final class BoundedHttpTelemetry {
 
     public static final String UNMATCHED_ROUTE = "<unmatched>";
+    public static final String ROUTE_LIMIT_EXCEEDED = "<route-limit-exceeded>";
 
     private static final int DISABLED_SLOT = -1;
     private static final int SAMPLED = 1;
     private static final int CHECK_SLOW = 1 << 1;
     private static final int FAILED = 1 << 2;
-    private static final int TOKEN_FLAG_SHIFT = 61;
+    private static final int EXACT_AGGREGATE = 1 << 3;
+    private static final int TOKEN_FLAG_SHIFT = 60;
     private static final long TOKEN_TIME_MASK = (1L << TOKEN_FLAG_SHIFT) - 1L;
 
     private final HttpTelemetrySink telemetry;
     private final int sampleRate;
     private final int sampleMask;
+    private final boolean traceSamplingEnabled;
     private final long slowThresholdNanos;
     private final ThreadLocal<SampleState> sampleState;
     private final RouteRegistry routeSlots;
@@ -28,6 +31,7 @@ public final class BoundedHttpTelemetry {
         this.telemetry = java.util.Objects.requireNonNull(telemetry, "telemetry");
         this.sampleRate = config.httpSampleRate();
         this.sampleMask = sampleRate - 1;
+        this.traceSamplingEnabled = config.traceCapacity() > 0;
         this.slowThresholdNanos = config.traceCapacity() == 0
                 ? Long.MAX_VALUE
                 : config.slowThresholdMs() * 1_000_000L;
@@ -36,30 +40,30 @@ public final class BoundedHttpTelemetry {
         this.routeSlots = new RouteRegistry(config.maxRoutes());
     }
 
-    /**
-     * Decides whether completion data may be needed for this response.
-     *
-     * <p>The dominant unsampled successful path returns zero. Callers should then avoid clocks,
-     * route lookup, and JNI.</p>
-     */
+    /** Starts exact aggregate observation and marks an optional trace sample. */
     public int observation(int status) {
-        int observation = beginObservation();
+        // Direct server adapters already own request timing. Avoid ThreadLocal sampler state in the
+        // default aggregate-only profile; exact aggregation itself needs no Java request state.
+        int observation = traceSamplingEnabled
+                ? nextObservation(sampleState.get())
+                : EXACT_AGGREGATE;
         if (status >= 500) observation |= FAILED;
         return observation;
     }
 
     /** Starts lifecycle observation without allocating a request object. */
     public int beginObservation() {
-        return nextObservation(sampleState.get());
+        return traceSamplingEnabled
+                ? nextObservation(sampleState.get())
+                : EXACT_AGGREGATE;
     }
 
     /** Starts one thread-bound MVC observation without allocating request state. */
     public void beginThreadObservation() {
         SampleState state = sampleState.get();
         int flags = nextObservation(state);
-        state.activeToken = flags == 0
-                ? 0L
-                : ((long) flags << TOKEN_FLAG_SHIFT) | (System.nanoTime() & TOKEN_TIME_MASK);
+        state.activeToken = ((long) flags << TOKEN_FLAG_SHIFT)
+                | (System.nanoTime() & TOKEN_TIME_MASK);
     }
 
     /** Detaches and clears the current thread-bound observation for sync or async completion. */
@@ -82,8 +86,8 @@ public final class BoundedHttpTelemetry {
     }
 
     private int nextObservation(SampleState state) {
-        boolean sampled = state.next(sampleMask);
-        int observation = sampled ? SAMPLED : 0;
+        boolean sampled = traceSamplingEnabled && state.next(sampleMask);
+        int observation = EXACT_AGGREGATE | (sampled ? SAMPLED : 0);
         if (slowThresholdNanos != Long.MAX_VALUE) observation |= CHECK_SLOW;
         return observation;
     }
@@ -92,6 +96,16 @@ public final class BoundedHttpTelemetry {
     public void record(
             int observation,
             String method,
+            Object route,
+            int status,
+            long durationNanos,
+            Throwable error) {
+        record(observation, route, status, durationNanos, error);
+    }
+
+    /** Records a completed request using Glowroot-compatible route-only transaction naming. */
+    public void record(
+            int observation,
             Object route,
             int status,
             long durationNanos,
@@ -107,7 +121,7 @@ public final class BoundedHttpTelemetry {
                 ? UNMATCHED_ROUTE
                 : route instanceof String text ? text : route.toString();
         try {
-            int slot = routeSlots.getOrRegister(method, routeValue, telemetry);
+            int slot = routeSlots.getOrRegister(routeValue, telemetry);
             if (slot == DISABLED_SLOT) return;
             telemetry.recordHttp(
                     slot,
@@ -120,17 +134,16 @@ public final class BoundedHttpTelemetry {
         }
     }
 
-    /** Lets reactive adapters skip route and method lookup on the dominant successful path. */
+    /** Returns whether this completion contributes to exact aggregate or error telemetry. */
     public boolean shouldRecord(
             int observation,
             int status,
             long durationNanos,
             Throwable error) {
-        boolean failed = (observation & FAILED) != 0 || status >= 500 || error != null;
-        if (observation == 0) return failed;
-        return (observation & SAMPLED) != 0
-                || failed
-                || Math.max(0L, durationNanos) >= slowThresholdNanos;
+        return (observation & EXACT_AGGREGATE) != 0
+                || (observation & FAILED) != 0
+                || status >= 500
+                || error != null;
     }
 
     private static int initialSampleOffset(long threadId, int mask) {
@@ -161,34 +174,37 @@ public final class BoundedHttpTelemetry {
         private static final VarHandle STRING_ELEMENT =
                 MethodHandles.arrayElementVarHandle(String[].class);
 
-        private final int maxRoutes;
+        private final int maxNamedRoutes;
         private final int mask;
-        private final String[] methods;
         private final String[] routes;
         private final int[] slots;
-        private int size;
+        private volatile int size;
+        private volatile int overflowSlot = DISABLED_SLOT;
+        private volatile boolean overflowRegistrationAttempted;
 
         private RouteRegistry(int maxRoutes) {
             int capacity = 2;
             while (capacity < maxRoutes * 2) capacity <<= 1;
-            this.maxRoutes = maxRoutes;
+            // Reserve one bounded slot for overflow so route-cardinality pressure never makes
+            // completed requests disappear silently from Glowroot transaction aggregates.
+            this.maxNamedRoutes = maxRoutes - 1;
             this.mask = capacity - 1;
-            this.methods = new String[capacity];
             this.routes = new String[capacity];
             this.slots = new int[capacity];
         }
 
-        private int getOrRegister(String method, String route, HttpTelemetrySink telemetry) {
-            int registered = find(method, route);
+        private int getOrRegister(String route, HttpTelemetrySink telemetry) {
+            int registered = find(route);
             if (registered != DISABLED_SLOT) return registered;
-            return register(method, route, telemetry);
+            if (size >= maxNamedRoutes) return overflowSlot(telemetry);
+            return register(route, telemetry);
         }
 
-        private int find(String method, String route) {
-            int index = spreadHash(method, route) & mask;
-            String registeredMethod;
-            while ((registeredMethod = (String) STRING_ELEMENT.getAcquire(methods, index)) != null) {
-                if (registeredMethod.equals(method) && routes[index].equals(route)) {
+        private int find(String route) {
+            int index = spreadHash(route) & mask;
+            String registeredRoute;
+            while ((registeredRoute = (String) STRING_ELEMENT.getAcquire(routes, index)) != null) {
+                if (registeredRoute.equals(route)) {
                     return slots[index];
                 }
                 index = (index + 1) & mask;
@@ -196,29 +212,43 @@ public final class BoundedHttpTelemetry {
             return DISABLED_SLOT;
         }
 
-        private synchronized int register(
-                String method,
-                String route,
-                HttpTelemetrySink telemetry) {
-            int registered = find(method, route);
+        private synchronized int register(String route, HttpTelemetrySink telemetry) {
+            int registered = find(route);
             if (registered != DISABLED_SLOT) return registered;
-            if (size >= maxRoutes) return DISABLED_SLOT;
+            if (size >= maxNamedRoutes) return registerOverflow(telemetry);
 
-            int index = spreadHash(method, route) & mask;
-            while ((String) STRING_ELEMENT.getAcquire(methods, index) != null) {
+            int index = spreadHash(route) & mask;
+            while ((String) STRING_ELEMENT.getAcquire(routes, index) != null) {
                 index = (index + 1) & mask;
             }
-            int slot = telemetry.registerHttpRoute(method, route);
+            int slot = telemetry.registerHttpRoute("", route);
             if (slot == DISABLED_SLOT) return DISABLED_SLOT;
-            routes[index] = route;
             slots[index] = slot;
-            STRING_ELEMENT.setRelease(methods, index, method);
+            STRING_ELEMENT.setRelease(routes, index, route);
             size++;
             return slot;
         }
 
-        private static int spreadHash(String method, String route) {
-            int hash = 31 * method.hashCode() + route.hashCode();
+        private int overflowSlot(HttpTelemetrySink telemetry) {
+            int registered = overflowSlot;
+            if (registered != DISABLED_SLOT || overflowRegistrationAttempted) return registered;
+            synchronized (this) {
+                return registerOverflow(telemetry);
+            }
+        }
+
+        private int registerOverflow(HttpTelemetrySink telemetry) {
+            if (overflowSlot != DISABLED_SLOT || overflowRegistrationAttempted) return overflowSlot;
+            int registered = telemetry.registerHttpRoute("", ROUTE_LIMIT_EXCEEDED);
+            overflowSlot = registered;
+            // A native exception is handled by the outer fail-open boundary and is retried on the
+            // next request. A normal disabled result is stable and must not call JNI forever.
+            overflowRegistrationAttempted = true;
+            return overflowSlot;
+        }
+
+        private static int spreadHash(String route) {
+            int hash = route.hashCode();
             return hash ^ (hash >>> 16);
         }
     }

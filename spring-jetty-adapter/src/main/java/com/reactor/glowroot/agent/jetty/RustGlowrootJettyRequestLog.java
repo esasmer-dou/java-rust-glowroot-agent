@@ -36,7 +36,6 @@ final class RustGlowrootJettyRequestLog implements RequestLog {
         if (!telemetry.shouldRecord(observation, status, durationNanos, error)) return;
         telemetry.record(
                 observation,
-                request.getMethod(),
                 request.getAttribute(ROUTE_ATTRIBUTE),
                 status,
                 durationNanos,

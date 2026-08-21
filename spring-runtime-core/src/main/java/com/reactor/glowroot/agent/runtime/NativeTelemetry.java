@@ -8,7 +8,7 @@ import java.time.Duration;
 /** Process-scoped facade for the bounded native telemetry runtime. */
 public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
 
-    static final int EXPECTED_GLOWROOT_ABI = 3;
+    static final int EXPECTED_GLOWROOT_ABI = 4;
     private static final Object LIFECYCLE_LOCK = new Object();
     private static int references;
     private static volatile TelemetryProfile activeProfile = TelemetryProfile.MICRO;
@@ -119,12 +119,12 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
     }
 
     /**
-     * Records one sampled or failed HTTP request in native aggregate state.
+     * Records one completed HTTP request in exact native aggregate state.
      *
      * @param slot previously registered route slot
      * @param status HTTP response status
      * @param durationNanos request duration in nanoseconds
-     * @param sampleWeight successful request weight, or zero for an exact error
+     * @param sampleWeight optional trace sampling weight; aggregate count and duration stay exact
      */
     public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
         if (!closed) {

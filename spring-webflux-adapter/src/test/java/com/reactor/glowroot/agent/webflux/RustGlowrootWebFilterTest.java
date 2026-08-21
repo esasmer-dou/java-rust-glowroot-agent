@@ -40,9 +40,9 @@ class RustGlowrootWebFilterTest {
         StepVerifier.create(filter.filter(exchange, current -> current.getResponse().setComplete()))
                 .verifyComplete();
 
-        assertEquals(List.of("GET /orders/{id}"), recorder.routes);
+        assertEquals(List.of("/orders/{id}"), recorder.routes);
         assertEquals(200, recorder.records.getFirst().status());
-        assertEquals(1, recorder.records.getFirst().sampleWeight());
+        assertEquals(0, recorder.records.getFirst().sampleWeight());
     }
 
     @Test
@@ -114,7 +114,7 @@ class RustGlowrootWebFilterTest {
                 }))
                 .verifyComplete();
 
-        assertEquals(List.of("GET <unmatched>"), recorder.routes);
+        assertEquals(List.of("<unmatched>"), recorder.routes);
         assertEquals(404, recorder.records.getFirst().status());
     }
 
@@ -159,7 +159,7 @@ class RustGlowrootWebFilterTest {
 
         @Override
         public int registerHttpRoute(String method, String route) {
-            routes.add(method + ' ' + route);
+            routes.add(route);
             return routes.size() - 1;
         }
 

@@ -4,6 +4,27 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-21
+
+### Fixed
+
+- Feed Glowroot **Average**, **Percentile**, **Throughput**, and **Errors** with one exact aggregate
+  contribution for every completed HTTP request. `reactor.glowroot.http.sample-rate` now limits only
+  optional trace detail and never removes successful requests from endpoint dashboards.
+- Emit upstream-compatible `Web` transaction types, route-only names such as `/orders/*`, and the
+  `http request` root timer expected by the existing Glowroot Central and Cassandra read model.
+- Aggregate route-cardinality overflow under one bounded `<route-limit-exceeded>` transaction
+  instead of silently dropping completed requests. Transient native registration failures retry on
+  the next request while telemetry remains fail-open.
+- Print one startup readiness line naming the active Spring HTTP adapter. This makes a missing
+  starter or disabled HTTP adapter visible before operators inspect the transaction screens.
+
+### Compatibility
+
+- The next coordinated package requires Glowroot native ABI `4`. REST native ABI remains `29`.
+- The optional `-javaagent` bootstrap is still configuration-only. Spring HTTP telemetry requires
+  the Spring Boot starter or the matching MVC/WebFlux adapter on the application classpath.
+
 ## [0.4.1] - 2026-08-18
 
 ### Fixed
@@ -250,7 +271,8 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.3.0...v0.4.0
 [0.1.0-rc1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.1.0-rc1

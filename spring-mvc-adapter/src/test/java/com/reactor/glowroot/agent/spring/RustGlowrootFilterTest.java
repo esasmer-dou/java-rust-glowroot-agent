@@ -25,7 +25,7 @@ class RustGlowrootFilterTest {
 
         filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> response.setStatus(503));
 
-        assertEquals(List.of("GET /orders/{id}"), recorder.routes);
+        assertEquals(List.of("/orders/{id}"), recorder.routes);
         assertEquals(1, recorder.records.size());
         assertEquals(503, recorder.records.get(0).status());
         assertEquals(0, recorder.records.get(0).sampleWeight());
@@ -59,7 +59,7 @@ class RustGlowrootFilterTest {
 
         @Override
         public int registerHttpRoute(String method, String route) {
-            routes.add(method + ' ' + route);
+            routes.add(route);
             return routes.size() - 1;
         }
 

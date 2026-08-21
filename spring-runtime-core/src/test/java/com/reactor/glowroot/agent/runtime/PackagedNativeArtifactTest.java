@@ -24,7 +24,7 @@ class PackagedNativeArtifactTest {
         }
 
         assertEquals("1", provenance.getProperty("schema"));
-        assertEquals("3", provenance.getProperty("glowroot.abi"));
+        assertEquals("4", provenance.getProperty("glowroot.abi"));
         String revision = provenance.getProperty("source.revision");
         assertNotNull(revision);
         assertTrue(revision.matches("[0-9a-f]{40}"), "source revision must be a full Git SHA");

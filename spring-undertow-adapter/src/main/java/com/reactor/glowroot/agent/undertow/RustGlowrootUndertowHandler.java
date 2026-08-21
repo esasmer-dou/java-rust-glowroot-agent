@@ -64,7 +64,6 @@ final class RustGlowrootUndertowHandler implements HttpHandler {
             Object route = request == null ? null : request.getAttribute(ROUTE_ATTRIBUTE);
             telemetry.record(
                     observation,
-                    exchange.getRequestMethod().toString(),
                     route,
                     status,
                     durationNanos,

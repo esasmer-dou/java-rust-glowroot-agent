@@ -20,9 +20,9 @@ import java.util.function.Function;
  * @param connectTimeoutMs collector connection timeout
  * @param requestTimeoutMs complete collector request timeout
  * @param slowThresholdMs threshold used when bounded traces are enabled
- * @param httpSampleRate successful HTTP request sampling rate
+ * @param httpSampleRate optional HTTP trace sampling rate; route aggregates are always exact
  * @param traceCapacity bounded trace queue capacity
- * @param maxRoutes maximum number of retained HTTP route slots
+ * @param maxRoutes total bounded HTTP route slots, including one overflow aggregate
  * @param maxExportBytes maximum encoded collector request size
  * @param profile bounded telemetry surfaces enabled at startup
  * @param profileReleaseTimeoutMs maximum synchronous wait for retired profile state

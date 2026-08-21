@@ -26,9 +26,9 @@ class RustGlowrootInterceptorTest {
             RustGlowrootInterceptor.class.getName() + ".observation";
 
     @Test
-    void samplesSuccessesAndKeepsErrorsExactWithoutPerRequestRouteRegistration() throws Exception {
+    void recordsEverySuccessAndKeepsTraceSamplingBounded() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(4, 0, 4));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(4, 4, 4));
 
         for (int index = 0; index < 4; index++) {
             invoke(interceptor, 200, "/orders/{id}", null);
@@ -36,11 +36,11 @@ class RustGlowrootInterceptorTest {
         invoke(interceptor, 500, "/orders/{id}", null);
 
         assertEquals(1, recorder.registrations);
-        assertEquals(2, recorder.records.size());
-        assertEquals(4, recorder.records.get(0).sampleWeight());
-        assertEquals(200, recorder.records.get(0).status());
-        assertEquals(0, recorder.records.get(1).sampleWeight());
-        assertEquals(500, recorder.records.get(1).status());
+        assertEquals(5, recorder.records.size());
+        assertEquals(4, recorder.records.stream().filter(record -> record.status() == 200).count());
+        assertEquals(1, recorder.records.stream().filter(record -> record.sampleWeight() == 4).count());
+        assertEquals(0, recorder.records.getLast().sampleWeight());
+        assertEquals(500, recorder.records.getLast().status());
     }
 
     @Test
@@ -62,12 +62,12 @@ class RustGlowrootInterceptorTest {
 
         invoke(interceptor, 422, "/orders/{id}", null);
 
-        assertEquals(List.of("GET /orders/{id}"), recorder.routes);
+        assertEquals(List.of("/orders/{id}"), recorder.routes);
         assertEquals(422, recorder.records.get(0).status());
     }
 
     @Test
-    void boundsTheJavaRouteCacheBeforeCallingNativeRegistration() throws Exception {
+    void aggregatesRoutesBeyondTheBoundedCacheInOneOverflowSlot() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
         RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
 
@@ -75,13 +75,27 @@ class RustGlowrootInterceptorTest {
         invoke(interceptor, 200, "/customers/{id}", null);
 
         assertEquals(1, recorder.registrations);
-        assertEquals(1, recorder.records.size());
+        assertEquals(List.of("<route-limit-exceeded>"), recorder.routes);
+        assertEquals(2, recorder.records.size());
+        assertEquals(recorder.records.getFirst().slot(), recorder.records.getLast().slot());
+    }
+
+    @Test
+    void retriesOverflowRegistrationAfterTransientNativeFailure() throws Exception {
+        FlakyOverflowRecorder recorder = new FlakyOverflowRecorder();
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
+
+        invoke(interceptor, 200, "/orders/{id}", null);
+        invoke(interceptor, 200, "/orders/{id}", null);
+
+        assertEquals(2, recorder.registrationAttempts);
+        assertEquals(1, recorder.records);
     }
 
     @Test
     void resolvesHashCollisionsWithoutReregisteringRoutes() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 2));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 3));
 
         invoke(interceptor, 200, "/FB", null);
         invoke(interceptor, 200, "/Ea", null);
@@ -129,7 +143,7 @@ class RustGlowrootInterceptorTest {
     @Test
     void preservesTheOriginalSampleAcrossAsyncRedispatch() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 2));
         MockHttpServletRequest request = request("/orders/{id}");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -144,10 +158,9 @@ class RustGlowrootInterceptorTest {
     }
 
     @Test
-    void recordsAnUnsampledAsyncFailureExactlyOnceWithoutSamplingWeight() throws Exception {
+    void recordsAnAsyncFailureExactlyOnceWithoutTraceSamplingWeight() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(8, 0, 1));
-        advancePastSample(interceptor, recorder);
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(8, 0, 2));
         MockHttpServletRequest request = request("/orders/{id}");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -165,7 +178,7 @@ class RustGlowrootInterceptorTest {
     @Test
     void ignoresASecondContainerErrorDispatch() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 2));
         MockHttpServletRequest request = request("/orders/{id}");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -182,7 +195,7 @@ class RustGlowrootInterceptorTest {
     @Test
     void recordsAnUnmatched404FromThePortableErrorDispatch() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 2));
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/missing");
         MockHttpServletResponse response = new MockHttpServletResponse();
         request.setDispatcherType(DispatcherType.ERROR);
@@ -192,7 +205,7 @@ class RustGlowrootInterceptorTest {
         interceptor.preHandle(request, response, new Object());
         interceptor.afterCompletion(request, response, new Object(), null);
 
-        assertEquals(List.of("GET <unmatched>"), recorder.routes);
+        assertEquals(List.of("<unmatched>"), recorder.routes);
         assertEquals(1, recorder.records.size());
         assertEquals(404, recorder.records.getFirst().status());
     }
@@ -200,7 +213,7 @@ class RustGlowrootInterceptorTest {
     @Test
     void recordsAnUnmatchedContainerFailureExactly() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1024, 0, 1));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1024, 0, 2));
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/broken");
         MockHttpServletResponse response = new MockHttpServletResponse();
         request.setDispatcherType(DispatcherType.ERROR);
@@ -221,7 +234,7 @@ class RustGlowrootInterceptorTest {
     @Test
     void keepsTheCompatibilityTimeoutStatusExact() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 2));
         MockHttpServletRequest request = request("/orders/{id}");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
@@ -236,7 +249,7 @@ class RustGlowrootInterceptorTest {
     @Test
     void keepsSynchronousRequestsOutOfTheServletAttributeTable() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 1));
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1, 0, 2));
         TrackingRequest request = new TrackingRequest();
         request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/orders/{id}");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -249,10 +262,9 @@ class RustGlowrootInterceptorTest {
     }
 
     @Test
-    void skipsMethodAndRouteLookupForAnUnsampledSuccessfulRequest() throws Exception {
+    void recordsEverySuccessfulRequestWithoutReadingTheHttpMethod() throws Exception {
         FakeRecorder recorder = new FakeRecorder();
-        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(8, 0, 1));
-        advancePastSample(interceptor, recorder);
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(8, 0, 2));
         TrackingRequest request = new TrackingRequest();
         request.setAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE, "/orders/{id}");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -261,8 +273,9 @@ class RustGlowrootInterceptorTest {
         interceptor.afterCompletion(request, response, new Object(), null);
 
         assertEquals(0, request.methodReads);
-        assertEquals(0, request.routeAttributeReads);
-        assertEquals(0, recorder.records.size());
+        assertEquals(1, request.routeAttributeReads);
+        assertEquals(1, recorder.records.size());
+        assertEquals(0, recorder.records.getFirst().sampleWeight());
     }
 
     private static void invoke(
@@ -275,15 +288,6 @@ class RustGlowrootInterceptorTest {
         assertTrue(interceptor.preHandle(request, response, new Object()));
         response.setStatus(status);
         interceptor.afterCompletion(request, response, new Object(), exception);
-    }
-
-    private static void advancePastSample(
-            RustGlowrootInterceptor interceptor,
-            FakeRecorder recorder) throws Exception {
-        while (recorder.records.isEmpty()) {
-            invoke(interceptor, 200, "/orders/{id}", null);
-        }
-        recorder.records.clear();
     }
 
     private static MockHttpServletRequest request(String route) {
@@ -321,7 +325,7 @@ class RustGlowrootInterceptorTest {
 
         @Override
         public int registerHttpRoute(String method, String route) {
-            routes.add(method + ' ' + route);
+            routes.add(route);
             return registrations++;
         }
 
@@ -377,6 +381,26 @@ class RustGlowrootInterceptorTest {
         @Override
         public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
             records.incrementAndGet();
+        }
+    }
+
+    private static final class FlakyOverflowRecorder implements HttpTelemetrySink {
+        private int registrationAttempts;
+        private int records;
+
+        @Override
+        public int registerHttpRoute(String method, String route) {
+            registrationAttempts++;
+            if (registrationAttempts == 1) {
+                throw new IllegalStateException("transient native registration failure");
+            }
+            return 7;
+        }
+
+        @Override
+        public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
+            assertEquals(7, slot);
+            records++;
         }
     }
 

@@ -34,7 +34,8 @@ flowchart LR
 
 - Java `premain` yalnız konfigürasyonu hazırlar. Transformer kurmaz.
 - Route adları startup sırasında bir kez atanır. Request path'i metric adı oluşturmaz.
-- Başarılı HTTP request'leri ağırlıklı ve sınırlı örneklenir. HTTP `5xx` tam sayılır.
+- Tamamlanan her HTTP isteği, sınırlı endpoint toplamını tam olarak günceller. Örnekleme yalnız
+  isteğe bağlı trace ayrıntısına uygulanır; Average, Percentile, Throughput ve hata toplamını değiştirmez.
 - HTTP trace yalnız route adı, status ve süre taşır. Request body, query değeri, header, bind değeri
   ve business payload kopyalanmaz. Açıkça tanımlanan SQL slotunda yalnız normalize edilmiş ve
   sınırlanmış statement etiketi tutulur.
@@ -132,17 +133,21 @@ oluşan parent/child classloader hatasını önler. Ayrıca Servlet uygulamasın
 bir sunucu motoru gelmez. CI üç ayrı MVC uygulaması ile Reactor Netty WebFlux uygulaması üretir;
 seçilmeyen bir motor arşive girerse build durur.
 
-Başarılı istekler JNI çağrısından önce Java tarafında örneklenir. Yaygın olan örneklenmeyen başarılı
-yol; route'a, request attribute'a veya native state'e erişmeden döner. Örneklenen, yavaş, hatalı,
-asenkron ve bulunamayan istekler Spring'in normalize edilmiş route bilgisini seçilen sunucunun
-tamamlanma noktasından çözer. Her desteklenen motorda `5xx` tam sayılır. WebFlux filter aynı sınırlı
-route, durum ve hata sözleşmesini reaktif terminal sinyalinde uygular. Önce uygulamanın terminal
-sinyalini iletir, hemen ardından telemetriyi kaydeder. Böylece exporter işi yanıtın kritik yolunu
-uzatmaz. İstek başına gözlem yalnız ayrı seçilen WebFlux modülünde bulunur. Hiçbir adaptör Java
-executor, Servlet filter,
-request wrapper veya classpath taraması oluşturmaz. Standalone Rust kütüphanesi, `256 KiB`
+Tamamlanan her istek, sabit maliyetli Java-Rust sınırı üzerinden bir endpoint toplamını tam olarak
+günceller. Glowroot Central içindeki summary, overview, histogram ve throughput tablolarının doğru
+oluşması için bu gereklidir. İsteğe bağlı trace örneklemesine Java tarafında karar verilir; ancak bu
+karar istekleri endpoint toplamından çıkarmaz. Hatalar, asenkron tamamlanmalar ve bulunamayan istekler
+bütün desteklenen motorlarda aynı sözleşmeyi kullanır. WebFlux filter, uygulama terminal sinyalini
+ilettikten sonra reaktif tamamlanma noktasında telemetriyi kaydeder. Böylece exporter işi yanıt
+üretimine girmez. Hiçbir adaptör Java executor, Servlet filter, request wrapper veya classpath
+taraması oluşturmaz. Standalone Rust kütüphanesi, `256 KiB`
 stack kullanan tek current-thread Tokio exporter çalıştırır. Queue, endpoint tablosu, trace buffer,
 mesaj ve DNS adres listesi native engine'in sert sınırlarına uyar.
+
+Transaction type, upstream Glowroot ile uyumlu olarak `Web` değeridir. Transaction adı HTTP metodunu
+değil, yalnız normalize edilmiş endpoint'i taşır. Örneğin `/orders/{id}`, ekranda `/orders/*` olur.
+Endpoint çeşitliliği sınırı aşılırsa isteklerin kaybolmaması için `max-routes` içindeki bir slot
+`<route-limit-exceeded>` toplamına ayrılır.
 
 Spring sınırı son eşleşen route'u, response status bilgisini, tamamlanmayı ve gerekirse `Throwable`
 referansını okur. Bu bilgiler ancak framework dispatch tamamlandıktan sonra oluşur.

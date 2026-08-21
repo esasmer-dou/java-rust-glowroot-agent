@@ -18,7 +18,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             RustGlowrootInterceptor.class.getName() + ".observation";
     private static final String COMPLETED_ATTRIBUTE =
             RustGlowrootInterceptor.class.getName() + ".completed";
-    private static final Object UNSAMPLED_ASYNC = new Object();
+    private static final Object NO_OBSERVATION_ASYNC = new Object();
     private static final Object COMPLETED = new Object();
 
     private final BoundedHttpTelemetry telemetry;
@@ -63,7 +63,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
         long token = telemetry.takeThreadObservation();
         request.setAttribute(
                 OBSERVATION_ATTRIBUTE,
-                token == 0L ? UNSAMPLED_ASYNC : new Observation(token));
+                token == 0L ? NO_OBSERVATION_ASYNC : new Observation(token));
     }
 
     @Override
@@ -106,8 +106,7 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
         if (error != null && status < 500) status = 500;
         if (status >= 400 || error != null) request.setAttribute(COMPLETED_ATTRIBUTE, COMPLETED);
 
-        // Successful unsampled requests are the dominant path. Return before reading the timer,
-        // resolving route metadata, or touching native state.
+        // A zero token is possible only when no observation was started for this dispatch.
         if (observationFlags == 0) {
             if (status >= 500 || error != null) {
                 recordStatus(request, status, 0L, 0, error, dispatcherType);
@@ -156,11 +155,10 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             DispatcherType dispatcherType) {
         if (!telemetry.shouldRecord(observation, status, durationNanos, error)) return;
 
-        String method = request.getMethod();
         Object matched = dispatcherType == DispatcherType.ERROR && status == 404
                 ? null
                 : request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        telemetry.record(observation, method, matched, status, durationNanos, error);
+        telemetry.record(observation, matched, status, durationNanos, error);
     }
 
     private static int responseStatus(
