@@ -3,7 +3,7 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <parent><groupId>com.reactor</groupId><artifactId>java-rust-glowroot-parent</artifactId><version>0.5.0</version><relativePath>../pom.xml</relativePath></parent>
+  <parent><groupId>com.reactor</groupId><artifactId>java-rust-glowroot-parent</artifactId><version>0.5.1</version><relativePath>../pom.xml</relativePath></parent>
   <artifactId>java-rust-glowroot-spring-undertow-adapter</artifactId>
   <name>java-rust-glowroot-spring-undertow-adapter</name>
   <description>Allocation-bounded Undertow completion HTTP telemetry adapter.</description>

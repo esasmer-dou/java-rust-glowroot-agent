@@ -87,6 +87,11 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
                 processConfiguredProfile = config.profile();
                 profileGeneration++;
                 awaitProfileRelease(transitionId, config.profileReleaseTimeoutMs());
+                System.err.println(
+                        "Java-Rust Glowroot native telemetry active: abi=" + abi
+                                + ", profile=" + config.profile().propertyValue()
+                                + ", application=" + config.applicationName()
+                );
             }
             references++;
             return new NativeTelemetry(

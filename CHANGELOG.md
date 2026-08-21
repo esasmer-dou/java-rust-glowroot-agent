@@ -4,6 +4,30 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-21
+
+### Fixed
+
+- Print a process-scoped native runtime startup line after the Java package, native library, ABI,
+  and configured profile have all initialized successfully.
+- Use `spring.application.name` when neither `reactor.glowroot.application.name` nor
+  `reactor.application.name` is configured.
+- Add a fail-fast final-container gate for custom dependency layers and shared `NEW_BOOT-INF` PVCs.
+  It rejects images whose classpath index references agent JARs that are not physically present.
+
+### Validated
+
+- Reproduced the NMC runtime combination with Spring Boot `3.2.4`, Jetty, Semeru OpenJ9 21, the
+  Kubernetes environment-variable names, and an explicit native path. The collector accepted one
+  init message, one aggregate message, 102 exact `Web` transactions, 20 gauges, and no validation
+  errors.
+- Confirmed that deleting `BOOT-INF/lib` without updating the redirected dependency layer leaves
+  zero agent JARs in the final application filesystem while the service can still start.
+
+### Compatibility
+
+- Glowroot native ABI remains `4`. The Windows DLL and Linux SO are unchanged from `0.5.0`.
+
 ## [0.5.0] - 2026-08-21
 
 ### Fixed
@@ -271,7 +295,8 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.3.0...v0.4.0

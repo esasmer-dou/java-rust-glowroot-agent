@@ -45,4 +45,15 @@ class TelemetryConfigTest {
         properties.put("reactor.glowroot.profile", "unbounded");
         assertThrows(IllegalArgumentException.class, () -> TelemetryConfig.from(properties::get));
     }
+
+    @Test
+    void usesSpringApplicationNameWhenAgentSpecificNamesAreAbsent() {
+        Map<String, String> properties = new HashMap<>();
+        properties.put("reactor.glowroot.agent.id", "store::test");
+        properties.put("spring.application.name", "nmc-store-common");
+
+        TelemetryConfig config = TelemetryConfig.from(properties::get);
+
+        assertEquals("nmc-store-common", config.applicationName());
+    }
 }

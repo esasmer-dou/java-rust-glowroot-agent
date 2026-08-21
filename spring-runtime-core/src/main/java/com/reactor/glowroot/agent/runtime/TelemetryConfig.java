@@ -164,7 +164,11 @@ public record TelemetryConfig(
         String applicationName = value(
                 resolver,
                 PREFIX + "application.name",
-                value(resolver, "reactor.application.name", "reactor-application")
+                value(
+                        resolver,
+                        "reactor.application.name",
+                        value(resolver, "spring.application.name", "reactor-application")
+                )
         );
         String hostname = value(resolver, PREFIX + "hostname", System.getenv("HOSTNAME"));
         if (hostname == null || hostname.isBlank()) {
