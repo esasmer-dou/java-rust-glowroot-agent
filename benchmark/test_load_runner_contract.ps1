@@ -5,6 +5,10 @@ $gate = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "spring_boot_gate
 $protocolGate = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "glowroot_gate.ps1")
 $embeddedServerGate = Get-Content -Raw -LiteralPath `
         (Join-Path $PSScriptRoot "embedded_server_dependency_gate.ps1")
+$runtimeCompatibilityGate = Get-Content -Raw -LiteralPath `
+        (Join-Path $PSScriptRoot "spring_runtime_compatibility_gate.ps1")
+$nonWebGate = Get-Content -Raw -LiteralPath `
+        (Join-Path $PSScriptRoot "non_web_gate.ps1")
 $workflow = Get-Content -Raw -LiteralPath `
         (Join-Path $projectRoot ".github/workflows/production-gate.yml")
 $release = Get-Content -Raw -LiteralPath `
@@ -26,6 +30,38 @@ function Get-FunctionTextUntilMarker([string] $Text, [string] $Name, [string] $M
     $end = $Text.IndexOf($Marker, $start + 1, [StringComparison]::Ordinal)
     if ($start -lt 0 -or $end -le $start) { throw "Cannot locate function $Name." }
     return $Text.Substring($start, $end - $start)
+}
+
+[xml]$rootPom = Get-Content -Raw -LiteralPath (Join-Path $projectRoot "pom.xml")
+$agentVersion = "$($rootPom.project.version)".Trim()
+foreach ($fixture in @(
+        [pscustomobject]@{
+            Path = "spring-app/pom.xml"
+            Artifact = "java-rust-glowroot-spring-boot-starter"
+        },
+        [pscustomobject]@{
+            Path = "webflux-app/pom.xml"
+            Artifact = "java-rust-glowroot-spring-webflux-adapter"
+        },
+        [pscustomobject]@{
+            Path = "non-web-app/pom.xml"
+            Artifact = "java-rust-glowroot-spring-boot-starter"
+        })) {
+    [xml]$fixturePom = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot $fixture.Path)
+    $fixtureVersion = "$($fixturePom.project.properties.'glowroot.agent.version')".Trim()
+    if ($fixtureVersion -ne $agentVersion) {
+        throw "$($fixture.Path) must default glowroot.agent.version to root version $agentVersion; found $fixtureVersion."
+    }
+    $agentDependency = @($fixturePom.project.dependencies.dependency) |
+            Where-Object { $_.artifactId -eq $fixture.Artifact } |
+            Select-Object -First 1
+    if ($null -eq $agentDependency -or "$($agentDependency.version)" -ne '${glowroot.agent.version}') {
+        throw "$($fixture.Path) must reference $($fixture.Artifact) through glowroot.agent.version."
+    }
+}
+foreach ($fixtureGate in @($gate, $embeddedServerGate, $runtimeCompatibilityGate, $nonWebGate)) {
+    Assert-Contains $fixtureGate ([regex]::Escape('"-Dglowroot.agent.version=$agentVersion"')) `
+            "Every fixture build gate must pass the root agent version explicitly."
 }
 
 $warmup = Get-FunctionText $gate "Invoke-Warmup" "Invoke-InterleavedPreWarm"

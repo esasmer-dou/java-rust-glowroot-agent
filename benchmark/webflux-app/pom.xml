@@ -11,7 +11,7 @@
   <properties>
     <java.version>21</java.version>
     <spring.boot.version>3.5.5</spring.boot.version>
-    <glowroot.agent.version>0.4.1</glowroot.agent.version>
+    <glowroot.agent.version>0.5.4</glowroot.agent.version>
   </properties>
 
   <dependencyManagement>

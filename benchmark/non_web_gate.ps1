@@ -5,6 +5,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
+[xml]$rootPom = Get-Content -Raw -LiteralPath (Join-Path $projectRoot "pom.xml")
+$agentVersion = "$($rootPom.project.version)".Trim()
+if ([string]::IsNullOrWhiteSpace($agentVersion)) {
+    throw "Cannot resolve the agent version from the root pom.xml."
+}
 $appPom = Join-Path $PSScriptRoot "non-web-app/pom.xml"
 $appJar = Join-Path $PSScriptRoot "non-web-app/target/spring-glowroot-non-web-benchmark-1.0.0.jar"
 $dependencyTree = Join-Path $PSScriptRoot "non-web-app/target/runtime-dependencies.txt"
@@ -18,6 +23,7 @@ try {
 
     & mvn -B -ntp -f $appPom clean package `
             dependency:tree `
+            "-Dglowroot.agent.version=$agentVersion" `
             "-Dscope=runtime" `
             "-DoutputFile=$dependencyTree"
     if ($LASTEXITCODE -ne 0) { throw "Non-web application build failed with exit code $LASTEXITCODE" }

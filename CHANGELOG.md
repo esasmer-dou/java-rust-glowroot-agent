@@ -15,6 +15,8 @@ All notable changes to this project are recorded here.
   stale, mismatched, or expired evidence now fails the release before publication begins.
 - Add deterministic pass/fail tests for the release-gate verifier and execute them in CI and the
   Production Gate workflow.
+- Resolve every Spring MVC, WebFlux, and non-web benchmark fixture against the root release version
+  and fail CI when a fixture drifts to an older agent artifact.
 
 ### Compatibility
 

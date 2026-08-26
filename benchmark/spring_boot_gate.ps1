@@ -109,6 +109,11 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "gate_statistics.ps1")
 . (Join-Path $ScriptDir "warmup_statistics.ps1")
 $ProjectRoot = Split-Path -Parent $ScriptDir
+[xml]$rootPom = Get-Content -Raw -LiteralPath (Join-Path $ProjectRoot "pom.xml")
+$agentVersion = "$($rootPom.project.version)".Trim()
+if ([string]::IsNullOrWhiteSpace($agentVersion)) {
+    throw "Cannot resolve the agent version from the root pom.xml."
+}
 $IsRustJavaRest = $ApplicationKind -eq "rust-java-rest"
 $IsWebFlux = $ApplicationKind -eq "spring-webflux"
 if ($IsRustJavaRest -and $ServletContainer -ne "tomcat") {
@@ -256,11 +261,15 @@ function Prepare-Build {
             }
             Invoke-Checked mvn @("-B", "-ntp", "-DskipTests", "clean", "package") $FrameworkRoot | Out-Null
         } elseif ($IsWebFlux) {
-            Invoke-Checked mvn @("-B", "-ntp", "clean", "package") $SpringRoot | Out-Null
+            Invoke-Checked mvn @(
+                "-B", "-ntp", "clean", "package",
+                "-Dglowroot.agent.version=$agentVersion"
+            ) $SpringRoot | Out-Null
         } else {
             $serverArtifact = "spring-boot-starter-$ServletContainer"
             Invoke-Checked mvn @(
                 "-B", "-ntp", "clean", "package",
+                "-Dglowroot.agent.version=$agentVersion",
                 "-Dembedded.server.artifact=$serverArtifact"
             ) $SpringRoot | Out-Null
         }

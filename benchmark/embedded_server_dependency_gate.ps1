@@ -5,6 +5,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
+[xml]$rootPom = Get-Content -Raw -LiteralPath (Join-Path $projectRoot "pom.xml")
+$agentVersion = "$($rootPom.project.version)".Trim()
+if ([string]::IsNullOrWhiteSpace($agentVersion)) {
+    throw "Cannot resolve the agent version from the root pom.xml."
+}
 $starterPom = Join-Path $projectRoot "spring-boot-starter/pom.xml"
 $runtimePom = Join-Path $projectRoot "spring-runtime-core/pom.xml"
 $mvcPom = Join-Path $projectRoot "spring-mvc-adapter/pom.xml"
@@ -103,11 +108,13 @@ try {
     foreach ($server in $servers) {
         $dependencyTree = Join-Path $appTarget "dependency-tree-$($server.Name).txt"
         & mvn -B -ntp -f $appPom clean package `
+                "-Dglowroot.agent.version=$agentVersion" `
                 "-Dembedded.server.artifact=$($server.Starter)"
         if ($LASTEXITCODE -ne 0) {
             throw "$($server.Name) application build failed with exit code $LASTEXITCODE."
         }
         & mvn -B -ntp -f $appPom dependency:tree `
+                "-Dglowroot.agent.version=$agentVersion" `
                 "-Dembedded.server.artifact=$($server.Starter)" `
                 "-Dscope=runtime" `
                 "-DoutputFile=$dependencyTree"
@@ -163,11 +170,13 @@ try {
     }
 
     $webFluxTree = Join-Path $webFluxTarget "dependency-tree-reactor-netty.txt"
-    & mvn -B -ntp -f $webFluxPom clean package
+    & mvn -B -ntp -f $webFluxPom clean package `
+            "-Dglowroot.agent.version=$agentVersion"
     if ($LASTEXITCODE -ne 0) {
         throw "Reactor Netty WebFlux application build failed with exit code $LASTEXITCODE."
     }
     & mvn -B -ntp -f $webFluxPom dependency:tree `
+            "-Dglowroot.agent.version=$agentVersion" `
             "-Dscope=runtime" `
             "-DoutputFile=$webFluxTree"
     if ($LASTEXITCODE -ne 0) {

@@ -10,6 +10,11 @@ $ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
 $scriptRoot = $PSScriptRoot
 $projectRoot = Split-Path -Parent $scriptRoot
+[xml]$rootPom = Get-Content -Raw -LiteralPath (Join-Path $projectRoot "pom.xml")
+$agentVersion = "$($rootPom.project.version)".Trim()
+if ([string]::IsNullOrWhiteSpace($agentVersion)) {
+    throw "Cannot resolve the agent version from the root pom.xml."
+}
 $springApp = Join-Path $scriptRoot "spring-app"
 $webFluxApp = Join-Path $scriptRoot "webflux-app"
 $network = "glowroot-spring-runtime-compat"
@@ -158,11 +163,15 @@ try {
         if ($runtime.Kind -eq "servlet") {
             Invoke-Checked "mvn" @(
                 "-B", "-ntp", "-DskipTests", "clean", "package",
+                "-Dglowroot.agent.version=$agentVersion",
                 "-Dembedded.server.artifact=$($runtime.Starter)"
             ) $springApp
             $applicationJar = Join-Path $springApp "target/spring-glowroot-benchmark-1.0.0.jar"
         } else {
-            Invoke-Checked "mvn" @("-B", "-ntp", "-DskipTests", "clean", "package") $webFluxApp
+            Invoke-Checked "mvn" @(
+                "-B", "-ntp", "-DskipTests", "clean", "package",
+                "-Dglowroot.agent.version=$agentVersion"
+            ) $webFluxApp
             $applicationJar = Join-Path $webFluxApp "target/spring-webflux-glowroot-benchmark-1.0.0.jar"
         }
         $expectedAdapter = $runtime.Adapter
