@@ -134,6 +134,8 @@ Assert-Contains $protocolGate 'Set-ReactorCurrentProcessCpuAffinity -CpuSet \$Or
         "Protocol orchestration must not run on the wrk CPU set."
 Assert-Contains $protocolGate '-OrchestratorCpuSet \$OrchestratorCpuSet' `
         "The protocol isolation check must receive the orchestrator CPU set."
+Assert-Contains $protocolGate '-AllowSharedInfrastructureGroup:\$AllowSharedInfrastructureCpuGroup' `
+        "The protocol gate must preserve managed-runner application isolation."
 Assert-Contains $warmup '@\("exec", \$LoadRunner, "wrk"' `
         "Warmup must use docker exec, not docker run."
 if ($warmup -match 'docker\s+run|@\("run"') {
@@ -159,7 +161,7 @@ if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
 if (([regex]::Matches($workflow, '-AutoSelectCpuRoles')).Count -ne 3 -or
         ([regex]::Matches($workflow, '-MinLogicalCpu 4')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-MinPhysicalCpuGroups 2')).Count -ne 2 -or
-        ([regex]::Matches($workflow, '-AllowSharedInfrastructureCpuGroup')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '-AllowSharedInfrastructureCpuGroup')).Count -ne 3 -or
         ([regex]::Matches($workflow, '-HostStabilizationSeconds 30')).Count -ne 2) {
     throw "Spring and Rust-Java release matrices must use quiet-host automatic CPU isolation."
 }

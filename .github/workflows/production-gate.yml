@@ -286,6 +286,7 @@ jobs:
             -ProtocolOnly `
             -SkipBuild `
             -AutoSelectCpuRoles `
+            -AllowSharedInfrastructureCpuGroup `
             -FailOnGate
 
       - name: Upload production evidence

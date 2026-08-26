@@ -33,6 +33,7 @@ param(
     [switch] $ProtocolOnly,
     [switch] $AutoSelectCpuRoles,
     [switch] $AllowRunnerCollectorSiblingSharing,
+    [switch] $AllowSharedInfrastructureCpuGroup,
     [switch] $SkipBuild,
     [switch] $FailOnGate
 )
@@ -574,7 +575,8 @@ if ($AutoSelectCpuRoles) {
     if (-not $ProtocolOnly) {
         throw "Automatic two-slot selection is not supported by the resident crossover gate. Use the sequential production matrix."
     }
-    $selectedRoles = Select-ReactorBenchmarkCpuRoles
+    $selectedRoles = Select-ReactorBenchmarkCpuRoles `
+            -AllowSharedInfrastructureGroup:$AllowSharedInfrastructureCpuGroup
     $SlotACpuSet = $selectedRoles.application
     $SlotBCpuSet = $selectedRoles.application
     $RunnerCpuSet = $selectedRoles.runner
@@ -590,7 +592,8 @@ Assert-ReactorBenchmarkCpuIsolation `
         -CollectorCpuSet $CollectorCpuSet `
         -OrchestratorCpuSet $OrchestratorCpuSet `
         -AllowSharedApplicationSlots:($ProtocolOnly -and $AutoSelectCpuRoles) `
-        -AllowRunnerCollectorSiblingSharing:$AllowRunnerCollectorSiblingSharing
+        -AllowRunnerCollectorSiblingSharing:$AllowRunnerCollectorSiblingSharing `
+        -AllowSharedInfrastructureGroup:$AllowSharedInfrastructureCpuGroup
 
 if (-not $ProtocolOnly -and -not $SkipHostPreflight) {
     if ($HostStabilizationSeconds -gt 0) {
