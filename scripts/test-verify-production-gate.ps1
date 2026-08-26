@@ -19,7 +19,9 @@ function Assert-VerifierFails([string] $RunsPath, [string] $ArtifactsPath, [stri
         -RunsFixturePath $RunsPath `
         -ArtifactsFixturePath $ArtifactsPath `
         -GitHubOutputPath "" *> $null
-    if ($LASTEXITCODE -eq 0) {
+    $failureExitCode = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($failureExitCode -eq 0) {
         throw "Expected verifier failure: $Description"
     }
 }
@@ -81,6 +83,7 @@ try {
     Assert-VerifierFails $runsPath $artifactsPath "missing required artifact"
 
     Write-Host "Production Gate verifier tests passed."
+    $global:LASTEXITCODE = 0
 } finally {
     Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
