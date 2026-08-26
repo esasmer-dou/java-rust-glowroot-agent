@@ -281,10 +281,13 @@ jobs:
       - name: Run Rust-Java REST protocol and fail-open gate
         shell: pwsh
         working-directory: java-rust-glowroot-agent
+        env:
+          REST_EVIDENCE_RUN_ID: ${{ inputs.rest_evidence_run_id }}
         run: |
+          $skipBuild = [string]::IsNullOrWhiteSpace($env:REST_EVIDENCE_RUN_ID)
           ./benchmark/glowroot_gate.ps1 `
             -ProtocolOnly `
-            -SkipBuild `
+            -SkipBuild:$skipBuild `
             -AutoSelectCpuRoles `
             -AllowSharedInfrastructureCpuGroup `
             -FailOnGate

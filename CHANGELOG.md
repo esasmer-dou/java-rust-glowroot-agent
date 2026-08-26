@@ -30,6 +30,8 @@ All notable changes to this project are recorded here.
 - Use a bounded, deterministic curl request burst for the embedded REST protocol and collector-down
   fail-open gates. The release gate no longer depends on a non-existent executable in the curl image,
   and CI now rejects that invalid runner contract.
+- Rebuild the protocol fixture images on fresh runners when content-identical REST performance
+  evidence is reused. The non-reuse path still avoids the redundant build.
 
 ### Compatibility
 

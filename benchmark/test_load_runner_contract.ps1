@@ -204,6 +204,12 @@ Assert-Contains $workflow 'rest_evidence_run_id:' `
         "Workflow must support content-addressed reuse of a passing REST matrix."
 Assert-Contains $workflow 'runtime_evidence_identity\.ps1' `
         "Reused REST evidence must be verified against the current runtime tree."
+Assert-Contains $workflow 'REST_EVIDENCE_RUN_ID: \$\{\{ inputs\.rest_evidence_run_id \}\}' `
+        "The protocol gate must know whether the REST performance artifact was reused."
+Assert-Contains $workflow '\$skipBuild = \[string\]::IsNullOrWhiteSpace\(\$env:REST_EVIDENCE_RUN_ID\)' `
+        "Only a same-job REST matrix may reuse its already-built protocol images."
+Assert-Contains $workflow '-SkipBuild:\$skipBuild' `
+        "A reused REST artifact must rebuild protocol images on the fresh runner."
 Assert-Contains $workflow 'ref: 869f69aa94eeac6346ca9dc535c54b70505a19c5' `
         "The production workflow must pin the coordinated Rust-Java REST 4.6.2 commit."
 Assert-Contains $workflow '-RequiredRestVersion "4\.6\.2"' `
