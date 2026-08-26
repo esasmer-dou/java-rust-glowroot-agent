@@ -4,6 +4,23 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-08-26
+
+### Production Gate
+
+- Pin the Rust-Java REST performance matrix to release `4.6.2` and its exact source commit.
+- Require a successful Production Gate run for the exact release commit before Maven packages or
+  GitHub release assets can be published.
+- Require both non-expired Spring Boot and Rust-Java REST performance evidence artifacts. Missing,
+  stale, mismatched, or expired evidence now fails the release before publication begins.
+- Add deterministic pass/fail tests for the release-gate verifier and execute them in CI and the
+  Production Gate workflow.
+
+### Compatibility
+
+- Runtime behavior, Java APIs, REST ABI `29`, and Glowroot ABI `6` are unchanged from `0.5.3`.
+- Agent `0.5.4` remains coordinated with Rust-Java REST `4.6.2`.
+
 ## [0.5.3] - 2026-08-26
 
 ### Fixed
@@ -360,7 +377,8 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.0...v0.5.1

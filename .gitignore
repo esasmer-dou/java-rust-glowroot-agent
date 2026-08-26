@@ -9,7 +9,36 @@
 /*.iml
 
 # Local engineering and collaboration artifacts
-/benchmark/
+/benchmark/*
+!/benchmark/.dockerignore
+!/benchmark/app.Dockerfile
+!/benchmark/benchmark_isolation.ps1
+!/benchmark/embedded_server_dependency_gate.ps1
+!/benchmark/gate_statistics.ps1
+!/benchmark/glowroot_gate.ps1
+!/benchmark/non_web_gate.ps1
+!/benchmark/performance_runner_preflight.ps1
+!/benchmark/runtime_evidence_identity.ps1
+!/benchmark/spring.Dockerfile
+!/benchmark/spring_boot_gate.ps1
+!/benchmark/spring_runtime_compatibility_gate.ps1
+!/benchmark/test_benchmark_isolation.ps1
+!/benchmark/test_gate_statistics.ps1
+!/benchmark/test_load_runner_contract.ps1
+!/benchmark/test_warmup_statistics.ps1
+!/benchmark/warmup_statistics.ps1
+!/benchmark/mock-collector/
+!/benchmark/mock-collector/**
+!/benchmark/non-web-app/
+!/benchmark/non-web-app/**
+!/benchmark/rest-app/
+!/benchmark/rest-app/**
+!/benchmark/spring-app/
+!/benchmark/spring-app/**
+!/benchmark/webflux-app/
+!/benchmark/webflux-app/**
+/benchmark/**/target/
+/benchmark/results/
 /scripts/performance-runner/
 /docs/evidence/
 /docs/UPSTREAM_ANALYSIS.md
@@ -18,8 +47,6 @@
 /docs/VALIDATION.tr.md
 /.github/workflows/focused-performance-diagnostic.yml
 /.github/workflows/performance-runner-smoke.yml
-/.github/workflows/production-gate.yml
-/.github/workflows/production-runner-preflight.yml
 /.agents/
 /.codex/
 /AGENTS.md

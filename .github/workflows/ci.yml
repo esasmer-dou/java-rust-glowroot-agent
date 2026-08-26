@@ -25,6 +25,10 @@ jobs:
       - name: Build and test
         run: mvn -B -ntp clean verify
 
+      - name: Verify fail-closed release gate logic
+        shell: pwsh
+        run: ./scripts/test-verify-production-gate.ps1
+
       - name: Verify plain JVM bootstrap without Spring
         shell: bash
         run: |

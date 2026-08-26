@@ -1,0 +1,294 @@
+name: Production Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      qualification_depth:
+        description: Release runs three to six adaptive pairs; extended always runs all six.
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - extended
+      rest_evidence_run_id:
+        description: Optional prior run id whose passing REST matrix has an identical runtime tree.
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  REACTOR_PERFORMANCE_RUNNER_CLASS: reactor-performance-native-linux
+  REACTOR_GATE_QUALIFICATION_DEPTH: ${{ inputs.qualification_depth }}
+
+concurrency:
+  group: java-rust-glowroot-production-performance
+  cancel-in-progress: false
+
+jobs:
+  gate-statistics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Semeru OpenJ9 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: semeru
+          java-version: "21"
+          cache: maven
+
+      - name: Verify benchmark decision statistics
+        shell: pwsh
+        run: |
+          ./benchmark/test_gate_statistics.ps1
+          ./benchmark/test_warmup_statistics.ps1
+          ./benchmark/test_benchmark_isolation.ps1
+          ./benchmark/test_load_runner_contract.ps1
+          ./scripts/test-verify-production-gate.ps1
+
+      - name: Build exact-commit Java artifacts
+        run: mvn -B -ntp clean install
+
+      - name: Verify embedded Servlet server dependency isolation
+        shell: pwsh
+        run: ./benchmark/embedded_server_dependency_gate.ps1 -SkipAgentBuild
+
+      - name: Verify Spring MVC and WebFlux runtime parity
+        shell: pwsh
+        run: |
+          ./benchmark/spring_runtime_compatibility_gate.ps1 `
+            -SkipAgentBuild `
+            -Concurrency 32 `
+            -DurationSeconds 3 `
+            -MinimumRequestsPerSecond 100
+
+      - name: Verify Spring Boot non-web integration
+        shell: pwsh
+        run: ./benchmark/non_web_gate.ps1 -SkipAgentBuild
+
+  spring-boot-agent:
+    needs: [gate-statistics, rust-java-rest-agent]
+    runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Check out pinned Glowroot wire contract
+        uses: actions/checkout@v5
+        with:
+          repository: glowroot/glowroot
+          ref: 622dc6f800228cccc6fa37b0ed9e779446d7c41e
+          path: glowroot-upstream
+
+      - name: Set up Semeru OpenJ9 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: semeru
+          java-version: "21"
+
+      - name: Verify dedicated native Linux runner
+        shell: pwsh
+        run: |
+          ./benchmark/performance_runner_preflight.ps1 `
+            -RunnerClass $env:REACTOR_PERFORMANCE_RUNNER_CLASS `
+            -EvidencePath benchmark/results/runner-preflight/spring-boot-agent.json
+
+      - name: Run full paired Spring Boot matrix
+        shell: pwsh
+        run: |
+          $endpointClasses = if ($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") {
+            "small-json,raw-json,heavy-json"
+          } else {
+            "small-json,raw-json"
+          }
+          ./benchmark/spring_boot_gate.ps1 `
+            -ServletContainer tomcat `
+            -PairRepeats 6 `
+            -MinimumPairRepeats 3 `
+            -MaxInvalidPairAttempts 2 `
+            -RequireAllPairs:($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") `
+            -ConcurrencyLevels "64,256" `
+            -HeavyConcurrencyLevels "64,128" `
+            -EndpointClasses $endpointClasses `
+            -Duration "12s" `
+            -Warmup "5s" `
+            -PreWarmCycles 4 `
+            -MinWarmupRounds 3 `
+            -MaxWarmupRounds 6 `
+            -MaxWarmupConfirmationRounds 14 `
+            -MaxWarmupRobustTrendPercent 3 `
+            -MaxWarmupBorderlineRobustTrendPercent 5 `
+            -MaxWarmupBorderlineMedianShiftPercent 3 `
+            -MaxWarmupMedianAbsoluteDeviationPercent 4 `
+            -MaxNon2xxDeltaPercentagePoints 0 `
+            -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+            -MaxAbsoluteNon2xxPercent 0.05 `
+            -AutoSelectCpuRoles `
+            -FailOnGate
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spring-boot-production-gate
+          path: |
+            benchmark/results/spring_gate_*/
+            benchmark/results/runner-preflight/spring-boot-agent.json
+          if-no-files-found: error
+          retention-days: 30
+
+  rust-java-rest-agent:
+    needs: gate-statistics
+    runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
+    timeout-minutes: 90
+    steps:
+      - name: Check out agent source
+        uses: actions/checkout@v5
+        with:
+          path: java-rust-glowroot-agent
+          fetch-depth: 0
+
+      - name: Check out production Rust-Java REST runtime
+        uses: actions/checkout@v5
+        with:
+          repository: esasmer-dou/rust-java-rest
+          ref: 869f69aa94eeac6346ca9dc535c54b70505a19c5
+          path: rust-java-rest
+
+      - name: Check out pinned Glowroot wire contract
+        uses: actions/checkout@v5
+        with:
+          repository: glowroot/glowroot
+          ref: 622dc6f800228cccc6fa37b0ed9e779446d7c41e
+          path: glowroot
+
+      - name: Set up Semeru OpenJ9 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: semeru
+          java-version: "21"
+
+      - name: Verify dedicated native Linux runner
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        run: |
+          ./benchmark/performance_runner_preflight.ps1 `
+            -RunnerClass $env:REACTOR_PERFORMANCE_RUNNER_CLASS `
+            -EvidencePath benchmark/results/runner-preflight/rust-java-rest-agent.json
+
+      - name: Run full paired Rust-Java REST matrix
+        if: inputs.rest_evidence_run_id == ''
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        run: |
+          $endpointClasses = if ($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") {
+            "small-json,raw-json,heavy-json"
+          } else {
+            "small-json,raw-json"
+          }
+          ./benchmark/spring_boot_gate.ps1 `
+            -ApplicationKind rust-java-rest `
+            -RequiredRestVersion "4.6.2" `
+            -RequiredRestNativeAbi 29 `
+            -PairRepeats 6 `
+            -MinimumPairRepeats 3 `
+            -MaxInvalidPairAttempts 2 `
+            -RequireAllPairs:($env:REACTOR_GATE_QUALIFICATION_DEPTH -eq "extended") `
+            -ConcurrencyLevels "64,256" `
+            -HeavyConcurrencyLevels "64,128" `
+            -EndpointClasses $endpointClasses `
+            -Duration "12s" `
+            -Warmup "5s" `
+            -PreWarmCycles 4 `
+            -MinWarmupRounds 3 `
+            -MaxWarmupRounds 6 `
+            -MaxWarmupConfirmationRounds 14 `
+            -MaxWarmupRobustTrendPercent 3 `
+            -MaxWarmupBorderlineRobustTrendPercent 5 `
+            -MaxWarmupBorderlineMedianShiftPercent 3 `
+            -MaxWarmupMedianAbsoluteDeviationPercent 4 `
+            -MaxNon2xxDeltaPercentagePoints 0 `
+            -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
+            -MaxAbsoluteNon2xxPercent 0.05 `
+            -MemoryLimit "128m" `
+            -AllowedThreadDelta 1 `
+            -AutoSelectCpuRoles `
+            -FailOnGate
+
+      - name: Download content-identical REST performance evidence
+        if: inputs.rest_evidence_run_id != ''
+        uses: actions/download-artifact@v5
+        with:
+          name: rust-java-rest-production-gate
+          run-id: ${{ inputs.rest_evidence_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: java-rust-glowroot-agent/benchmark/reused-rest-evidence
+
+      - name: Import and verify REST runtime evidence identity
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        env:
+          EVIDENCE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REST_EVIDENCE_RUN_ID: ${{ inputs.rest_evidence_run_id }}
+        run: |
+          $currentCommit = "$env:GITHUB_SHA"
+          if ([string]::IsNullOrWhiteSpace($env:REST_EVIDENCE_RUN_ID)) {
+            $evidenceCommit = $currentCommit
+            $evidenceRunId = "$env:GITHUB_RUN_ID"
+            $evidenceRoot = "benchmark/results"
+          } else {
+            $headers = @{
+              Authorization = "Bearer $env:EVIDENCE_GITHUB_TOKEN"
+              Accept = "application/vnd.github+json"
+              "X-GitHub-Api-Version" = "2022-11-28"
+            }
+            $run = Invoke-RestMethod `
+              -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/actions/runs/$env:REST_EVIDENCE_RUN_ID" `
+              -Headers $headers
+            $evidenceCommit = "$($run.head_sha)"
+            $evidenceRunId = "$env:REST_EVIDENCE_RUN_ID"
+            git fetch --no-tags origin $evidenceCommit
+            if ($LASTEXITCODE -ne 0) { throw "Cannot fetch evidence commit $evidenceCommit." }
+            $source = @(Get-ChildItem benchmark/reused-rest-evidence -Directory -Filter "rest_gate_*")
+            if ($source.Count -ne 1) {
+              throw "Expected one reused REST result directory; found $($source.Count)."
+            }
+            Copy-Item -LiteralPath $source[0].FullName -Destination benchmark/results -Recurse
+            $evidenceRoot = "benchmark/results"
+          }
+          ./benchmark/runtime_evidence_identity.ps1 `
+            -CurrentCommit $currentCommit `
+            -EvidenceCommit $evidenceCommit `
+            -EvidenceRunId $evidenceRunId `
+            -EvidenceRoot $evidenceRoot `
+            -OutputPath benchmark/results/runtime-evidence-identity.json
+
+      - name: Run Rust-Java REST protocol and fail-open gate
+        shell: pwsh
+        working-directory: java-rust-glowroot-agent
+        run: |
+          ./benchmark/glowroot_gate.ps1 `
+            -ProtocolOnly `
+            -SkipBuild `
+            -AutoSelectCpuRoles `
+            -FailOnGate
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-java-rest-production-gate
+          path: |
+            java-rust-glowroot-agent/benchmark/results/rest_gate_*/
+            java-rust-glowroot-agent/benchmark/results/glowroot_gate_*/
+            java-rust-glowroot-agent/benchmark/results/runtime-evidence-identity.json
+            java-rust-glowroot-agent/benchmark/results/runner-preflight/rust-java-rest-agent.json
+          if-no-files-found: error
+          retention-days: 30
