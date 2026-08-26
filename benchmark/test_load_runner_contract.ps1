@@ -136,6 +136,14 @@ Assert-Contains $protocolGate '-OrchestratorCpuSet \$OrchestratorCpuSet' `
         "The protocol isolation check must receive the orchestrator CPU set."
 Assert-Contains $protocolGate '-AllowSharedInfrastructureGroup:\$AllowSharedInfrastructureCpuGroup' `
         "The protocol gate must preserve managed-runner application isolation."
+Assert-Contains $protocolGate 'function Invoke-RunnerRequestBurst' `
+        "Protocol smoke traffic must use the pinned curl runner through a deterministic request burst."
+if ($protocolGate -match 'load-probe') {
+    throw "The protocol gate must not invoke an executable that is absent from curlimages/curl."
+}
+if (([regex]::Matches($protocolGate, '-Requests 8')).Count -ne 2) {
+    throw "Protocol and fail-open smoke gates must use the same bounded request burst."
+}
 Assert-Contains $warmup '@\("exec", \$LoadRunner, "wrk"' `
         "Warmup must use docker exec, not docker run."
 if ($warmup -match 'docker\s+run|@\("run"') {

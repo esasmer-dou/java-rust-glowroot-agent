@@ -147,16 +147,6 @@ function Get-RunnerDockerPrefix {
     return $args + @($RunnerImage)
 }
 
-function Invoke-Runner {
-    param([string[]] $Arguments)
-    $dockerArgs = @(Get-RunnerDockerPrefix "load-probe") + $Arguments
-    $output = & docker @dockerArgs 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "load-probe failed:`n$($output -join "`n")"
-    }
-    return $output
-}
-
 function Invoke-RunnerCurl {
     param([string] $Url)
     $dockerArgs = @(Get-RunnerDockerPrefix "curl") + @("-fsS", $Url)
@@ -165,6 +155,45 @@ function Invoke-RunnerCurl {
         throw "curl failed for ${Url}:`n$($output -join "`n")"
     }
     return ($output -join "`n")
+}
+
+function Invoke-RunnerRequestBurst {
+    param(
+        [string] $Url,
+        [int] $Requests = 8
+    )
+    if ($Requests -lt 1 -or $Requests -gt 64) {
+        throw "Requests must be between 1 and 64."
+    }
+
+    $statusCounts = @{}
+    $errors = 0
+    foreach ($request in 1..$Requests) {
+        $dockerArgs = @(Get-RunnerDockerPrefix "curl") + @(
+            "-sS", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "10", $Url
+        )
+        $output = (& docker @dockerArgs 2>&1) -join "`n"
+        if ($LASTEXITCODE -ne 0) {
+            $errors++
+            continue
+        }
+        $status = $output.Trim()
+        if ($status -notmatch '^\d{3}$') {
+            $errors++
+            continue
+        }
+        if (-not $statusCounts.ContainsKey($status)) {
+            $statusCounts[$status] = 0
+        }
+        $statusCounts[$status]++
+    }
+
+    $result = [Collections.Generic.List[string]]::new()
+    foreach ($status in @($statusCounts.Keys | Sort-Object)) {
+        $result.Add("Status ${status}: $($statusCounts[$status])")
+    }
+    $result.Add("errors total: $errors")
+    return @($result)
 }
 
 function Wait-Http {
@@ -301,11 +330,14 @@ function Invoke-ProtocolGate {
     Start-AgentApp -CollectorAddress "${CollectorContainer}:8181" `
             -Mode "native-properties" -SlowThresholdMs 1
     try {
-        $output = Invoke-Runner @(
-            "--url", "http://${AppContainer}:8080/api/v1/heavy?items=1000",
-            "--method", "GET", "--concurrency", "64", "--duration", "10s", "--timeout-ms", "10000"
-        )
+        $output = Invoke-RunnerRequestBurst `
+                -Url "http://${AppContainer}:8080/api/v1/heavy?items=1000" `
+                -Requests 8
         $output | Set-Content -LiteralPath (Join-Path $ProtocolDir "load.txt") -Encoding utf8
+        if (($output -join "`n") -notmatch '(?m)^Status 200: 8$' `
+                -or ($output -join "`n") -notmatch '(?m)^errors total: 0$') {
+            throw "Glowroot protocol request burst failed: $($output -join '; ')"
+        }
 
         $reportPath = Join-Path $ProtocolDir "mock-collector.json"
         $deadline = (Get-Date).AddSeconds(75)
@@ -364,12 +396,11 @@ function Invoke-FailOpenGate {
     # transport outage.
     Start-AgentApp -CollectorAddress "127.0.0.1:65534" -Mode "native-properties"
     try {
-        $output = (Invoke-Runner @(
-            "--url", "http://${AppContainer}:8080/api/v1/candidates/direct",
-            "--method", "GET", "--concurrency", "64", "--duration", "5s", "--timeout-ms", "10000"
-        )) -join "`n"
+        $output = (Invoke-RunnerRequestBurst `
+                -Url "http://${AppContainer}:8080/api/v1/candidates/direct" `
+                -Requests 8) -join "`n"
         $output | Set-Content -LiteralPath (Join-Path $ProtocolDir "fail-open-load.txt") -Encoding utf8
-        if ($output -notmatch '(?m)^Status 200: [1-9][0-9]*$' -or $output -notmatch 'errors total: 0') {
+        if ($output -notmatch '(?m)^Status 200: 8$' -or $output -notmatch '(?m)^errors total: 0$') {
             throw "Collector-down fail-open gate produced request errors."
         }
         # The production interval contract is 60 seconds. Wait for the first real transport attempt

@@ -4,7 +4,7 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
-## [0.5.4] - 2026-08-26
+## [0.5.4] - 2026-08-27
 
 ### Production Gate
 
@@ -27,6 +27,9 @@ All notable changes to this project are recorded here.
   and orchestration process are bounded to the other physical group on standard hosted runners, and
   this topology is recorded in machine-readable evidence. A 30-second quiet-host window rejects
   noisy runners before evidence collection.
+- Use a bounded, deterministic curl request burst for the embedded REST protocol and collector-down
+  fail-open gates. The release gate no longer depends on a non-existent executable in the curl image,
+  and CI now rejects that invalid runner contract.
 
 ### Compatibility
 
