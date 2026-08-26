@@ -73,7 +73,7 @@ jobs:
         run: |
           MANIFEST="spring-runtime-core/src/main/resources/native/native-provenance.properties"
           grep -qx 'schema=1' "$MANIFEST"
-          grep -qx 'glowroot.abi=4' "$MANIFEST"
+          grep -qx 'glowroot.abi=6' "$MANIFEST"
           grep -qx 'linux-x64.glibc-minimum=2.17' "$MANIFEST"
           grep -Eq '^source.revision=[0-9a-f]{40}$' "$MANIFEST"
           WINDOWS_EXPECTED="$(sed -n 's/^windows-x64.sha256=//p' "$MANIFEST")"
@@ -99,6 +99,7 @@ jobs:
             "com.reactor.java-rust-glowroot-spring-undertow-adapter"
             "com.reactor.java-rust-glowroot-spring-boot-starter"
             "com.reactor.java-rust-glowroot-spring-webflux-adapter"
+            "com.reactor.java-rust-glowroot-spring-dubbo-adapter"
           )
           for package in "${PACKAGES[@]}"; do
             API_PATH="/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${package}/versions"
@@ -129,6 +130,7 @@ jobs:
             "com.reactor.java-rust-glowroot-spring-undertow-adapter"
             "com.reactor.java-rust-glowroot-spring-boot-starter"
             "com.reactor.java-rust-glowroot-spring-webflux-adapter"
+            "com.reactor.java-rust-glowroot-spring-dubbo-adapter"
           )
           for package in "${PACKAGES[@]}"; do
             API_PATH="/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${package}/versions"
@@ -157,6 +159,7 @@ jobs:
             "spring-undertow-adapter:java-rust-glowroot-spring-undertow-adapter"
             "spring-boot-starter:java-rust-glowroot-spring-boot-starter"
             "spring-webflux-adapter:java-rust-glowroot-spring-webflux-adapter"
+            "spring-dubbo-adapter:java-rust-glowroot-spring-dubbo-adapter"
           )
           for entry in "${MODULES[@]}"; do
             module="${entry%%:*}"

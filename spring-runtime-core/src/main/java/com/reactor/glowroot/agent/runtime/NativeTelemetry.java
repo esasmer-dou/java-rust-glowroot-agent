@@ -1,6 +1,8 @@
 package com.reactor.glowroot.agent.runtime;
 
 import com.reactor.glowroot.agent.http.HttpTelemetrySink;
+import com.reactor.glowroot.agent.http.HttpRequestTraceState;
+import com.reactor.glowroot.agent.http.HttpThreadStats;
 
 import java.nio.file.Path;
 import java.time.Duration;
@@ -8,7 +10,7 @@ import java.time.Duration;
 /** Process-scoped facade for the bounded native telemetry runtime. */
 public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
 
-    static final int EXPECTED_GLOWROOT_ABI = 4;
+    static final int EXPECTED_GLOWROOT_ABI = 6;
     private static final Object LIFECYCLE_LOCK = new Object();
     private static int references;
     private static volatile TelemetryProfile activeProfile = TelemetryProfile.MICRO;
@@ -85,6 +87,8 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
                 long transitionId = nativeUpdateProfile(config.profile().featureMask());
                 activeProfile = config.profile();
                 processConfiguredProfile = config.profile();
+                HttpRequestTraceState.setEnabled(config.profile().diagnosticsEnabled());
+                HttpThreadStats.setEnabled(config.profile().diagnosticsEnabled());
                 profileGeneration++;
                 awaitProfileRelease(transitionId, config.profileReleaseTimeoutMs());
                 System.err.println(
@@ -137,6 +141,108 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
         }
     }
 
+    @Override
+    public void recordHttpDetail(
+            int slot,
+            int status,
+            long durationNanos,
+            int sampleWeight,
+            String method,
+            String controller,
+            Throwable error) {
+        recordHttpDetail(
+                slot,
+                status,
+                durationNanos,
+                sampleWeight,
+                method,
+                controller,
+                -1L,
+                -1L,
+                -1L,
+                -1L,
+                error);
+    }
+
+    @Override
+    public void recordHttpDetail(
+            int slot,
+            int status,
+            long durationNanos,
+            int sampleWeight,
+            String method,
+            String controller,
+            long cpuNanos,
+            long blockedNanos,
+            long waitedNanos,
+            long allocatedBytes,
+            Throwable error) {
+        if (!closed) {
+            nativeRecordHttpDetail(
+                    slot,
+                    status,
+                    durationNanos,
+                    sampleWeight,
+                    method == null ? "" : method,
+                    controller == null ? "" : controller,
+                    cpuNanos,
+                    blockedNanos,
+                    waitedNanos,
+                    allocatedBytes,
+                    -1L,
+                    -1L,
+                    "",
+                    -1L,
+                    0L,
+                    0L,
+                    0L,
+                    error);
+        }
+    }
+
+    @Override
+    public void recordHttpDetail(
+            int slot,
+            int status,
+            long durationNanos,
+            int sampleWeight,
+            String method,
+            String controller,
+            long cpuNanos,
+            long blockedNanos,
+            long waitedNanos,
+            long allocatedBytes,
+            long controllerStartOffsetNanos,
+            long controllerDurationNanos,
+            String dubboOperation,
+            long dubboStartOffsetNanos,
+            long dubboDurationNanos,
+            long dubboCount,
+            long dubboErrors,
+            Throwable error) {
+        if (!closed) {
+            nativeRecordHttpDetail(
+                    slot,
+                    status,
+                    durationNanos,
+                    sampleWeight,
+                    method == null ? "" : method,
+                    controller == null ? "" : controller,
+                    cpuNanos,
+                    blockedNanos,
+                    waitedNanos,
+                    allocatedBytes,
+                    controllerStartOffsetNanos,
+                    controllerDurationNanos,
+                    dubboOperation == null ? "" : dubboOperation,
+                    dubboStartOffsetNanos,
+                    dubboDurationNanos,
+                    dubboCount,
+                    dubboErrors,
+                    error);
+        }
+    }
+
     /**
      * Returns bounded exporter state without enabling JMX or a management server.
      *
@@ -166,6 +272,8 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
             if (required == activeProfile) return;
             long transitionId = nativeUpdateProfile(required.featureMask());
             activeProfile = required;
+            HttpRequestTraceState.setEnabled(required.diagnosticsEnabled());
+            HttpThreadStats.setEnabled(required.diagnosticsEnabled());
             profileGeneration++;
             awaitProfileRelease(transitionId, Math.toIntExact(timeoutMs));
         }
@@ -313,6 +421,8 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
             if (activeProfile != TelemetryProfile.MICRO) {
                 long transitionId = nativeUpdateProfile(TelemetryProfile.MICRO.featureMask());
                 activeProfile = TelemetryProfile.MICRO;
+                HttpRequestTraceState.setEnabled(false);
+                HttpThreadStats.setEnabled(false);
                 profileGeneration++;
                 awaitProfileRelease(transitionId, profileReleaseTimeoutMs);
             }
@@ -380,6 +490,26 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
             int status,
             long durationNanos,
             int sampleWeight);
+
+    private static native void nativeRecordHttpDetail(
+            int slot,
+            int status,
+            long durationNanos,
+            int sampleWeight,
+            String method,
+            String controller,
+            long cpuNanos,
+            long blockedNanos,
+            long waitedNanos,
+            long allocatedBytes,
+            long controllerStartOffsetNanos,
+            long controllerDurationNanos,
+            String dubboOperation,
+            long dubboStartOffsetNanos,
+            long dubboDurationNanos,
+            long dubboCount,
+            long dubboErrors,
+            Throwable error);
 
     private static native long nativeUpdateProfile(int featureMask);
 

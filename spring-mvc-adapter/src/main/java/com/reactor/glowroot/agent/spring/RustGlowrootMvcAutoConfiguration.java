@@ -10,11 +10,15 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.env.Environment;
 import org.springframework.web.servlet.AsyncHandlerInterceptor;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.HandlerExceptionResolver;
+
+import java.util.List;
 
 /** Optional Servlet MVC edge for the web-independent native telemetry runtime. */
 @AutoConfiguration(
@@ -48,6 +52,12 @@ public class RustGlowrootMvcAutoConfiguration {
         return new RustGlowrootInterceptor(telemetry, config);
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    RustGlowrootMvcEnricher rustGlowrootMvcEnricher(NativeTelemetry telemetry) {
+        return new RustGlowrootMvcEnricher(telemetry);
+    }
+
     @Bean(name = "rustGlowrootHttpTelemetryAdapter")
     @ConditionalOnMissingBean(HttpTelemetryAdapter.class)
     HttpTelemetryAdapter rustGlowrootMvcTelemetryAdapter() {
@@ -55,15 +65,22 @@ public class RustGlowrootMvcAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(RustGlowrootInterceptor.class)
     @ConditionalOnMissingBean(name = {
             "rustGlowrootWebMvcConfigurer",
             "rustGlowrootFilterRegistration"
     })
     WebMvcConfigurer rustGlowrootWebMvcConfigurer(
-            RustGlowrootInterceptor interceptor,
+            ObjectProvider<RustGlowrootInterceptor> interceptor,
+            RustGlowrootMvcEnricher enricher,
             Environment environment) {
-        return new TelemetryWebMvcConfigurer(interceptor, resolveInterceptorOrder(environment));
+        TelemetryConfig config = TelemetryConfig.from(environment::getProperty);
+        boolean detailEnabled = config.traceCapacity() > 0
+                || (config.profile().errorDetailsEnabled() && config.errorTraceCapacity() > 0);
+        return new TelemetryWebMvcConfigurer(
+                interceptor.getIfAvailable(),
+                enricher,
+                detailEnabled,
+                resolveInterceptorOrder(environment));
     }
 
     private static int resolveInterceptorOrder(Environment environment) {
@@ -79,11 +96,25 @@ public class RustGlowrootMvcAutoConfiguration {
 
     private record TelemetryWebMvcConfigurer(
             RustGlowrootInterceptor interceptor,
+            RustGlowrootMvcEnricher enricher,
+            boolean detailEnabled,
             int order) implements WebMvcConfigurer {
 
         @Override
         public void addInterceptors(InterceptorRegistry registry) {
-            registry.addInterceptor(interceptor).order(order);
+            if (detailEnabled) {
+                registry.addInterceptor(enricher).order(order);
+            }
+            if (interceptor != null) {
+                registry.addInterceptor(interceptor).order(order + 1);
+            }
+        }
+
+        @Override
+        public void extendHandlerExceptionResolvers(List<HandlerExceptionResolver> resolvers) {
+            if (detailEnabled && !resolvers.contains(enricher)) {
+                resolvers.add(0, enricher);
+            }
         }
     }
 }

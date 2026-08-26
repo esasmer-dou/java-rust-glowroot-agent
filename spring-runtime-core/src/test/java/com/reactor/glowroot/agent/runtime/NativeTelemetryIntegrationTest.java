@@ -2,6 +2,10 @@ package com.reactor.glowroot.agent.runtime;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -15,6 +19,13 @@ class NativeTelemetryIntegrationTest {
 
     @Test
     void loadsThePackagedPlatformBinaryAndRunsTheBoundedLifecycle() throws Exception {
+        ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
+        boolean contentionWasEnabled = threadBean.isThreadContentionMonitoringEnabled();
+        com.sun.management.ThreadMXBean allocationBean =
+                threadBean instanceof com.sun.management.ThreadMXBean bean ? bean : null;
+        boolean allocatedMemoryWasEnabled = allocationBean != null
+                && allocationBean.isThreadAllocatedMemorySupported()
+                && allocationBean.isThreadAllocatedMemoryEnabled();
         TelemetryConfig config = new TelemetryConfig(
                 "http://127.0.0.1:1",
                 "native-integration::test",
@@ -69,8 +80,43 @@ class NativeTelemetryIntegrationTest {
                     failure.captureThreadId,
                     "Throwable inspection ran on the application test thread");
 
+            Path diagnosticDirectory = Files.createTempDirectory("rust-glowroot-live-");
+            Path threadDump = diagnosticDirectory.resolve("threads.txt");
+            Path heapHistogram = diagnosticDirectory.resolve("heap-histogram.txt");
+            try {
+                telemetry.updateProfile(TelemetryProfile.DIAGNOSTIC, Duration.ofSeconds(2));
+                diagnostics = telemetry.diagnosticsJson();
+                assertTrue(diagnostics.contains("\"jvm_probe_registered\":true"));
+                if (threadBean.isThreadContentionMonitoringSupported()) {
+                    assertTrue(threadBean.isThreadContentionMonitoringEnabled());
+                }
+                if (allocationBean != null && allocationBean.isThreadAllocatedMemorySupported()) {
+                    assertTrue(allocationBean.isThreadAllocatedMemoryEnabled());
+                }
+
+                assertTrue(telemetry.submitDiagnostic("thread-dump", threadDump) > 0L);
+                awaitDiagnostic(threadDump);
+                assertTrue(Files.readString(threadDump).contains(" Id="));
+
+                assertTrue(telemetry.submitDiagnostic("heap-histogram", heapHistogram) > 0L);
+                awaitDiagnostic(heapHistogram);
+                String histogram = Files.readString(heapHistogram);
+                assertTrue(histogram.contains("class name"));
+                assertTrue(histogram.contains("java.lang.String"));
+            } finally {
+                Files.deleteIfExists(threadDump);
+                Files.deleteIfExists(heapHistogram);
+                Files.deleteIfExists(diagnosticDirectory);
+            }
+
             telemetry.restoreConfiguredProfile(Duration.ofSeconds(2));
             assertEquals(TelemetryProfile.MICRO, telemetry.activeProfile());
+            assertEquals(contentionWasEnabled, threadBean.isThreadContentionMonitoringEnabled());
+            if (allocationBean != null && allocationBean.isThreadAllocatedMemorySupported()) {
+                assertEquals(
+                        allocatedMemoryWasEnabled,
+                        allocationBean.isThreadAllocatedMemoryEnabled());
+            }
             statement.recordSuccess(statement.start(), 1L);
             assertEquals(-1, statement.activeSlot());
             diagnostics = telemetry.diagnosticsJson();
@@ -98,6 +144,15 @@ class NativeTelemetryIntegrationTest {
             assertTrue(diagnostics.contains("\"profile_release_pending\":false"));
             assertTrue(diagnostics.contains("\"jvm_probe_registered\":false"));
         }
+    }
+
+    private static void awaitDiagnostic(Path path) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!Files.isRegularFile(path) && System.nanoTime() < deadline) {
+            Thread.sleep(20L);
+        }
+        assertTrue(Files.isRegularFile(path), "Native diagnostic did not publish " + path);
+        assertTrue(Files.size(path) > 0L, "Native diagnostic was empty: " + path);
     }
 
     private static TelemetryConfig withProfile(

@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-glowroot-parent</artifactId>
-    <version>0.5.1</version>
+    <version>0.5.2</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -39,6 +39,11 @@
     <dependency>
       <groupId>com.reactor</groupId>
       <artifactId>java-rust-glowroot-spring-undertow-adapter</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.reactor</groupId>
+      <artifactId>java-rust-glowroot-spring-dubbo-adapter</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>

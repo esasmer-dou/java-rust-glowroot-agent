@@ -20,6 +20,16 @@ public enum TelemetryProfile {
         return featureMask;
     }
 
+    /** Returns whether bounded exception details are active in this profile. */
+    public boolean errorDetailsEnabled() {
+        return (featureMask & (1 << 2)) != 0;
+    }
+
+    /** Returns whether live JVM diagnostic control is active in this profile. */
+    public boolean diagnosticsEnabled() {
+        return (featureMask & (1 << 3)) != 0;
+    }
+
     /** Value accepted by {@code reactor.glowroot.profile}. */
     public String propertyValue() {
         return name().toLowerCase(Locale.ROOT);

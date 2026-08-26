@@ -1,6 +1,7 @@
 package com.reactor.glowroot.agent.spring;
 
 import com.reactor.glowroot.agent.http.HttpTelemetrySink;
+import com.reactor.glowroot.agent.http.HttpTraceMetadata;
 import com.reactor.glowroot.agent.runtime.TelemetryConfig;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
@@ -18,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RustGlowrootInterceptorTest {
@@ -53,6 +55,25 @@ class RustGlowrootInterceptorTest {
         assertEquals(1, recorder.records.size());
         assertEquals(500, recorder.records.get(0).status());
         assertEquals(0, recorder.records.get(0).sampleWeight());
+    }
+
+    @Test
+    void preservesControllerDetailForAnExceptionHandledByControllerAdvice() throws Exception {
+        FakeRecorder recorder = new FakeRecorder();
+        RustGlowrootInterceptor interceptor = new RustGlowrootInterceptor(recorder, config(1024, 4, 4));
+        MockHttpServletRequest request = request("/orders/{id}");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        IllegalStateException failure = new IllegalStateException("provider timeout");
+
+        interceptor.preHandle(request, response, new Object());
+        request.setAttribute(HttpTraceMetadata.CONTROLLER_ATTRIBUTE, "OrderController.create()");
+        request.setAttribute(HttpTraceMetadata.ERROR_ATTRIBUTE, failure);
+        response.setStatus(422);
+        interceptor.afterCompletion(request, response, new Object(), null);
+
+        assertEquals(500, recorder.records.getFirst().status());
+        assertEquals("OrderController.create()", recorder.lastController);
+        assertSame(failure, recorder.lastError);
     }
 
     @Test
@@ -322,6 +343,8 @@ class RustGlowrootInterceptorTest {
         private int registrations;
         private final List<String> routes = new ArrayList<>();
         private final List<Record> records = new ArrayList<>();
+        private String lastController;
+        private Throwable lastError;
 
         @Override
         public int registerHttpRoute(String method, String route) {
@@ -331,6 +354,31 @@ class RustGlowrootInterceptorTest {
 
         @Override
         public void recordHttp(int slot, int status, long durationNanos, int sampleWeight) {
+            records.add(new Record(slot, status, sampleWeight));
+        }
+
+        @Override
+        public void recordHttpDetail(
+                int slot,
+                int status,
+                long durationNanos,
+                int sampleWeight,
+                String method,
+                String controller,
+                long cpuNanos,
+                long blockedNanos,
+                long waitedNanos,
+                long allocatedBytes,
+                long controllerStartOffsetNanos,
+                long controllerDurationNanos,
+                String dubboOperation,
+                long dubboStartOffsetNanos,
+                long dubboDurationNanos,
+                long dubboCount,
+                long dubboErrors,
+                Throwable error) {
+            lastController = controller;
+            lastError = error;
             records.add(new Record(slot, status, sampleWeight));
         }
     }

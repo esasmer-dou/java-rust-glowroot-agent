@@ -2,6 +2,9 @@ package com.reactor.glowroot.agent.spring;
 
 import com.reactor.glowroot.agent.http.BoundedHttpTelemetry;
 import com.reactor.glowroot.agent.http.HttpTelemetrySink;
+import com.reactor.glowroot.agent.http.HttpTraceMetadata;
+import com.reactor.glowroot.agent.http.HttpThreadStats;
+import com.reactor.glowroot.agent.http.HttpRequestTraceState;
 import com.reactor.glowroot.agent.runtime.NativeTelemetry;
 import com.reactor.glowroot.agent.runtime.TelemetryConfig;
 import jakarta.servlet.DispatcherType;
@@ -153,12 +156,30 @@ public final class RustGlowrootInterceptor implements AsyncHandlerInterceptor {
             int observation,
             Throwable error,
             DispatcherType dispatcherType) {
+        Object threadStatsStart = request.getAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
+        request.removeAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
+        Object requestTraceValue = request.getAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);
+        request.removeAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);
+        if (error == null
+                && request.getAttribute(HttpTraceMetadata.ERROR_ATTRIBUTE) instanceof Throwable captured) {
+            error = captured;
+        }
         if (!telemetry.shouldRecord(observation, status, durationNanos, error)) return;
+        boolean detail = telemetry.shouldRecordDetail(observation, status, durationNanos, error);
 
         Object matched = dispatcherType == DispatcherType.ERROR && status == 404
                 ? null
                 : request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-        telemetry.record(observation, matched, status, durationNanos, error);
+        telemetry.record(
+                observation,
+                detail ? request.getMethod() : "",
+                matched,
+                status,
+                durationNanos,
+                error,
+                detail ? request.getAttribute(HttpTraceMetadata.CONTROLLER_ATTRIBUTE) : null,
+                detail ? HttpThreadStats.finish(threadStatsStart) : null,
+                detail && requestTraceValue instanceof HttpRequestTraceState state ? state : null);
     }
 
     private static int responseStatus(

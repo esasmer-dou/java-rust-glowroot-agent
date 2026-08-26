@@ -1,6 +1,9 @@
 package com.reactor.glowroot.agent.jetty;
 
 import com.reactor.glowroot.agent.http.BoundedHttpTelemetry;
+import com.reactor.glowroot.agent.http.HttpTraceMetadata;
+import com.reactor.glowroot.agent.http.HttpThreadStats;
+import com.reactor.glowroot.agent.http.HttpRequestTraceState;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.RequestLog;
 import org.eclipse.jetty.server.Response;
@@ -24,21 +27,32 @@ final class RustGlowrootJettyRequestLog implements RequestLog {
         int observation = telemetry.observation(status);
         if (observation == 0) return;
 
-        Throwable error = status >= 500
-                && request.getAttribute(ERROR_ATTRIBUTE) instanceof Throwable throwable
-                ? throwable
-                : null;
+        Throwable error = null;
+        if (status >= 500) {
+            Object captured = request.getAttribute(HttpTraceMetadata.ERROR_ATTRIBUTE);
+            if (!(captured instanceof Throwable)) captured = request.getAttribute(ERROR_ATTRIBUTE);
+            if (captured instanceof Throwable throwable) error = throwable;
+        }
 
         long startedAtNanos = request.getBeginNanoTime();
         long durationNanos = startedAtNanos <= 0L
                 ? 0L
                 : Math.max(0L, System.nanoTime() - startedAtNanos);
+        Object threadStatsStart = request.getAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
+        request.removeAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
+        Object requestTraceValue = request.getAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);
+        request.removeAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);
         if (!telemetry.shouldRecord(observation, status, durationNanos, error)) return;
+        boolean detail = telemetry.shouldRecordDetail(observation, status, durationNanos, error);
         telemetry.record(
                 observation,
+                detail ? request.getMethod() : "",
                 request.getAttribute(ROUTE_ATTRIBUTE),
                 status,
                 durationNanos,
-                error);
+                error,
+                detail ? request.getAttribute(HttpTraceMetadata.CONTROLLER_ATTRIBUTE) : null,
+                detail ? HttpThreadStats.finish(threadStatsStart) : null,
+                detail && requestTraceValue instanceof HttpRequestTraceState state ? state : null);
     }
 }

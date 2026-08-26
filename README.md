@@ -6,8 +6,8 @@
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
 Bounded, Rust-first telemetry for Rust-Java REST applications and Spring Boot services. It sends
-HTTP aggregates when an HTTP adapter exists, plus process/JVM gauges, explicit SQL timings, errors,
-optional bounded traces, and native Dubbo/Redis timings to an existing Glowroot Central collector.
+exact HTTP aggregates, bounded slow/error traces, Spring controller and Dubbo consumer timing,
+process/JVM gauges, and authorized live JVM diagnostics to an existing Glowroot Central collector.
 
 Your controllers, handlers, services, validation, and database code do not change. The agent does
 not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a Java executor.
@@ -37,11 +37,11 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 | Application | Add to the application | Native runtime | Extra telemetry thread |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.6.0` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
-| Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.5.1` | Loads the small standalone agent library and the matching optional server adapter | `1` |
-| Spring Boot `3.x`, non-web | Minimum: `java-rust-glowroot-spring-runtime:0.5.1`; the umbrella starter also works | Loads only the web-independent standalone agent library in the minimum setup | `1` |
-| Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.5.1` | Uses the same standalone native runtime | `1` |
-| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.5.1` bootstrap | Same runtime as the row above | Same single exporter; bootstrap adds none |
+| Rust-Java REST `4.6.1` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
+| Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.5.2` | Loads the small standalone agent library and the matching optional server adapter | `1` |
+| Spring Boot `3.x`, non-web | Minimum: `java-rust-glowroot-spring-runtime:0.5.2`; the umbrella starter also works | Loads only the web-independent standalone agent library in the minimum setup | `1` |
+| Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.5.2` | Uses the same standalone native runtime | `1` |
+| Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.5.2` bootstrap | Same runtime as the row above | Same single exporter; bootstrap adds none |
 
 The bootstrap JAR only maps `-javaagent:key=value` arguments to properties. It contains one class,
 no native binary, no transformer, and no runtime dependency. The Spring starter is a separate JAR
@@ -50,12 +50,13 @@ so Spring classes never cross the executable-JAR classloader boundary.
 The existing Glowroot collector, UI, and database stay unchanged.
 
 > **Compatibility boundary:** runtime profile switching requires REST native ABI `29` and Glowroot
-> ABI `4`. Use agent `0.5.1` with Rust-Java REST `4.6.0`. Do not copy DLL/SO files from an older
+> ABI `6`. Use agent `0.5.2` with Rust-Java REST `4.6.1`. Do not copy DLL/SO files from an older
 > package.
 
-Version `0.5.1` includes the exact endpoint-dashboard correction. After one export interval, open
+Version `0.5.2` adds the complete Spring diagnostic trace path. After one export interval, open
 Glowroot **Transactions** and select transaction type **Web**. Route patterns such as
-`/orders/{id}` appear as `/orders/*`.
+`/orders/{id}` appear as `/orders/*`. A selected slow or failed MVC trace also shows the HTTP
+method, response code, controller timer, Dubbo consumer timer, thread counters, and bounded error.
 
 ## Sample Projects
 
@@ -66,8 +67,8 @@ Glowroot Central deployment.
 |---|---|---|
 | [`rest-sample-cache-reader`](https://github.com/esasmer-dou/rest-sample-cache-reader) | Embedded Rust-Java REST runtime | Enable through properties; HTTP and native Redis read aggregates are available |
 | [`rest-sample-dubbo-consumer`](https://github.com/esasmer-dou/rest-sample-dubbo-consumer) | Embedded Rust-Java REST runtime | Enable through properties; HTTP and native Dubbo aggregates are available |
-| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | Release `0.5.1` does not provide a standalone plain-Java runtime; bootstrap alone is insufficient |
-| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | Release `0.5.1` does not instrument the official Java provider runtime |
+| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | Release `0.5.2` does not provide a standalone plain-Java runtime; bootstrap alone is insufficient |
+| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | Release `0.5.2` does not instrument the official Java provider runtime |
 
 Do not add Spring Boot or a REST server to a plain-Java sample only to obtain telemetry. If an
 application already uses Spring Boot for a real application requirement, use the non-web starter.
@@ -75,25 +76,28 @@ Otherwise keep the smaller runtime and use platform-level metrics until a dedica
 runtime is available.
 
 The reader and consumer READMEs contain copy-paste local and Kubernetes examples. For a new
-production deployment, align them to Rust-Java REST `4.6.0` before enabling agent `0.5.1`.
+production deployment, align them to Rust-Java REST `4.6.1` before enabling agent `0.5.2`.
 
 ## What You Get
 
 | Signal | Behavior |
 | --- | --- |
 | HTTP count, duration, percentile, and throughput | Counted exactly for every completed request and grouped by normalized route pattern |
-| HTTP errors | Status and error totals are counted exactly; optional stack detail stays bounded |
-| Slow/error trace | Optional bounded queue; disabled by default |
+| HTTP errors | Status and error totals are counted exactly; `5xx` is an error even when Spring handles the exception |
+| Slow/error trace | Bounded request detail with method, response code, controller timer, thread counters, and error stack |
+| Java Dubbo consumer inside Spring MVC | Diagnostic-only nested timer, operation, call count, and error count; arguments and results are never retained |
 | Rust-native Dubbo | Aggregate count, duration, and errors |
 | Rust-native Redis | Separate read/write count, duration, and errors |
 | Process gauges | RSS and thread count once per export interval |
 | JVM gauges | Optional heap, non-heap, memory-pool, GC count, and GC time gauges |
 | SQL aggregates | Optional explicit, bounded operation/statement timing; no JDBC proxy or bytecode weaving |
 | Error stacks | Optional bounded stack capture for failed HTTP requests and explicit SQL operations |
-| On-demand diagnostics | Optional thread dump, heap histogram, or heap dump in the short-lived diagnostic profile |
+| Live diagnostics | Thread dump, OpenJ9 heap histogram/dump, Force GC, MBean tree, and masked system properties in the short-lived diagnostic profile |
 | Export health | Connect, reconnect, failure, drop, and last-error counters |
 
-Request bodies, query values, headers, SQL text, and personal data are not copied into telemetry.
+Request/response bodies, query values, headers, Dubbo arguments/results, and personal data are not
+copied into telemetry. This is a deliberate bounded-memory and data-protection rule, not a missing
+trace field.
 
 ## Where The Work Runs
 
@@ -107,7 +111,8 @@ inside Spring or the JVM.
 | Error detail capture | Rust | A failed Java request hands off only a bounded weak `Throwable` reference. The isolated exporter reads class, message, and stack frames later; the application request thread never walks a stack trace |
 | Diagnostics | Rust | The command queue, JNI calls, bounded orchestration, file creation, atomic publication, failure cleanup, and counters stay in Rust |
 | Profile lifecycle | Rust | Optional state is allocated, retired, dropped, and optionally trimmed outside Hyper and application workers |
-| Optional Spring MVC edge | Java, constant-time only | The adapter selected by the application's existing server records completion: Tomcat Valve, Jetty RequestLog, or Undertow completion listener. It passes normalized route, status, duration, and an optional failure reference to Rust |
+| Optional Spring MVC edge | Java, constant-time only | The adapter selected by the application's existing server records completion: Tomcat Valve, Jetty RequestLog, or Undertow completion listener. The MVC enricher adds controller identity and request-owned timing only for diagnostic traces |
+| Optional Java Dubbo edge | Java, diagnostic-only | One Dubbo consumer SPI filter stores a bounded timer in the current MVC request. It does not inspect or copy RPC arguments, results, or payload bytes |
 | Optional Spring WebFlux edge | Java, bounded reactive callback | The separate WebFlux module keeps only the state required by the reactive lifecycle, reads the normalized route at commit, and passes the bounded event to Rust. It does not add or select Reactor Netty |
 | JVM internals | JVM, invoked by Rust | MXBean and dump APIs still execute inside the JVM because that is where the data exists; no Java helper, polling thread, cache, or direct-buffer callback is used |
 
@@ -137,14 +142,14 @@ from the agent.
 
 ## Rust-Java REST Setup
 
-Use the coordinated `4.6.0` framework line. It contains Glowroot native ABI `4` and validates the
+Use the coordinated `4.6.1` framework line. It contains Glowroot native ABI `6` and validates the
 native provenance before the HTTP server starts.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.6.0</version>
+  <version>4.6.1</version>
 </dependency>
 ```
 
@@ -172,7 +177,7 @@ configuration reaches the same embedded Rust engine:
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.5.1.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.5.2.jar=collector=http://glowroot-collector:8181,agent-id=catalog::pod-1,application=catalog-api \
   -jar catalog-api.jar
 ```
 
@@ -188,7 +193,7 @@ created even when the bootstrap JAR and native library are present.
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.5.1</version>
+  <version>0.5.2</version>
 </dependency>
 ```
 
@@ -229,6 +234,50 @@ The same exact request aggregate feeds **Average**, **Percentile**, **Throughput
 requests may enter the optional bounded trace-detail queue. Keep `trace.capacity=0` when aggregate
 telemetry is sufficient.
 
+For controller, Dubbo, error, and live JVM investigation, use this bounded incident profile on one
+pod:
+
+```yaml
+env:
+  - name: REACTOR_GLOWROOT_ENABLED
+    value: "true"
+  - name: REACTOR_GLOWROOT_PROFILE
+    value: "diagnostic"
+  - name: REACTOR_GLOWROOT_SPRING_ENABLED
+    value: "true"
+  - name: REACTOR_GLOWROOT_HTTP_SAMPLE_RATE
+    value: "256"
+  - name: REACTOR_GLOWROOT_TRACE_CAPACITY
+    value: "8"
+  - name: REACTOR_GLOWROOT_TRACE_SLOW_THRESHOLD_MS
+    value: "500"
+```
+
+`sample-rate=256` means roughly one normal successful request can keep trace detail. It does not
+sample endpoint counts, Average, Percentile, Throughput, or Errors. Requests slower than `500 ms`
+and failed requests are still selected by their own rules. `trace.capacity=8` is a hard queue bound;
+it never grows with traffic.
+
+A selected Spring MVC trace contains:
+
+| Glowroot trace field | Source |
+| --- | --- |
+| Request HTTP method and response code | Direct server completion adapter |
+| `http request` root timer | Full request duration |
+| `spring controller` child timer and `package.Controller.method()` entry | MVC mapping and controller lifecycle |
+| `dubbo consumer` child timer, operation, count, and error count | Optional Dubbo consumer SPI filter |
+| CPU, blocked, and waited deltas | Current request thread while `diagnostic` is active |
+| Error and bounded stack | Original Spring/Servlet failure; otherwise `HTTP status 5xx` |
+
+The Dubbo timer is automatic when the application already contains Apache Dubbo and uses the
+umbrella starter. It applies to consumer calls made within the current synchronous MVC request. No
+SQL configuration is required. The adapter has no runtime Dubbo dependency of its own; it uses the
+application's existing Dubbo `3.3.x` API and stays inactive when Dubbo is absent.
+
+HTTP or Dubbo payloads are intentionally not shown. Capturing bodies would retain personal data,
+tokens, and potentially large byte arrays. If a business field must be searchable, emit a redacted
+application log or a bounded domain metric instead of enabling generic body capture.
+
 The application still chooses its embedded server. Auto-configuration detects the server already
 present in the application and activates exactly one direct adapter. Every server API remains
 `provided` and `optional` inside its adapter module. The umbrella starter therefore adds no server
@@ -261,7 +310,7 @@ For Jetty, the application owns this dependency choice:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.5.1</version>
+  <version>0.5.2</version>
 </dependency>
 ```
 
@@ -285,7 +334,7 @@ For Undertow, keep the same exclusion and select Undertow instead:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-boot-starter</artifactId>
-  <version>0.5.1</version>
+  <version>0.5.2</version>
 </dependency>
 ```
 
@@ -304,7 +353,7 @@ Keep the reactive surface separate. Add the optional adapter only to a WebFlux a
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-webflux-adapter</artifactId>
-  <version>0.5.1</version>
+  <version>0.5.2</version>
 </dependency>
 <dependency>
   <groupId>org.springframework.boot</groupId>
@@ -326,7 +375,7 @@ process, command-line process, or database-only Spring Boot application:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-spring-runtime</artifactId>
-  <version>0.5.1</version>
+  <version>0.5.2</version>
 </dependency>
 ```
 
@@ -363,7 +412,7 @@ exporter thread, route table, SQL table, trace queue, or collector connection is
 
 The runtime does not guess Kafka topic names, scheduler job names, batch step names, or arbitrary
 business-method boundaries. It does not weave methods. Kafka, scheduler, and batch operation timing
-is therefore not automatic in `0.5.1`. Process and JVM evidence is automatic. Database timing is
+is therefore not automatic in `0.5.2`. Process and JVM evidence is automatic. Database timing is
 explicit through the reusable `SqlStatement` API shown below. This keeps the hot path predictable
 and avoids a framework-specific Java agent layer.
 
@@ -391,7 +440,7 @@ start metadata to the same runtime; by itself it does not load a native library 
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-agent</artifactId>
-  <version>0.5.1</version>
+  <version>0.5.2</version>
   <scope>runtime</scope>
 </dependency>
 ```
@@ -400,7 +449,7 @@ Keep the bootstrap JAR outside the executable Spring Boot JAR and pass its file 
 
 ```bash
 java \
-  -javaagent:/opt/agent/java-rust-glowroot-agent-0.5.1.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
+  -javaagent:/opt/agent/java-rust-glowroot-agent-0.5.2.jar=collector=http://glowroot-collector:8181,agent-id=orders::pod-1,application=orders-api,http-sample-rate=256,trace-capacity=0 \
   -jar orders-api.jar
 ```
 
@@ -467,7 +516,7 @@ TLS sidecar when encryption or mTLS is required.
 
 ## Linux Container Compatibility
 
-Release `0.5.1` supports Linux x64 images with `glibc 2.17` or newer. The release build has a fixed
+Release `0.5.2` supports Linux x64 images with `glibc 2.17` or newer. The release build has a fixed
 GLIBC symbol ceiling and is loaded in both Debian Stretch (`glibc 2.24`) and Debian Bookworm
 (`glibc 2.36`) before publication. This is a build-time compatibility change. It adds no runtime
 thread, allocation, or JNI call.
@@ -487,7 +536,7 @@ Adding the starter to `pom.xml` is not enough when the image deletes `BOOT-INF/l
 native library and the Java runtime JARs. Updating only `librust_glowroot_agent.so` leaves Spring
 without the auto-configuration classes, so the service starts normally but exports nothing.
 
-For release `0.5.1` with Jetty, verify the running pod before testing the UI:
+For release `0.5.2` with Jetty, verify the running pod before testing the UI:
 
 ```bash
 APP_HOME=/u01/applications/nmc-store-common
@@ -497,7 +546,7 @@ find "$APP_HOME" -type f -name 'java-rust-glowroot-*.jar' -print
 grep -F 'librust_glowroot_agent.so' /proc/1/maps
 ```
 
-The first two commands must show the `0.5.1` starter, runtime, and Jetty adapter. The `/proc/1/maps`
+The first two commands must show the `0.5.2` starter, runtime, and Jetty adapter. The `/proc/1/maps`
 line appears only after Java has loaded the native library. A custom dependency image or shared PVC
 must therefore be rebuilt or updated from the same Maven dependency layer as the application.
 
@@ -505,14 +554,14 @@ The repository also provides a fail-fast final-image check:
 
 ```bash
 scripts/verify-container-runtime.sh \
-  /u01/applications/nmc-store-common 0.5.1 jetty \
+  /u01/applications/nmc-store-common 0.5.2 jetty \
   /u01/applications/nmc-store-common/glowroot/librust_glowroot_agent.so
 ```
 
 At application startup, look for both lines:
 
 ```text
-Java-Rust Glowroot native telemetry active: abi=4, profile=diagnostic, application=nmc-store-common
+Java-Rust Glowroot native telemetry active: abi=6, profile=diagnostic, application=nmc-store-common
 Java-Rust Glowroot HTTP telemetry active: adapter=jetty-request-log, transaction-type=Web
 ```
 
@@ -751,10 +800,12 @@ For Spring Boot, inject `NativeTelemetry` into an existing secured diagnostics c
 you need it, then return `diagnosticsJson()`. The starter does not open a management endpoint by
 itself.
 
-Watch `connected`, `export_failure`, `dropped_intervals`, `dropped_transactions`, `dropped_traces`,
+Watch `connected`, `downstream_connected`, `export_failure`, `dropped_intervals`,
+`dropped_transactions`, `dropped_traces`,
 `pending_error_captures`, `queued_error_traces`, `dropped_error_traces`, `dropped_routes`,
-`reconnects`, and `last_error_code`. `pending_error_captures` is work waiting for the isolated Rust
-exporter; it should remain bounded and return to zero after the burst. During a profile change watch
+`reconnects`, `downstream_reconnects`, `downstream_failures`, and `last_error_code`.
+`pending_error_captures` is work waiting for the isolated Rust exporter; it should remain bounded
+and return to zero after the burst. During a profile change watch
 `active_profile`, `active_profile_memory_ceiling_bytes`, `retired_profile_memory_ceiling_bytes`,
 `jvm_probe_registered`, `jvm_probe_owned_global_refs`, `profile_release_pending`, `profile_released_transition`,
 `profile_release_timeouts`, `profile_last_release_micros`, `profile_max_release_micros`, and
@@ -765,6 +816,34 @@ and `jvm_probe_owned_global_refs=0` are required. Diagnostic output is written b
 file in the target directory and published only after success. Heap histograms and heap dumps can
 still create a large one-time JVM diagnostic allocation; use them on one pod, never as a periodic
 job or during a latency-sensitive peak.
+
+Glowroot Central's live JVM buttons use a separate bidirectional HTTP/2 downstream connection. It
+is active only in `diagnostic`. Wait for this one-time line before opening the live pages:
+
+```text
+Java-Rust Glowroot live diagnostics connected: agent-id=nmc-store-common::pod-name
+```
+
+If Central says the agent is not connected, first check `downstream_connected=true`; historical
+aggregate delivery through `connected=true` is not sufficient for live commands. The downstream
+connection is rotated before Central's idle limit and reconnects independently. It does not run on
+the application server, Hyper, or business worker pool.
+
+| Glowroot JVM page/action | `diagnostic` behavior on Semeru OpenJ9 21 |
+| --- | --- |
+| Thread dump | Available; bounded to 512 threads and 128 frames per thread |
+| Heap histogram | Available through OpenJ9's in-process class statistics; bounded to 4096 classes and a 1 MiB response |
+| Heap dump | Available as an OpenJ9 PHD file in the selected server directory |
+| Force GC | Available through the JVM memory MXBean; use only during an incident |
+| MBean tree | Available through the platform MBean server; names, attributes, and response bytes are bounded |
+| System properties | Available; password, secret, token, credential, authorization, and private-key values are masked |
+| Environment | Startup host, CPU, physical memory, OS/version, PID/start time, Java/JVM, masked JVM arguments, dump directory, and agent version |
+
+The Environment page does not export arbitrary operating-system environment variables. Kubernetes
+Secrets often live there, and the upstream Environment protobuf has no safe arbitrary key/value
+field. Put a non-secret deployment label in a JVM property such as
+`-Ddeployment.environment=test` when it must be visible under **System properties**. Do not mirror
+passwords or tokens into JVM properties.
 
 ## Performance Contract
 
@@ -806,7 +885,7 @@ compatibility, collector-down fail-open, and
 the optional bootstrap are separate mandatory checks.
 
 See [Architecture And Production Boundary](docs/ARCHITECTURE.md). User-facing changes and
-compatibility details are in the [0.5.1 release notes](docs/releases/0.5.1.md). Internal benchmark
+compatibility details are in the [0.5.2 release notes](docs/releases/0.5.2.md). Internal benchmark
 tools and raw evidence are intentionally not part of the public repository.
 
 ## Compatibility
@@ -814,15 +893,16 @@ tools and raw evidence are intentionally not part of the public repository.
 | Component | Release | Contract |
 | --- | ---: | --- |
 | Java | `21` | Semeru OpenJ9 is the primary tested JVM |
-| Rust-Java REST | `4.6.0` | REST ABI `29`, Glowroot ABI `4` |
-| Agent bootstrap | `0.5.1` | One class; works with either supported runtime |
-| Spring Boot starter | `0.5.1` | Spring Boot `3.x`; web-independent core plus direct full-lifecycle adapters for Tomcat, Jetty, and Undertow; no server engine dependency |
-| Spring WebFlux adapter | `0.5.1` | Separate optional `WebFilter`; no Reactor Netty or Servlet engine dependency |
-| Standalone native source | `rust-spring v4.6.0` | Glowroot ABI `4`; clean CI DLL/SO |
+| Rust-Java REST | `4.6.1` | REST ABI `29`, Glowroot ABI `6` |
+| Agent bootstrap | `0.5.2` | One class; works with either supported runtime |
+| Spring Boot starter | `0.5.2` | Spring Boot `3.x`; web-independent core plus direct full-lifecycle adapters for Tomcat, Jetty, and Undertow; no server engine dependency |
+| Spring Dubbo adapter | `0.5.2` | Optional consumer SPI correlation compiled against Dubbo `3.3.0-beta.4`; no transitive Dubbo runtime |
+| Spring WebFlux adapter | `0.5.2` | Separate optional `WebFilter`; no Reactor Netty or Servlet engine dependency |
+| Standalone native source | `rust-spring v4.6.1` | Glowroot ABI `6`; clean CI DLL/SO |
 | Glowroot Central wire contract | upstream `0.14.8-beta.5-SNAPSHOT` checkout | Unary h2/protobuf compatibility gate |
 | Native platforms | Windows x64, Linux glibc x64 | Clean CI-built DLL/SO with SHA-256 provenance |
 
-Runtime profile switching requires the coordinated REST ABI `29` and Glowroot ABI `4` pair shown
+Runtime profile switching requires the coordinated REST ABI `29` and Glowroot ABI `6` pair shown
 above. Startup provenance checks reject an older or locally copied native binary.
 
 Do not copy DLL/SO files between versions. The framework, cache, Dubbo, and agent libraries validate
@@ -837,14 +917,15 @@ mvn -B -ntp clean verify
 
 The Maven reactor builds:
 
-- `agent-bootstrap/target/java-rust-glowroot-agent-0.5.1.jar`
-- `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.5.1.jar`
-- `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.5.1.jar`
-- `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.5.1.jar`
-- `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.5.1.jar`
-- `spring-undertow-adapter/target/java-rust-glowroot-spring-undertow-adapter-0.5.1.jar`
-- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.5.1.jar`
-- `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.5.1.jar`
+- `agent-bootstrap/target/java-rust-glowroot-agent-0.5.2.jar`
+- `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.5.2.jar`
+- `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.5.2.jar`
+- `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.5.2.jar`
+- `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.5.2.jar`
+- `spring-undertow-adapter/target/java-rust-glowroot-spring-undertow-adapter-0.5.2.jar`
+- `spring-dubbo-adapter/target/java-rust-glowroot-spring-dubbo-adapter-0.5.2.jar`
+- `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.5.2.jar`
+- `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.5.2.jar`
 
 The native DLL/SO are built only from the clean `rust-spring` commit recorded in
 `native-provenance.properties`. `scripts/sync-native-artifacts.ps1` is retained because it is part of

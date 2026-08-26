@@ -23,6 +23,7 @@ public final class BoundedHttpTelemetry {
     private final int sampleRate;
     private final int sampleMask;
     private final boolean traceSamplingEnabled;
+    private final boolean errorDetailsEnabled;
     private final long slowThresholdNanos;
     private final ThreadLocal<SampleState> sampleState;
     private final RouteRegistry routeSlots;
@@ -32,6 +33,8 @@ public final class BoundedHttpTelemetry {
         this.sampleRate = config.httpSampleRate();
         this.sampleMask = sampleRate - 1;
         this.traceSamplingEnabled = config.traceCapacity() > 0;
+        this.errorDetailsEnabled = config.profile().errorDetailsEnabled()
+                && config.errorTraceCapacity() > 0;
         this.slowThresholdNanos = config.traceCapacity() == 0
                 ? Long.MAX_VALUE
                 : config.slowThresholdMs() * 1_000_000L;
@@ -100,7 +103,73 @@ public final class BoundedHttpTelemetry {
             int status,
             long durationNanos,
             Throwable error) {
-        record(observation, route, status, durationNanos, error);
+        record(observation, method, route, status, durationNanos, error, null);
+    }
+
+    /** Records a completion and adds bounded trace metadata only for selected traces. */
+    public void record(
+            int observation,
+            String method,
+            Object route,
+            int status,
+            long durationNanos,
+            Throwable error,
+            Object controller) {
+        recordInternal(
+                observation,
+                method,
+                route,
+                status,
+                durationNanos,
+                error,
+                controller,
+                null,
+                null);
+    }
+
+    /** Records a completion with diagnostic-only request-thread deltas. */
+    public void record(
+            int observation,
+            String method,
+            Object route,
+            int status,
+            long durationNanos,
+            Throwable error,
+            Object controller,
+            long[] threadStats) {
+        record(
+                observation,
+                method,
+                route,
+                status,
+                durationNanos,
+                error,
+                controller,
+                threadStats,
+                null);
+    }
+
+    /** Records diagnostic-only controller and Dubbo correlation for a selected trace. */
+    public void record(
+            int observation,
+            String method,
+            Object route,
+            int status,
+            long durationNanos,
+            Throwable error,
+            Object controller,
+            long[] threadStats,
+            HttpRequestTraceState requestTraceState) {
+        recordInternal(
+                observation,
+                method,
+                route,
+                status,
+                durationNanos,
+                error,
+                controller,
+                threadStats,
+                requestTraceState);
     }
 
     /** Records a completed request using Glowroot-compatible route-only transaction naming. */
@@ -110,6 +179,19 @@ public final class BoundedHttpTelemetry {
             int status,
             long durationNanos,
             Throwable error) {
+        recordInternal(observation, "", route, status, durationNanos, error, null, null, null);
+    }
+
+    private void recordInternal(
+            int observation,
+            String method,
+            Object route,
+            int status,
+            long durationNanos,
+            Throwable error,
+            Object controller,
+            long[] threadStats,
+            HttpRequestTraceState requestTraceState) {
         long boundedDuration = Math.max(0L, durationNanos);
         if (!shouldRecord(observation, status, boundedDuration, error)) return;
 
@@ -121,17 +203,43 @@ public final class BoundedHttpTelemetry {
                 ? UNMATCHED_ROUTE
                 : route instanceof String text ? text : route.toString();
         try {
+            String methodValue = method == null ? "" : method;
             int slot = routeSlots.getOrRegister(routeValue, telemetry);
             if (slot == DISABLED_SLOT) return;
-            telemetry.recordHttp(
-                    slot,
-                    normalizedStatus,
-                    boundedDuration,
-                    sampled && !failed ? sampleRate : 0);
-            if (error != null) telemetry.recordError(slot, boundedDuration, error);
+            int sampleWeight = sampled && !failed ? sampleRate : 0;
+            if (shouldRecordDetail(observation, normalizedStatus, boundedDuration, error)) {
+                HttpRequestTraceState.Snapshot requestTrace = requestTraceState == null
+                        ? null : requestTraceState.snapshot(boundedDuration);
+                telemetry.recordHttpDetail(
+                        slot,
+                        normalizedStatus,
+                        boundedDuration,
+                        sampleWeight,
+                        methodValue,
+                        controller == null ? "" : controller.toString(),
+                        stat(threadStats, 0),
+                        stat(threadStats, 1),
+                        stat(threadStats, 2),
+                        stat(threadStats, 3),
+                        requestTrace == null ? -1L : requestTrace.controllerStartOffsetNanos(),
+                        requestTrace == null ? -1L : requestTrace.controllerDurationNanos(),
+                        requestTrace == null ? "" : requestTrace.dubboOperation(),
+                        requestTrace == null ? -1L : requestTrace.dubboStartOffsetNanos(),
+                        requestTrace == null ? 0L : requestTrace.dubboDurationNanos(),
+                        requestTrace == null ? 0L : requestTrace.dubboCount(),
+                        requestTrace == null ? 0L : requestTrace.dubboErrors(),
+                        error);
+            } else {
+                telemetry.recordHttp(slot, normalizedStatus, boundedDuration, sampleWeight);
+                if (error != null) telemetry.recordError(slot, boundedDuration, error);
+            }
         } catch (RuntimeException ignored) {
             // Telemetry must never alter the application response during shutdown or native failure.
         }
+    }
+
+    private static long stat(long[] values, int index) {
+        return values == null || values.length <= index ? -1L : values[index];
     }
 
     /** Returns whether this completion contributes to exact aggregate or error telemetry. */
@@ -144,6 +252,20 @@ public final class BoundedHttpTelemetry {
                 || (observation & FAILED) != 0
                 || status >= 500
                 || error != null;
+    }
+
+    /** Returns whether completion metadata and thread deltas are needed for this request. */
+    public boolean shouldRecordDetail(
+            int observation,
+            int status,
+            long durationNanos,
+            Throwable error) {
+        boolean selected = (observation & SAMPLED) != 0
+                || (observation & FAILED) != 0
+                || status >= 500
+                || error != null
+                || ((observation & CHECK_SLOW) != 0 && durationNanos >= slowThresholdNanos);
+        return selected && (traceSamplingEnabled || errorDetailsEnabled);
     }
 
     private static int initialSampleOffset(long threadId, int mask) {

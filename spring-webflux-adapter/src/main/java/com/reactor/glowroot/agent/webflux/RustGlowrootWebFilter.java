@@ -2,6 +2,7 @@ package com.reactor.glowroot.agent.webflux;
 
 import com.reactor.glowroot.agent.http.BoundedHttpTelemetry;
 import com.reactor.glowroot.agent.http.HttpTelemetrySink;
+import com.reactor.glowroot.agent.http.HttpThreadStats;
 import com.reactor.glowroot.agent.runtime.NativeTelemetry;
 import com.reactor.glowroot.agent.runtime.TelemetryConfig;
 import org.springframework.core.Ordered;
@@ -19,6 +20,7 @@ import reactor.util.context.Context;
 public final class RustGlowrootWebFilter implements WebFilter, Ordered {
 
     private final BoundedHttpTelemetry telemetry;
+    private final boolean threadStatsEnabled;
     private final int order;
 
     /** Creates a WebFlux filter backed by the process-scoped Rust telemetry runtime. */
@@ -43,6 +45,7 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
             TelemetryConfig config,
             int order) {
         this.telemetry = new BoundedHttpTelemetry(telemetry, config);
+        this.threadStatsEnabled = config.profile().diagnosticsEnabled();
         this.order = order;
     }
 
@@ -55,14 +58,16 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         int flags = telemetry.beginObservation();
         long startedAtNanos = flags == 0 ? 0L : System.nanoTime();
+        long[] threadStatsStart = HttpThreadStats.begin(threadStatsEnabled);
         try {
             return new ObservedMono(
                     chain.filter(exchange),
                     exchange,
                     flags,
-                    startedAtNanos);
+                    startedAtNanos,
+                    threadStatsStart);
         } catch (RuntimeException | Error error) {
-            completeFailOpen(exchange, flags, startedAtNanos, error);
+            completeFailOpen(exchange, flags, startedAtNanos, threadStatsStart, error);
             throw error;
         }
     }
@@ -71,9 +76,10 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
             ServerWebExchange exchange,
             int flags,
             long startedAtNanos,
+            Object threadStatsStart,
             Throwable error) {
         try {
-            complete(exchange, flags, startedAtNanos, error);
+            complete(exchange, flags, startedAtNanos, threadStatsStart, error);
         } catch (RuntimeException | LinkageError ignored) {
             // Native telemetry failures must not alter the application signal.
         }
@@ -83,6 +89,7 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
             ServerWebExchange exchange,
             int flags,
             long startedAtNanos,
+            Object threadStatsStart,
             Throwable error) {
         HttpStatusCode responseStatus = exchange.getResponse().getStatusCode();
         int status = responseStatus == null ? 200 : responseStatus.value();
@@ -90,13 +97,16 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
                 ? 0L
                 : Math.max(0L, System.nanoTime() - startedAtNanos);
         if (!telemetry.shouldRecord(flags, status, durationNanos, error)) return;
-
+        boolean detail = telemetry.shouldRecordDetail(flags, status, durationNanos, error);
         telemetry.record(
                 flags,
+                detail ? exchange.getRequest().getMethod().name() : "",
                 exchange.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE),
                 status,
                 durationNanos,
-                error);
+                error,
+                null,
+                detail ? HttpThreadStats.finish(threadStatsStart) : null);
     }
 
     private final class ObservedMono extends Mono<Void> {
@@ -104,16 +114,19 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
         private final ServerWebExchange exchange;
         private final int flags;
         private final long startedAtNanos;
+        private final Object threadStatsStart;
 
         private ObservedMono(
                 Mono<Void> source,
                 ServerWebExchange exchange,
                 int flags,
-                long startedAtNanos) {
+                long startedAtNanos,
+                Object threadStatsStart) {
             this.source = source;
             this.exchange = exchange;
             this.flags = flags;
             this.startedAtNanos = startedAtNanos;
+            this.threadStatsStart = threadStatsStart;
         }
 
         @Override
@@ -165,6 +178,7 @@ public final class RustGlowrootWebFilter implements WebFilter, Ordered {
                     observation.exchange,
                     observation.flags,
                     observation.startedAtNanos,
+                    observation.threadStatsStart,
                     error);
         }
     }

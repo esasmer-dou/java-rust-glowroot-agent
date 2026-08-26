@@ -1,6 +1,9 @@
 package com.reactor.glowroot.agent.undertow;
 
 import com.reactor.glowroot.agent.http.BoundedHttpTelemetry;
+import com.reactor.glowroot.agent.http.HttpTraceMetadata;
+import com.reactor.glowroot.agent.http.HttpThreadStats;
+import com.reactor.glowroot.agent.http.HttpRequestTraceState;
 import io.undertow.server.ExchangeCompletionListener;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
@@ -52,22 +55,42 @@ final class RustGlowrootUndertowHandler implements HttpHandler {
             ServletRequestContext context = exchange.getAttachment(ServletRequestContext.ATTACHMENT_KEY);
             ServletRequest request = context == null ? null : context.getServletRequest();
             if (error == null && status >= 500 && request != null
-                    && request.getAttribute(ERROR_ATTRIBUTE) instanceof Throwable throwable) {
-                error = throwable;
+                    && request.getAttribute(HttpTraceMetadata.ERROR_ATTRIBUTE) instanceof Throwable captured) {
+                error = captured;
+            }
+            if (error == null && status >= 500 && request != null
+                    && request.getAttribute(ERROR_ATTRIBUTE) instanceof Throwable dispatched) {
+                error = dispatched;
             }
 
             long startedAtNanos = exchange.getRequestStartTime();
             long durationNanos = startedAtNanos <= 0L
                     ? 0L
                     : Math.max(0L, System.nanoTime() - startedAtNanos);
+                Object threadStatsStart = request == null
+                        ? null
+                        : request.getAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
+                Object requestTraceValue = request == null
+                        ? null
+                        : request.getAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);
+                if (request != null) {
+                    request.removeAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
+                    request.removeAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);
+                }
             if (!telemetry.shouldRecord(observation, status, durationNanos, error)) return;
+            boolean detail = telemetry.shouldRecordDetail(observation, status, durationNanos, error);
             Object route = request == null ? null : request.getAttribute(ROUTE_ATTRIBUTE);
             telemetry.record(
                     observation,
+                    detail ? exchange.getRequestMethod().toString() : "",
                     route,
                     status,
                     durationNanos,
-                    error);
+                    error,
+                    detail && request != null
+                            ? request.getAttribute(HttpTraceMetadata.CONTROLLER_ATTRIBUTE) : null,
+                    detail ? HttpThreadStats.finish(threadStatsStart) : null,
+                    detail && requestTraceValue instanceof HttpRequestTraceState state ? state : null);
         } finally {
             nextListener.proceed();
         }

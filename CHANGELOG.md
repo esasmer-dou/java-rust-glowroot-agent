@@ -4,6 +4,45 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-26
+
+### Added
+
+- Add bounded Spring MVC slow/error trace details: HTTP method, response code, controller timer and
+  entry, request-thread counters, and original exception class/message/stack.
+- Add a diagnostic-only Apache Dubbo consumer SPI adapter. It reports the operation, total call
+  duration, call count, and error count without retaining RPC arguments or results.
+- Add Glowroot Central's bidirectional downstream service for live Thread dump, OpenJ9 heap
+  histogram/dump, Force GC, MBean tree, masked System properties, capabilities, and current time.
+- Populate the Glowroot Environment view with bounded host, process, Java/OpenJ9, masked JVM
+  argument, dump-directory, and agent-version information.
+
+### Changed
+
+- Keep all protobuf encoding, collector/downstream transport, reconnect, bounded queues, JVM
+  diagnostic dispatch, and exception stack materialization on the isolated Rust exporter runtime.
+- Enable request CPU, contention, and allocated-memory counters only while `diagnostic` owns them,
+  then restore the JVM's prior setting on profile downgrade.
+- Preserve unsent aggregate atomics across collector connection failures and rotate long-lived HTTP/2
+  connections before Central's idle boundary.
+
+### Fixed
+
+- Failed Spring requests now reach Glowroot Errors and detailed traces even when the server adapter
+  only observes a final `5xx`; an available Spring/Servlet exception remains the preferred error.
+- Slow traces now use the upstream `http request` root timer with nested `spring controller` and
+  `dubbo consumer` timers instead of a header-only trace.
+- Live JVM pages no longer report the agent as disconnected when the diagnostic downstream stream is
+  established.
+
+### Compatibility
+
+- Glowroot native ABI is `6`. Use agent `0.5.2` only with its packaged DLL/SO or coordinated
+  Rust-Java REST `4.6.1` native runtime.
+- Linux x64 remains compatible with `glibc 2.17` and newer.
+- Request/response bodies, query/header values, Dubbo arguments/results, arbitrary operating-system
+  environment variables, and application log weaving remain outside the bounded-agent contract.
+
 ## [0.5.1] - 2026-08-21
 
 ### Fixed
@@ -295,7 +334,8 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.0...v0.4.1

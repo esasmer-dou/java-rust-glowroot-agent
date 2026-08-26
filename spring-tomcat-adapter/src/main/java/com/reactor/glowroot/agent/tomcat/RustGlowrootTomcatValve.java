@@ -1,6 +1,9 @@
 package com.reactor.glowroot.agent.tomcat;
 
 import com.reactor.glowroot.agent.http.BoundedHttpTelemetry;
+import com.reactor.glowroot.agent.http.HttpTraceMetadata;
+import com.reactor.glowroot.agent.http.HttpThreadStats;
+import com.reactor.glowroot.agent.http.HttpRequestTraceState;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.DispatcherType;
@@ -60,9 +63,10 @@ final class RustGlowrootTomcatValve extends ValveBase {
 
     private void complete(Request request, Response response, Throwable error, int forcedStatus) {
         int status = forcedStatus == 0 ? response.getStatus() : forcedStatus;
-        if (error == null && status >= 500
-                && request.getAttribute(ERROR_ATTRIBUTE) instanceof Throwable dispatchedError) {
-            error = dispatchedError;
+        if (error == null && status >= 500) {
+            Object captured = request.getAttribute(HttpTraceMetadata.ERROR_ATTRIBUTE);
+            if (!(captured instanceof Throwable)) captured = request.getAttribute(ERROR_ATTRIBUTE);
+            if (captured instanceof Throwable dispatchedError) error = dispatchedError;
         }
         if (error != null && status < 500) status = 500;
         int observation = telemetry.observation(status);
@@ -72,13 +76,22 @@ final class RustGlowrootTomcatValve extends ValveBase {
         long durationNanos = startedAtNanos <= 0L
                 ? 0L
                 : Math.max(0L, System.nanoTime() - startedAtNanos);
+        Object threadStatsStart = request.getAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
+        request.removeAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
+        Object requestTraceValue = request.getAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);
+        request.removeAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);
         if (!telemetry.shouldRecord(observation, status, durationNanos, error)) return;
+        boolean detail = telemetry.shouldRecordDetail(observation, status, durationNanos, error);
         telemetry.record(
                 observation,
+                detail ? request.getMethod() : "",
                 request.getAttribute(ROUTE_ATTRIBUTE),
                 status,
                 durationNanos,
-                error);
+                error,
+                detail ? request.getAttribute(HttpTraceMetadata.CONTROLLER_ATTRIBUTE) : null,
+                detail ? HttpThreadStats.finish(threadStatsStart) : null,
+                detail && requestTraceValue instanceof HttpRequestTraceState state ? state : null);
     }
 
     private final class AsyncCompletion implements AsyncListener {
