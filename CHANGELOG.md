@@ -23,8 +23,10 @@ All notable changes to this project are recorded here.
 - Move release performance evidence to pinned GitHub-hosted Linux images. Spring Boot and Rust-Java
   REST matrices run in parallel after shared correctness checks, reducing wall-clock gate time while
   keeping each A/B comparison inside one isolated VM.
-- Record the application, load-runner, collector, and orchestration CPU roles in machine-readable
-  evidence. A 30-second quiet-host window rejects noisy runners before evidence collection.
+- Reserve one complete physical CPU group for the measured application. The load runner, collector,
+  and orchestration process are bounded to the other physical group on standard hosted runners, and
+  this topology is recorded in machine-readable evidence. A 30-second quiet-host window rejects
+  noisy runners before evidence collection.
 
 ### Compatibility
 

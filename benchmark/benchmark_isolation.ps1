@@ -142,7 +142,10 @@ function Get-ReactorLinuxCpuWindow {
 }
 
 function Select-ReactorBenchmarkCpuRoles {
-    param([int] $SampleSeconds = 5)
+    param(
+        [int] $SampleSeconds = 5,
+        [switch] $AllowSharedInfrastructureGroup
+    )
 
     if (-not $IsLinux) {
         throw "Automatic benchmark CPU selection requires Linux."
@@ -205,8 +208,9 @@ function Select-ReactorBenchmarkCpuRoles {
         }
         $groups[$group].Add($cpu)
     }
-    if ($groups.Count -lt 4) {
-        throw "At least four physical CPU groups are required for application, load-runner, collector, and orchestrator isolation."
+    $minimumGroups = if ($AllowSharedInfrastructureGroup) { 2 } else { 4 }
+    if ($groups.Count -lt $minimumGroups) {
+        throw "At least $minimumGroups physical CPU groups are required for the selected benchmark isolation mode."
     }
 
     $before = Get-ReactorLinuxCpuSnapshot
@@ -228,6 +232,32 @@ function Select-ReactorBenchmarkCpuRoles {
         }
     }
     $ranked = @($ranked | Sort-Object busy_percent, steal_percent, group)
+    if ($AllowSharedInfrastructureGroup) {
+        $application = $ranked[0]
+        $infrastructure = $ranked[1]
+        if ($infrastructure.logical.Count -lt 2) {
+            throw "Shared infrastructure isolation requires two logical CPUs in its physical group."
+        }
+        $applicationCpuSet = $application.cpus -join ","
+        $runnerCpu = $infrastructure.logical[0].cpu
+        $controlCpu = $infrastructure.logical[1].cpu
+        Write-Host (("CPU roles selected after build: app={0} group={1} busy={2:N2}% " +
+                "steal={3:N2}%; shared-infrastructure-group={4} runner={5} " +
+                "collector={6} orchestrator={6}") -f `
+                $applicationCpuSet, $application.group, $application.busy_percent, `
+                $application.steal_percent, $infrastructure.group, $runnerCpu, $controlCpu)
+        return [pscustomobject]@{
+            application = $applicationCpuSet
+            runner = "$runnerCpu"
+            collector = "$controlCpu"
+            orchestrator = "$controlCpu"
+            application_group = "$($application.group)"
+            infrastructure_group = "$($infrastructure.group)"
+            observed_busy_percent = [math]::Round($application.busy_percent, 3)
+            observed_steal_percent = [math]::Round($application.steal_percent, 3)
+            source = "automatic-idle-sample-shared-infrastructure"
+        }
+    }
     $application = $ranked[0]
     $load = $ranked[1]
     $collector = $ranked[2]
@@ -302,6 +332,7 @@ function Assert-ReactorBenchmarkCpuIsolation {
         [string] $CollectorCpuSet,
         [string] $OrchestratorCpuSet,
         [switch] $AllowRunnerCollectorSiblingSharing,
+        [switch] $AllowSharedInfrastructureGroup,
         [switch] $AllowSharedApplicationSlots
     )
 
@@ -325,8 +356,8 @@ function Assert-ReactorBenchmarkCpuIsolation {
         if ($roleCpus.Count -eq 0) {
             throw "CPU isolation requires an explicit non-empty CPU set for $($entry.Key)."
         }
-        if ($entry.Key -like "application-slot-*" -or $entry.Key -eq "load-runner" `
-                -or $entry.Key -eq "benchmark-orchestrator") {
+        if ($entry.Key -like "application-slot-*" -or ((-not $AllowSharedInfrastructureGroup) `
+                -and ($entry.Key -eq "load-runner" -or $entry.Key -eq "benchmark-orchestrator"))) {
             $requiredCpus = [System.Collections.Generic.HashSet[int]]::new()
             foreach ($cpu in $roleCpus) {
                 if (-not $topology.ContainsKey($cpu)) {
@@ -349,7 +380,11 @@ function Assert-ReactorBenchmarkCpuIsolation {
                 $existingRole = $logicalCpuOwners[$cpu]
                 $runnerCollectorPair = @($entry.Key, $existingRole) -contains "load-runner" `
                         -and @($entry.Key, $existingRole) -contains "collector"
-                if (-not ($AllowRunnerCollectorSiblingSharing -and $runnerCollectorPair)) {
+                $infrastructurePair = @("load-runner", "collector", "benchmark-orchestrator") `
+                        -contains $entry.Key -and `
+                        @("load-runner", "collector", "benchmark-orchestrator") -contains $existingRole
+                if (-not (($AllowRunnerCollectorSiblingSharing -and $runnerCollectorPair) `
+                        -or ($AllowSharedInfrastructureGroup -and $infrastructurePair))) {
                     throw "CPU isolation is invalid: $($entry.Key) and $existingRole use logical CPU $cpu."
                 }
             }
@@ -359,8 +394,12 @@ function Assert-ReactorBenchmarkCpuIsolation {
                     -and $physicalCoreOwners[$physicalCore] -ne $entry.Key) {
                 $existingRole = $physicalCoreOwners[$physicalCore]
                 $runnerCollectorPair = @($entry.Key, $existingRole) -contains "load-runner" `
-                    -and @($entry.Key, $existingRole) -contains "collector"
-                if (-not ($AllowRunnerCollectorSiblingSharing -and $runnerCollectorPair)) {
+                        -and @($entry.Key, $existingRole) -contains "collector"
+                $infrastructurePair = @("load-runner", "collector", "benchmark-orchestrator") `
+                        -contains $entry.Key -and `
+                        @("load-runner", "collector", "benchmark-orchestrator") -contains $existingRole
+                if (-not (($AllowRunnerCollectorSiblingSharing -and $runnerCollectorPair) `
+                        -or ($AllowSharedInfrastructureGroup -and $infrastructurePair))) {
                     throw "CPU isolation is invalid: $($entry.Key) and $existingRole share physical-core sibling group $physicalCore."
                 }
             } else {
@@ -370,6 +409,9 @@ function Assert-ReactorBenchmarkCpuIsolation {
     }
     $slotCMessage = if ([string]::IsNullOrWhiteSpace($SlotCCpuSet)) { "" } else { " C=$SlotCCpuSet" }
     $sharedMessage = if ($AllowRunnerCollectorSiblingSharing) { " runner/collector-SMT-sharing=allowed" } else { "" }
+    if ($AllowSharedInfrastructureGroup) {
+        $sharedMessage += " infrastructure-physical-group-sharing=allowed"
+    }
     $applicationMessage = if ($AllowSharedApplicationSlots -and $SlotACpuSet -eq $SlotBCpuSet) {
         " sequential-application-slot=$SlotACpuSet"
     } else {

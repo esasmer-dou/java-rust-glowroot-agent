@@ -158,6 +158,8 @@ if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
 }
 if (([regex]::Matches($workflow, '-AutoSelectCpuRoles')).Count -ne 3 -or
         ([regex]::Matches($workflow, '-MinLogicalCpu 4')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '-MinPhysicalCpuGroups 2')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '-AllowSharedInfrastructureCpuGroup')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-HostStabilizationSeconds 30')).Count -ne 2) {
     throw "Spring and Rust-Java release matrices must use quiet-host automatic CPU isolation."
 }
@@ -217,6 +219,7 @@ if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.cpu_roles\.orchestrator')).Count -ne 2 -or
         ([regex]::Matches($release, '\.cpu_roles\.variant_execution == "sequential_shared_slot"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.cpu_roles\.runner_collector_sibling_sharing == false')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.cpu_roles\.infrastructure_physical_group_sharing == true')).Count -ne 2 -or
         ([regex]::Matches($release, '\.cpu_roles\.single_cpu_logical_pin == false')).Count -ne 2 -or
         ([regex]::Matches($release, '\.cpu_roles\.application_slot_b == \.cpu_roles\.application_slot_a')).Count -ne 2 -or
         ([regex]::Matches($release, '\.warmup_stability\.gate_mode == "absolute_rps_per_variant"')).Count -ne 2 -or

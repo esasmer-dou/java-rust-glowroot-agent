@@ -4,6 +4,7 @@ param(
     [string] $RunnerClass = "reactor-performance-native-linux",
     [string] $EvidencePath = "",
     [int] $MinLogicalCpu = 8,
+    [int] $MinPhysicalCpuGroups = 4,
     [double] $MinMemoryGiB = 12,
     [double] $MinFreeDiskGiB = 20,
     [switch] $AllowWslForSmoke
@@ -79,7 +80,8 @@ foreach ($topology in Get-ChildItem -Path "/sys/devices/system/cpu/cpu*/topology
         -File -ErrorAction SilentlyContinue) {
     [void] $physicalGroups.Add((Get-Content -Raw -LiteralPath $topology.FullName).Trim())
 }
-Add-Check "physical_cpu_groups" ($physicalGroups.Count -ge 4) "$($physicalGroups.Count)" ">= 4"
+Add-Check "physical_cpu_groups" ($physicalGroups.Count -ge $MinPhysicalCpuGroups) `
+        "$($physicalGroups.Count)" ">= $MinPhysicalCpuGroups"
 
 $configuredCpuRoles = $null
 $cpuRoleError = ""

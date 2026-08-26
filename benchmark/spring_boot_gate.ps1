@@ -36,6 +36,7 @@ param(
     [switch] $PairedWarmupRatioGate,
     [switch] $UseJavaAgentBootstrap,
     [switch] $AllowRunnerCollectorSiblingSharing,
+    [switch] $AllowSharedInfrastructureCpuGroup,
     [double] $MinUsefulRpsDeltaPercent = -2.0,
     [double] $MaxP99RegressionPercent = 10.0,
     [double] $MaxMemoryRegressionMiB = 3.0,
@@ -102,6 +103,9 @@ if ($MaxAbsoluteNon2xxPercent -le 0.0 -or $MaxAbsoluteNon2xxPercent -gt 0.05) {
 }
 if ($DevelopmentQuickMode -and -not $SkipHostPreflight) {
     throw "DevelopmentQuickMode requires SkipHostPreflight and cannot produce release evidence."
+}
+if ($AllowSharedInfrastructureCpuGroup -and -not $AutoSelectCpuRoles) {
+    throw "AllowSharedInfrastructureCpuGroup requires automatic CPU-role selection."
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -1034,7 +1038,8 @@ Ensure-Network
 New-Item -ItemType Directory -Force -Path $Results | Out-Null
 $selectedRoles = $null
 if ($AutoSelectCpuRoles) {
-    $selectedRoles = Select-ReactorBenchmarkCpuRoles
+    $selectedRoles = Select-ReactorBenchmarkCpuRoles `
+            -AllowSharedInfrastructureGroup:$AllowSharedInfrastructureCpuGroup
     $SlotACpuSet = $selectedRoles.application
     $SlotBCpuSet = $selectedRoles.application
     $RunnerCpuSet = $selectedRoles.runner
@@ -1067,7 +1072,8 @@ Assert-ReactorBenchmarkCpuIsolation -RunnerImage $RunnerImage `
         -CollectorCpuSet $CollectorCpuSet `
         -OrchestratorCpuSet $OrchestratorCpuSet `
         -AllowSharedApplicationSlots:$SequentialVariants `
-        -AllowRunnerCollectorSiblingSharing:$AllowRunnerCollectorSiblingSharing
+        -AllowRunnerCollectorSiblingSharing:$AllowRunnerCollectorSiblingSharing `
+        -AllowSharedInfrastructureGroup:$AllowSharedInfrastructureCpuGroup
 Start-Collector
 Start-LoadRunner
 $records = [Collections.Generic.List[object]]::new()
@@ -1537,6 +1543,7 @@ ConvertTo-Json -InputObject @($invalidPairAttemptDetails) -Depth 8 |
         collector = $CollectorCpuSet
         orchestrator = $OrchestratorCpuSet
         runner_collector_sibling_sharing = [bool] $AllowRunnerCollectorSiblingSharing
+        infrastructure_physical_group_sharing = [bool] $AllowSharedInfrastructureCpuGroup
         auto_selected = [bool] $AutoSelectCpuRoles
         selection_source = if ($null -ne $selectedRoles) { $selectedRoles.source } else { "parameters" }
         application_group = if ($null -ne $selectedRoles) { $selectedRoles.application_group } else { "" }

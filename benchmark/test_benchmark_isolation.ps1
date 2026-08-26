@@ -1,5 +1,11 @@
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "benchmark_isolation.ps1")
+$isolationSource = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot "benchmark_isolation.ps1")
+
+if ($isolationSource -notmatch 'automatic-idle-sample-shared-infrastructure' -or
+        $isolationSource -notmatch 'infrastructure-physical-group-sharing=allowed') {
+    throw "Managed two-core runners must keep the application isolated from one bounded shared infrastructure group."
+}
 
 function Assert-Equal([object] $Expected, [object] $Actual, [string] $Message) {
     if ($Expected -ne $Actual) {

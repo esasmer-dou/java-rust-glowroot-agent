@@ -99,6 +99,7 @@ jobs:
           ./benchmark/performance_runner_preflight.ps1 `
             -RunnerClass $env:REACTOR_PERFORMANCE_RUNNER_CLASS `
             -MinLogicalCpu 4 `
+            -MinPhysicalCpuGroups 2 `
             -EvidencePath benchmark/results/runner-preflight/spring-boot-agent.json
 
       - name: Run full paired Spring Boot matrix
@@ -133,6 +134,7 @@ jobs:
             -MaxAbsoluteNon2xxPercent 0.05 `
             -HostStabilizationSeconds 30 `
             -AutoSelectCpuRoles `
+            -AllowSharedInfrastructureCpuGroup `
             -FailOnGate
 
       - name: Upload production evidence
@@ -184,6 +186,7 @@ jobs:
           ./benchmark/performance_runner_preflight.ps1 `
             -RunnerClass $env:REACTOR_PERFORMANCE_RUNNER_CLASS `
             -MinLogicalCpu 4 `
+            -MinPhysicalCpuGroups 2 `
             -EvidencePath benchmark/results/runner-preflight/rust-java-rest-agent.json
 
       - name: Run full paired Rust-Java REST matrix
@@ -224,6 +227,7 @@ jobs:
             -AllowedThreadDelta 1 `
             -HostStabilizationSeconds 30 `
             -AutoSelectCpuRoles `
+            -AllowSharedInfrastructureCpuGroup `
             -FailOnGate
 
       - name: Download content-identical REST performance evidence
