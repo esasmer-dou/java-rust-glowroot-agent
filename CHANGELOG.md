@@ -4,6 +4,32 @@ All notable changes to this project are recorded here.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-26
+
+### Fixed
+
+- Rotate the retained collector HTTP/2 connection after 15 minutes, before Glowroot Central's
+  20-minute maximum connection age.
+- Run a connection readiness preflight before draining aggregate counters.
+- Keep one bounded aggregate batch until Central acknowledges it. A connection close now performs
+  reconnect, init, and a byte-identical retry instead of losing the current transaction interval.
+- Preserve a pending aggregate after retry exhaustion while newer traffic remains in preallocated
+  counters. This avoids both silent data loss and an unbounded retry queue.
+
+### Added
+
+- Export proactive reconnect, recovered retry, deferred interval, and pending aggregate transaction
+  counters through diagnostics, Prometheus, and Glowroot gauges.
+- Add a deterministic HTTP/2 test that closes the first aggregate stream before acknowledgement and
+  verifies the exact payload is delivered on the replacement connection without increasing the
+  dropped transaction counter.
+
+### Compatibility
+
+- Glowroot native ABI remains `6`. Use agent `0.5.3` with its packaged DLL/SO or coordinated
+  Rust-Java REST `4.6.2`.
+- Linux x64 remains compatible with `glibc 2.17` and newer.
+
 ## [0.5.2] - 2026-08-26
 
 ### Added
@@ -334,7 +360,8 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.4.1...v0.5.0
