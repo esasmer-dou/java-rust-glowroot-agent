@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("reactor-performance-native-linux", "reactor-wsl-smoke")]
+    [ValidateSet("github-hosted-linux", "reactor-performance-native-linux", "reactor-wsl-smoke")]
     [string] $RunnerClass = "reactor-performance-native-linux",
     [string] $EvidencePath = "",
     [int] $MinLogicalCpu = 8,
@@ -19,6 +19,8 @@ if (-not $IsLinux) {
 if ($RunnerClass -eq "reactor-performance-native-linux" -and $AllowWslForSmoke) {
     throw "A production runner cannot enable AllowWslForSmoke."
 }
+
+$isGitHubHosted = $RunnerClass -eq "github-hosted-linux"
 
 $checks = [Collections.Generic.List[object]]::new()
 function Add-Check([string] $Name, [bool] $Passed, [string] $Observed, [string] $Required) {
@@ -47,6 +49,13 @@ if (Get-Command systemd-detect-virt -ErrorAction SilentlyContinue) {
 }
 $isContainerized = $containerType -ne "none" -and $containerType -ne "wsl"
 Add-Check "host_not_containerized" (-not $isContainerized) $containerType "none or WSL smoke classification"
+if ($isGitHubHosted) {
+    $runnerEnvironment = "$env:RUNNER_ENVIRONMENT"
+    Add-Check "github_hosted_environment" `
+        ($runnerEnvironment -eq "github-hosted" -and "$env:GITHUB_ACTIONS" -eq "true") `
+        "RUNNER_ENVIRONMENT=$runnerEnvironment GITHUB_ACTIONS=$env:GITHUB_ACTIONS" `
+        "GitHub Actions hosted Linux VM"
+}
 
 $memInfo = Get-Content -LiteralPath "/proc/meminfo"
 $memTotalLine = $memInfo | Where-Object { $_ -match '^MemTotal:\s+([0-9]+)\s+kB$' } |
@@ -201,6 +210,7 @@ $result = [ordered]@{
     schema = 1
     passed = $failedChecks.Count -eq 0
     runner_class = $RunnerClass
+    runner_environment = "$env:RUNNER_ENVIRONMENT"
     runner_name = "$env:RUNNER_NAME"
     runner_group = "$env:RUNNER_GROUP"
     repository = "$env:GITHUB_REPOSITORY"
@@ -217,6 +227,8 @@ $result = [ordered]@{
     } else {
         "unknown"
     }
+    image_os = "$env:ImageOS"
+    image_version = "$env:ImageVersion"
     logical_cpu = $logicalCpu
     process_available_cpu = $processAvailableCpu
     process_cpu_set = $processCpuSet

@@ -60,7 +60,7 @@ jobs:
             -Commit $releaseCommit `
             -GitHubOutputPath $env:GITHUB_OUTPUT
 
-      - name: Verify dedicated Production Gate runners
+      - name: Verify managed Linux Production Gate runners
         shell: bash
         run: |
           RUN_ID="${{ steps.production_gate.outputs.production_gate_run_id }}"
@@ -71,11 +71,9 @@ jobs:
             ($gates | length) == 2 and
             all($gates[];
               .conclusion == "success" and
-              (.labels | index("self-hosted")) != null and
-              (.labels | index("linux")) != null and
-              (.labels | index("x64")) != null and
-              (.labels | index("reactor-performance-native-linux")) != null and
-              (.runner_name | length) > 0)
+              (.labels | index("ubuntu-24.04")) != null and
+              (.labels | index("self-hosted")) == null and
+              (.runner_name | startswith("GitHub Actions ")))
           ' "$JOBS_JSON" >/dev/null
 
       - name: Set up Semeru OpenJ9 21 and Maven publishing
@@ -163,12 +161,13 @@ jobs:
 
           for RUNNER_EVIDENCE in "$SPRING_RUNNER" "$REST_RUNNER"; do
             jq -e '.schema == 1 and .passed == true and
-              .runner_class == "reactor-performance-native-linux" and
+              .runner_class == "github-hosted-linux" and
+              .runner_environment == "github-hosted" and
+              (.image_os | startswith("ubuntu")) and
               .wsl == false and .containerized == false and
-              .logical_cpu >= 8 and .physical_cpu_groups >= 4 and
-              .host_memory_gib >= 12 and .docker_cpu >= 8 and .docker_memory_gib >= 12 and
-              (.cpu_roles.orchestrator | type == "string" and length > 0) and
-              .runner_listener_count == 1 and all(.checks[]; .passed == true)' \
+              .logical_cpu >= 4 and .physical_cpu_groups >= 4 and
+              .host_memory_gib >= 12 and .docker_cpu >= 4 and .docker_memory_gib >= 12 and
+              all(.checks[]; .passed == true)' \
               "$RUNNER_EVIDENCE" >/dev/null
           done
 
@@ -190,13 +189,23 @@ jobs:
             .warmup_stability.fixed_rounds == 6 and
             .warmup_stability.interleaved_rounds == 6 and
             .cpu_roles.auto_selected == true and
-            .cpu_roles.selection_source == "environment" and
+            .cpu_roles.selection_source == "automatic-idle-sample" and
+            (.cpu_roles.application_slot_a | type == "string" and length > 0) and
+            .cpu_roles.application_slot_b == .cpu_roles.application_slot_a and
+            .cpu_roles.application_execution_slot_a == .cpu_roles.application_slot_a and
+            .cpu_roles.application_execution_slot_b == .cpu_roles.application_slot_a and
+            .cpu_roles.single_cpu_logical_pin == false and
+            (.cpu_roles.runner | type == "string" and length > 0) and
+            (.cpu_roles.collector | type == "string" and length > 0) and
             (.cpu_roles.orchestrator | type == "string" and length > 0) and
+            .cpu_roles.variant_execution == "sequential_shared_slot" and
+            .cpu_roles.runner_collector_sibling_sharing == false and
             .warmup_stability.maximum_confirmation_rounds == 14 and
             .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
             .warmup_stability.observed_maximum_confirmation_rounds <= 14 and
             .warmup_stability.observed_maximum_total_rounds <= 20 and
             .warmup_stability.variant_interleaved == false and
+            .warmup_stability.gate_mode == "absolute_rps_per_variant" and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
             .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 5 and
@@ -236,13 +245,23 @@ jobs:
             .warmup_stability.fixed_rounds == 6 and
             .warmup_stability.interleaved_rounds == 6 and
             .cpu_roles.auto_selected == true and
-            .cpu_roles.selection_source == "environment" and
+            .cpu_roles.selection_source == "automatic-idle-sample" and
+            (.cpu_roles.application_slot_a | type == "string" and length > 0) and
+            .cpu_roles.application_slot_b == .cpu_roles.application_slot_a and
+            .cpu_roles.application_execution_slot_a == .cpu_roles.application_slot_a and
+            .cpu_roles.application_execution_slot_b == .cpu_roles.application_slot_a and
+            .cpu_roles.single_cpu_logical_pin == false and
+            (.cpu_roles.runner | type == "string" and length > 0) and
+            (.cpu_roles.collector | type == "string" and length > 0) and
             (.cpu_roles.orchestrator | type == "string" and length > 0) and
+            .cpu_roles.variant_execution == "sequential_shared_slot" and
+            .cpu_roles.runner_collector_sibling_sharing == false and
             .warmup_stability.maximum_confirmation_rounds == 14 and
             .warmup_stability.confirmation_scope == "all_endpoints_interleaved_per_variant" and
             .warmup_stability.observed_maximum_confirmation_rounds <= 14 and
             .warmup_stability.observed_maximum_total_rounds <= 20 and
             .warmup_stability.variant_interleaved == false and
+            .warmup_stability.gate_mode == "absolute_rps_per_variant" and
             .warmup_stability.stability_window_rounds == 3 and
             .warmup_stability.maximum_allowed_robust_trend_pct == 3 and
             .warmup_stability.maximum_allowed_borderline_robust_trend_pct == 5 and

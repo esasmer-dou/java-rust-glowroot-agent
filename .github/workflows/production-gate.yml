@@ -22,7 +22,7 @@ permissions:
   actions: read
 
 env:
-  REACTOR_PERFORMANCE_RUNNER_CLASS: reactor-performance-native-linux
+  REACTOR_PERFORMANCE_RUNNER_CLASS: github-hosted-linux
   REACTOR_GATE_QUALIFICATION_DEPTH: ${{ inputs.qualification_depth }}
 
 concurrency:
@@ -73,9 +73,9 @@ jobs:
         run: ./benchmark/non_web_gate.ps1 -SkipAgentBuild
 
   spring-boot-agent:
-    needs: [gate-statistics, rust-java-rest-agent]
-    runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
-    timeout-minutes: 90
+    needs: gate-statistics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - name: Check out source
         uses: actions/checkout@v5
@@ -98,6 +98,7 @@ jobs:
         run: |
           ./benchmark/performance_runner_preflight.ps1 `
             -RunnerClass $env:REACTOR_PERFORMANCE_RUNNER_CLASS `
+            -MinLogicalCpu 4 `
             -EvidencePath benchmark/results/runner-preflight/spring-boot-agent.json
 
       - name: Run full paired Spring Boot matrix
@@ -130,6 +131,7 @@ jobs:
             -MaxNon2xxDeltaPercentagePoints 0 `
             -MaxSaturatedNon2xxDeltaPercentagePoints 0.02 `
             -MaxAbsoluteNon2xxPercent 0.05 `
+            -HostStabilizationSeconds 30 `
             -AutoSelectCpuRoles `
             -FailOnGate
 
@@ -146,8 +148,8 @@ jobs:
 
   rust-java-rest-agent:
     needs: gate-statistics
-    runs-on: [self-hosted, reactor-performance-native-linux, linux, x64]
-    timeout-minutes: 90
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - name: Check out agent source
         uses: actions/checkout@v5
@@ -181,6 +183,7 @@ jobs:
         run: |
           ./benchmark/performance_runner_preflight.ps1 `
             -RunnerClass $env:REACTOR_PERFORMANCE_RUNNER_CLASS `
+            -MinLogicalCpu 4 `
             -EvidencePath benchmark/results/runner-preflight/rust-java-rest-agent.json
 
       - name: Run full paired Rust-Java REST matrix
@@ -219,6 +222,7 @@ jobs:
             -MaxAbsoluteNon2xxPercent 0.05 `
             -MemoryLimit "128m" `
             -AllowedThreadDelta 1 `
+            -HostStabilizationSeconds 30 `
             -AutoSelectCpuRoles `
             -FailOnGate
 

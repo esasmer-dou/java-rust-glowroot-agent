@@ -17,6 +17,14 @@ All notable changes to this project are recorded here.
   Production Gate workflow.
 - Resolve every Spring MVC, WebFlux, and non-web benchmark fixture against the root release version
   and fail CI when a fixture drifts to an older agent artifact.
+- Run each baseline/candidate pair on the same automatically selected CPU group, reverse execution
+  order between pairs, and reject unstable warmup windows without relaxing RSS, p99, RPS, error, or
+  thread limits.
+- Move release performance evidence to pinned GitHub-hosted Linux images. Spring Boot and Rust-Java
+  REST matrices run in parallel after shared correctness checks, reducing wall-clock gate time while
+  keeping each A/B comparison inside one isolated VM.
+- Record the application, load-runner, collector, and orchestration CPU roles in machine-readable
+  evidence. A 30-second quiet-host window rejects noisy runners before evidence collection.
 
 ### Compatibility
 

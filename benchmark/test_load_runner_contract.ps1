@@ -13,6 +13,8 @@ $workflow = Get-Content -Raw -LiteralPath `
         (Join-Path $projectRoot ".github/workflows/production-gate.yml")
 $release = Get-Content -Raw -LiteralPath `
         (Join-Path $projectRoot ".github/workflows/release.yml")
+$runnerPreflight = Get-Content -Raw -LiteralPath `
+        (Join-Path $PSScriptRoot "performance_runner_preflight.ps1")
 
 function Assert-Contains([string] $Text, [string] $Pattern, [string] $Message) {
     if ($Text -notmatch $Pattern) { throw $Message }
@@ -86,6 +88,12 @@ Assert-Contains $gate '\[bool\] \$PinSingleCpuQuotaToOneLogicalCpu = \$false' `
         "Single-logical-CPU execution must remain an explicit diagnostic, not the release default."
 Assert-Contains $gate 'single_cpu_logical_pin = \$PinSingleCpuQuotaToOneLogicalCpu' `
         "Release evidence must record whether the diagnostic logical-CPU pin was enabled."
+Assert-Contains $gate 'variant_execution = if \(\$SequentialVariants\)' `
+        "Release evidence must distinguish sequential and parallel A/B execution."
+Assert-Contains $gate '"parallel_core_swapped_slots"' `
+        "Release evidence must identify the core-swapped parallel A/B contract."
+Assert-Contains $gate 'runner_collector_sibling_sharing = \[bool\] \$AllowRunnerCollectorSiblingSharing' `
+        "Release evidence must record the bounded runner/collector sharing exception."
 Assert-Contains $gate '\[int\] \$MaxInvalidPairAttempts = 2' `
         "The release gate must bound invalid process-pair replacement."
 Assert-Contains $gate 'invalid_pair_policy = "discard_entire_pair_and_restart_both_variants"' `
@@ -148,6 +156,20 @@ if (([regex]::Matches($workflow, '-MaxWarmupRounds 6')).Count -ne 2 -or
         ([regex]::Matches($workflow, '-HeavyConcurrencyLevels "64,128"')).Count -ne 2) {
     throw "Spring and Rust-Java jobs must use the same bounded adaptive warmup contract."
 }
+if (([regex]::Matches($workflow, '-AutoSelectCpuRoles')).Count -ne 3 -or
+        ([regex]::Matches($workflow, '-MinLogicalCpu 4')).Count -ne 2 -or
+        ([regex]::Matches($workflow, '-HostStabilizationSeconds 30')).Count -ne 2) {
+    throw "Spring and Rust-Java release matrices must use quiet-host automatic CPU isolation."
+}
+Assert-Contains $workflow 'REACTOR_PERFORMANCE_RUNNER_CLASS: github-hosted-linux' `
+        "The release gate must identify its managed Linux runner class."
+if (([regex]::Matches($workflow, 'runs-on: ubuntu-24\.04')).Count -ne 2) {
+    throw "Spring and Rust-Java performance jobs must use pinned managed Linux images."
+}
+Assert-Contains $runnerPreflight 'ValidateSet\("github-hosted-linux",' `
+        "Runner preflight must recognize the managed Linux release class."
+Assert-Contains $runnerPreflight 'github_hosted_environment' `
+        "Runner preflight must fail closed outside GitHub-hosted Actions."
 Assert-Contains $workflow 'REACTOR_GATE_QUALIFICATION_DEPTH' `
         "Workflow must expose release and extended gate depths."
 Assert-Contains $workflow '-ServletContainer tomcat' `
@@ -185,14 +207,20 @@ if (([regex]::Matches($workflow, '-EndpointClasses \$endpointClasses')).Count -n
         ([regex]::Matches($workflow, '"small-json,raw-json"')).Count -ne 2) {
     throw "Release depth must measure stable small/raw paths while extended depth retains heavy JSON."
 }
-Assert-Contains $workflow 'spring-boot-agent:\s+needs: \[gate-statistics, rust-java-rest-agent\]' `
-        "The production workflow must stop before Spring when the Rust-Java gate fails."
+Assert-Contains $workflow 'spring-boot-agent:\s+needs: gate-statistics' `
+        "Spring and Rust-Java matrices must start independently after contract validation."
 if (([regex]::Matches($release, '\.pair_repeats >= 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.minimum_pair_repeats == 3')).Count -ne 2 -or
         ([regex]::Matches($release, '\.maximum_pair_repeats == 6')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "strict_early_pass"')).Count -ne 2 -or
         ([regex]::Matches($release, '\.pair_decision == "maximum_pairs"')).Count -ne 2 -or
-        ([regex]::Matches($release, '\.cpu_roles\.orchestrator')).Count -ne 3 -or
+        ([regex]::Matches($release, '\.cpu_roles\.orchestrator')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.cpu_roles\.variant_execution == "sequential_shared_slot"')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.cpu_roles\.runner_collector_sibling_sharing == false')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.cpu_roles\.single_cpu_logical_pin == false')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.cpu_roles\.application_slot_b == \.cpu_roles\.application_slot_a')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.warmup_stability\.gate_mode == "absolute_rps_per_variant"')).Count -ne 2 -or
+        ([regex]::Matches($release, '\.warmup_stability\.variant_interleaved == false')).Count -ne 2 -or
         ([regex]::Matches($release, '\.measured_endpoint_classes == \["small-json", "raw-json"\]')).Count -ne 2 -or
         ([regex]::Matches($release, '\.smoked_endpoint_classes \| sort')).Count -ne 2 -or
         ([regex]::Matches($release, '\(\.rows \| length\) == 4')).Count -ne 2 -or

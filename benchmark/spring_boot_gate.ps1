@@ -1517,6 +1517,16 @@ ConvertTo-Json -InputObject @($invalidPairAttemptDetails) -Depth 8 |
     cpu_roles = [ordered]@{
         application = $SlotACpuSet
         application_execution = Get-ApplicationExecutionCpuSet -ReservedCpuSet $SlotACpuSet
+        application_slot_a = $SlotACpuSet
+        application_slot_b = if ($SequentialVariants) { $SlotACpuSet } else { $SlotBCpuSet }
+        application_execution_slot_a = Get-ApplicationExecutionCpuSet -ReservedCpuSet $SlotACpuSet
+        application_execution_slot_b = Get-ApplicationExecutionCpuSet `
+                -ReservedCpuSet $(if ($SequentialVariants) { $SlotACpuSet } else { $SlotBCpuSet })
+        variant_execution = if ($SequentialVariants) {
+            "sequential_shared_slot"
+        } else {
+            "parallel_core_swapped_slots"
+        }
         single_cpu_logical_pin = $PinSingleCpuQuotaToOneLogicalCpu
         application_cpu_limit_mode = if ($PinSingleCpuQuotaToOneLogicalCpu -and $CpuLimit -eq 1.0) {
             "single-logical-cpuset"
@@ -1526,6 +1536,7 @@ ConvertTo-Json -InputObject @($invalidPairAttemptDetails) -Depth 8 |
         runner = $RunnerCpuSet
         collector = $CollectorCpuSet
         orchestrator = $OrchestratorCpuSet
+        runner_collector_sibling_sharing = [bool] $AllowRunnerCollectorSiblingSharing
         auto_selected = [bool] $AutoSelectCpuRoles
         selection_source = if ($null -ne $selectedRoles) { $selectedRoles.source } else { "parameters" }
         application_group = if ($null -ne $selectedRoles) { $selectedRoles.application_group } else { "" }
