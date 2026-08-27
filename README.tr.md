@@ -638,13 +638,35 @@ yoktur.
 Uygulamayı `micro` ile başlatın. Daha fazla bilgi gerektiğinde yalnız bir pod'un profilini yükseltin.
 İnceleme bitince tekrar `micro` profiline dönün.
 
-| Profil | Sürekli process ölçümlerine ve varsa HTTP/Dubbo/Redis toplamlarına eklenen veri | Uygun kullanım |
-| --- | --- | --- |
-| `micro` | Ek veri yoktur | Normal production trafiği ve en düşük sabit bellek kullanımı |
-| `jvm` | Heap, non-heap, memory pool, GC sayısı ve GC süresi | Kısa JVM bellek veya GC incelemesi |
-| `sql` | Açıkça işaretlenen sınırlı SQL süreleri ve ayrıntılı hata stack bilgisi | JVM ölçümleri olmadan veritabanı gecikmesi incelemesi |
-| `full` | `jvm`, `sql` ve hata stack bilgisi | Tek pod üzerinde kısa olay incelemesi |
-| `diagnostic` | `full` ve iki komutluk tanılama kuyruğu | Yetkili thread dump, heap histogram veya heap dump işlemi |
+### Collector UI görünürlüğü
+
+HTTP adaptörü açıksa endpoint toplamları bütün profillerde eksiksizdir. Sampling yalnız ayrıntılı
+trace seçimini etkiler; çağrı sayısını, throughput değerini veya yüzdelikleri azaltmaz.
+
+| Profil | Transactions | Process | JVM/GC | SQL ve hata stack | Canlı JVM |
+| --- | --- | --- | --- | --- | --- |
+| `micro` | Average, Percentile, Throughput, Errors | RSS, thread, exporter sağlığı | Yok | Yok | Yok |
+| `jvm` | `micro` ile aynı | `micro` ile aynı | Heap, non-heap, pool, GC | Yok | Yok |
+| `sql` | `micro` ile aynı | `micro` ile aynı | Yok | Kayıtlı SQL ve sınırlı stack | Yok |
+| `full` | `micro` ile aynı | `micro` ile aynı | Heap, non-heap, pool, GC | Kayıtlı SQL ve sınırlı stack | Yok |
+| `diagnostic` | Tüm toplamlar; controller, Dubbo ve thread ayrıntısı | `micro` ile aynı | Heap, non-heap, pool, GC | Kayıtlı SQL ve sınırlı stack | Dump, MBean ve JVM komutları |
+
+### Trace koşulları
+
+| Collector UI alanı | Gerekli ayar |
+| --- | --- |
+| Endpoint toplamları ve HTTP hata sayıları | Her profil; `reactor.glowroot.trace.capacity` değerinden bağımsız |
+| Temel HTTP trace | `reactor.glowroot.trace.capacity > 0`; seçim sample rate, yavaşlık veya hata ile yapılır |
+| Ayrıntılı hata stack'i | `sql`, `full` veya `diagnostic`; ayrıca `reactor.glowroot.error.trace.capacity > 0` |
+| Spring controller, Java Dubbo ve request thread süreleri | `diagnostic`; ayrıntılı trace için `reactor.glowroot.trace.capacity > 0` |
+| Thread dump, heap histogram/dump, Force GC, MBean ve system properties | Yalnız `diagnostic` |
+
+Web sunucusu olmayan uygulamada **Web Transactions** ekranı boş kalır. Process ölçümleri ve seçilen
+JVM/SQL verileri yine gönderilir. Request/response body, header, query değeri ve Dubbo payload'ı hiçbir
+profilde toplanmaz.
+
+`reactor.glowroot.trace.capacity` ve `reactor.glowroot.http.sample-rate` startup ayarlarıdır. Profil
+değişimi bu iki kapasiteyi yeniden boyutlandırmaz; farklı değer için pod'u yeniden başlatın.
 
 `sql` profili bilinçli olarak açık kullanım ister. Agent `DataSource` veya JDBC nesnelerini proxy ile
 sarmaz. Driver sınıflarına bytecode weaving uygulamaz. Statement tanımını bir kez oluşturun ve tekrar

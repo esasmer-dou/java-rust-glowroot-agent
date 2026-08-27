@@ -636,13 +636,35 @@ Invalid bounds stop startup. There is no property that enlarges the agent-owned 
 Start with `micro`. Raise one pod only when you need more evidence. Return it to `micro` after the
 investigation.
 
-| Profile | Adds to always-on process gauges and available HTTP/Dubbo/Redis aggregates | Good fit |
-| --- | --- | --- |
-| `micro` | Nothing | Normal production traffic and the lowest steady memory |
-| `jvm` | Heap, non-heap, memory-pool, GC count, and GC time gauges | Short JVM memory or GC investigation |
-| `sql` | Explicit bounded SQL aggregates and detailed error stacks | Database latency investigation without JVM gauges |
-| `full` | `jvm` plus `sql` and error stacks | Short incident window on one pod |
-| `diagnostic` | `full` plus a two-command queue for dump operations | One authorized thread dump, heap histogram, or heap dump |
+### Collector UI visibility
+
+When the HTTP adapter is active, endpoint aggregates remain exact in every profile. Sampling affects
+only detailed trace selection; it does not reduce counts, throughput, or percentiles.
+
+| Profile | Transactions | Process | JVM/GC | SQL and error stack | Live JVM |
+| --- | --- | --- | --- | --- | --- |
+| `micro` | Average, Percentile, Throughput, Errors | RSS, threads, exporter health | None | None | None |
+| `jvm` | Same as `micro` | Same as `micro` | Heap, non-heap, pools, GC | None | None |
+| `sql` | Same as `micro` | Same as `micro` | None | Registered SQL and bounded stacks | None |
+| `full` | Same as `micro` | Same as `micro` | Heap, non-heap, pools, GC | Registered SQL and bounded stacks | None |
+| `diagnostic` | All aggregates; controller, Dubbo, and thread detail | Same as `micro` | Heap, non-heap, pools, GC | Registered SQL and bounded stacks | Dumps, MBeans, and JVM commands |
+
+### Trace conditions
+
+| Collector UI area | Required configuration |
+| --- | --- |
+| Endpoint aggregates and HTTP error counts | Every profile; independent of `reactor.glowroot.trace.capacity` |
+| Basic HTTP trace | `reactor.glowroot.trace.capacity > 0`; selected by sampling, slowness, or failure |
+| Detailed error stack | `sql`, `full`, or `diagnostic`; also requires `reactor.glowroot.error.trace.capacity > 0` |
+| Spring controller, Java Dubbo, and request-thread timing | `diagnostic`; detailed traces require `reactor.glowroot.trace.capacity > 0` |
+| Thread dump, heap histogram/dump, Force GC, MBeans, and system properties | `diagnostic` only |
+
+For a non-web application, the **Web Transactions** view remains empty. Process gauges and selected
+JVM/SQL evidence are still exported. Request/response bodies, headers, query values, and Dubbo
+payloads are never collected by any profile.
+
+`reactor.glowroot.trace.capacity` and `reactor.glowroot.http.sample-rate` are startup settings. A
+profile switch does not resize either capacity; restart the pod to use different values.
 
 `sql` is explicit by design. The agent does not proxy `DataSource`, wrap JDBC objects, or weave
 drivers. Create a statement descriptor once and reuse it. The timed call does not allocate an
