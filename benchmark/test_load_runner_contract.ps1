@@ -138,6 +138,15 @@ Assert-Contains $protocolGate '-AllowSharedInfrastructureGroup:\$AllowSharedInfr
         "The protocol gate must preserve managed-runner application isolation."
 Assert-Contains $protocolGate 'function Invoke-RunnerRequestBurst' `
         "Protocol smoke traffic must use the pinned curl runner through a deterministic request burst."
+Assert-Contains $protocolGate 'startup-failure-\$\{Mode\}\.log' `
+        "A failed protocol fixture startup must retain bounded container diagnostics."
+Assert-Contains $protocolGate 'function Assert-JavaAgentJarManifest' `
+        "The protocol fixture must validate the Java agent entry point before building its image."
+Assert-Contains $protocolGate 'java-rust-glowroot-agent-\$\{agentVersion\}\.jar' `
+        "The protocol fixture must select the unclassified Java agent artifact deterministically."
+if ($protocolGate -match 'java-rust-glowroot-agent-\*\.jar') {
+    throw "The protocol fixture must not select a sources or javadoc JAR by wildcard timestamp."
+}
 if ($protocolGate -match 'load-probe') {
     throw "The protocol gate must not invoke an executable that is absent from curlimages/curl."
 }

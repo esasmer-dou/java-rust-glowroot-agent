@@ -32,6 +32,9 @@ All notable changes to this project are recorded here.
   and CI now rejects that invalid runner contract.
 - Rebuild the protocol fixture images on fresh runners when content-identical REST performance
   evidence is reused. The non-reuse path still avoids the redundant build.
+- Select the unclassified Java agent JAR by exact project version and verify its `Premain-Class`
+  before building the protocol fixture. Sources and Javadoc artifacts can no longer be selected by
+  filesystem timestamp.
 
 ### Compatibility
 

@@ -232,6 +232,28 @@ function Find-SingleArtifact {
     return $matches[0].FullName
 }
 
+function Assert-JavaAgentJarManifest {
+    param([string] $Path)
+    $archive = [IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        $entry = $archive.GetEntry("META-INF/MANIFEST.MF")
+        if ($null -eq $entry) {
+            throw "Java agent artifact has no manifest: $Path"
+        }
+        $reader = [IO.StreamReader]::new($entry.Open())
+        try {
+            $manifest = $reader.ReadToEnd()
+        } finally {
+            $reader.Dispose()
+        }
+        if ($manifest -notmatch '(?m)^Premain-Class: com\.reactor\.glowroot\.agent\.RustGlowrootAgent\r?$') {
+            throw "Java agent artifact has no supported Premain-Class: $Path"
+        }
+    } finally {
+        $archive.Dispose()
+    }
+}
+
 function Prepare-BuildContext {
     $fullContext = [IO.Path]::GetFullPath($Context)
     $fullScriptDir = [IO.Path]::GetFullPath($ScriptDir) + [IO.Path]::DirectorySeparatorChar
@@ -244,8 +266,14 @@ function Prepare-BuildContext {
     New-Item -ItemType Directory -Force -Path $fullContext | Out-Null
     $frameworkJar = Find-SingleArtifact (Join-Path $FrameworkRoot "target") "*-core-runtime.jar"
     $codegenJar = Find-SingleArtifact (Join-Path $FrameworkRoot "target") "*-codegen.jar"
-    $agentJar = Find-SingleArtifact (Join-Path $ProjectRoot "agent-bootstrap\target") `
-            "java-rust-glowroot-agent-*.jar"
+    [xml]$pom = Get-Content -Raw -LiteralPath (Join-Path $ProjectRoot "pom.xml")
+    $agentVersion = "$($pom.project.version)".Trim()
+    $agentJar = Join-Path $ProjectRoot `
+            "agent-bootstrap\target\java-rust-glowroot-agent-${agentVersion}.jar"
+    if (-not (Test-Path -LiteralPath $agentJar)) {
+        throw "Unclassified Java agent artifact not found: $agentJar"
+    }
+    Assert-JavaAgentJarManifest -Path $agentJar
     Copy-Item -LiteralPath $frameworkJar -Destination (Join-Path $fullContext "framework.jar")
     Copy-Item -LiteralPath $codegenJar -Destination (Join-Path $fullContext "codegen.jar")
     Copy-Item -LiteralPath $agentJar -Destination (Join-Path $fullContext "agent.jar")
@@ -323,7 +351,23 @@ function Start-AgentApp {
     }
     $args += $AppImage
     Invoke-Checked docker $args $ProjectRoot | Out-Null
-    Wait-Http "http://${AppContainer}:8080/health"
+    try {
+        Wait-Http "http://${AppContainer}:8080/health"
+    } catch {
+        $state = (& docker inspect --format "{{json .State}}" $AppContainer 2>&1) -join "`n"
+        $logLines = @(& docker logs $AppContainer 2>&1)
+        $boundedLogs = @($logLines | Select-Object -Last 200)
+        $diagnostic = @(
+            "mode=$Mode"
+            "state=$state"
+            "logs:"
+            $boundedLogs
+        ) -join "`n"
+        $diagnostic | Set-Content `
+                -LiteralPath (Join-Path $ProtocolDir "startup-failure-${Mode}.log") `
+                -Encoding utf8
+        throw "Application startup failed in mode ${Mode}:`n$diagnostic"
+    }
 }
 
 function Invoke-ProtocolGate {
