@@ -14,6 +14,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.nio.charset.StandardCharsets;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryUsage;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -65,6 +69,20 @@ final class BenchmarkController {
     ResponseEntity<Void> fullGc() {
         System.gc();
         return ResponseEntity.noContent().build();
+    }
+
+    // Benchmark-only attribution, sampled after load; never part of the agent hot path.
+    @GetMapping(path = "/internal/benchmark/memory", produces = MediaType.APPLICATION_JSON_VALUE)
+    Map<String, Object> memory() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("uptime_ms", ManagementFactory.getRuntimeMXBean().getUptime());
+        result.put("loaded_classes", ManagementFactory.getClassLoadingMXBean().getLoadedClassCount());
+        result.put("threads", ManagementFactory.getThreadMXBean().getThreadCount());
+        for (var pool : ManagementFactory.getMemoryPoolMXBeans()) {
+            MemoryUsage usage = pool.getUsage();
+            result.put(pool.getName(), Map.of("used", usage.getUsed(), "committed", usage.getCommitted()));
+        }
+        return result;
     }
 
     @GetMapping(path = "/internal/benchmark/telemetry-adapter", produces = MediaType.APPLICATION_JSON_VALUE)

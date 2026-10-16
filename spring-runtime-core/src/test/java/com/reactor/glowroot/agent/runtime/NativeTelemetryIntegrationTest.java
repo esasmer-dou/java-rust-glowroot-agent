@@ -107,11 +107,11 @@ class NativeTelemetryIntegrationTest {
                 }
 
                 assertTrue(telemetry.submitDiagnostic("thread-dump", threadDump) > 0L);
-                awaitDiagnostic(threadDump);
+                awaitDiagnostic(telemetry, threadDump);
                 assertTrue(Files.readString(threadDump).contains(" Id="));
 
                 assertTrue(telemetry.submitDiagnostic("heap-histogram", heapHistogram) > 0L);
-                awaitDiagnostic(heapHistogram);
+                awaitDiagnostic(telemetry, heapHistogram);
                 String histogram = Files.readString(heapHistogram);
                 assertTrue(histogram.contains("class name"));
                 assertTrue(histogram.contains("java.lang.String"));
@@ -199,11 +199,17 @@ class NativeTelemetryIntegrationTest {
         }
     }
 
-    private static void awaitDiagnostic(Path path) throws Exception {
+    private static void awaitDiagnostic(NativeTelemetry telemetry, Path path) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-        while (!Files.isRegularFile(path) && System.nanoTime() < deadline) {
+        // Publishing the file precedes releasing the native diagnostic guard and temp link.
+        // A profile downgrade or directory deletion must wait for both boundaries.
+        while ((!Files.isRegularFile(path)
+                || !telemetry.diagnosticsJson().contains("\"diagnostic_in_progress\":false"))
+                && System.nanoTime() < deadline) {
             Thread.sleep(20L);
         }
+        assertTrue(telemetry.diagnosticsJson().contains("\"diagnostic_in_progress\":false"),
+                "Native diagnostic did not release its execution guard");
         assertTrue(Files.isRegularFile(path), "Native diagnostic did not publish " + path);
         assertTrue(Files.size(path) > 0L, "Native diagnostic was empty: " + path);
     }

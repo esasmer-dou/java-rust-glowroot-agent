@@ -832,6 +832,23 @@ function Prepare-SteadyMemoryMeasurement([string] $Name) {
     Start-Sleep -Seconds 5
 }
 
+function Save-SteadyMemoryEvidence([string] $Name, [int] $Pair, [string] $Variant) {
+    $prefix = Join-Path $Results "memory-$Pair-$Variant"
+    foreach ($file in @("smaps", "smaps_rollup", "status", "stat")) {
+        $output = & docker exec $Name cat "/proc/1/$file" 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Cannot capture /proc/1/$file from $Name." }
+        $output | Set-Content "$prefix-$file.txt" -Encoding utf8
+    }
+    $output = & docker exec $Name sh -c 'cat /sys/fs/cgroup/memory.current; cat /sys/fs/cgroup/memory.stat; cat /proc/uptime; getconf CLK_TCK' 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Cannot capture cgroup attribution from $Name." }
+    $output | Set-Content "$prefix-cgroup.txt" -Encoding utf8
+    if (-not $IsRustJavaRest -and -not $IsWebFlux) {
+        # After RSS sampling: management attribution must not warm the baseline before measurement.
+        Invoke-Curl "http://${Name}:8080/internal/benchmark/memory" |
+                Set-Content "$prefix-jvm.json" -Encoding utf8
+    }
+}
+
 function Invoke-Wrk([string] $Target, [string] $Path, [int] $Concurrency, [int] $Sequence) {
     $resultFile = "/tmp/reactor-wrk-$Sequence.out"
     $exitFile = "/tmp/reactor-wrk-$Sequence.exit"
@@ -1162,7 +1179,9 @@ try {
                     process_rss_mib = $stable.process_rss_mib
                     container_mib = $stable.container_mib
                     threads = $stable.threads
+                    warmup_rounds = $MaxWarmupRounds + $confirmationRoundsUsed
                 })
+                Save-SteadyMemoryEvidence -Name $name -Pair $pair -Variant $variant
                 Remove-Container $name
                 Start-Sleep -Seconds 5
             }
@@ -1271,7 +1290,9 @@ try {
                 process_rss_mib = $stable.process_rss_mib
                 container_mib = $stable.container_mib
                 threads = $stable.threads
+                warmup_rounds = $MaxWarmupRounds + $confirmationRoundsUsed
             })
+            Save-SteadyMemoryEvidence -Name $target -Pair $pair -Variant $variant
         }
         Remove-Container $Baseline
         Remove-Container $Candidate
@@ -1649,7 +1670,7 @@ $lines.Add("Paired runs: $completedPairs valid from $($completedPairs + $invalid
 $lines.Add("Warmup stability: $PreWarmCycles equal pre-warm cycles plus $MaxWarmupRounds measured rounds per endpoint/process, fully interleaved across endpoint classes$(if (-not $SequentialVariants) { ' and baseline/candidate variants' } else { '' }). One persistent wrk container is reused for the whole gate. A failing measured window receives at most $MaxWarmupConfirmationRounds additional full-matrix interleaved confirmation rounds without relaxing any threshold; this run used at most $observedMaxWarmupConfirmationRounds. The final $($MinWarmupRounds * 2)-round window had at most $([math]::Round($observedMaxWarmupRobustTrend,3))% normalized Theil-Sen trend against a $MaxWarmupRobustTrendPercent% primary gate. A trend up to $MaxWarmupBorderlineRobustTrendPercent% is accepted only when previous/recent window medians differ by at most $MaxWarmupBorderlineMedianShiftPercent%. Median absolute deviation must remain within $MaxWarmupMedianAbsoluteDeviationPercent%. Range spread remains diagnostic at $([math]::Round($observedMaxWarmupRangeSpread,3))%; latest first-stable round $observedMaxFirstStableRound.")
 $lines.Add("Warmup gate: **$(if ($warmupGatePassed) { 'PASS' } else { 'FAIL' })**. Unstable warmup blocks quantitative performance claims even in development-only mode.")
     $lines.Add("Collector evidence: **$(if ($collectorEvidencePassed) { 'PASS' } else { 'FAIL' })**$(if ($IsRustJavaRest) { ' (covered by the dedicated embedded REST protocol gate).' } else { '; the candidate exported exact Web aggregates with the normalized /api/small route.' })")
-$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells. The $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin applies only when embedded REST heavy-json is explicitly tested at c256+. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory is sampled after both variants complete the same full workload at equal process age. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
+$lines.Add("RPS, p99, and startup gates use the median of paired deltas. Non-2xx uses a zero-delta gate for normal cells. The $MaxSaturatedNon2xxDeltaPercentagePoints percentage-point non-inferiority margin applies only when embedded REST heavy-json is explicitly tested at c256+. Baseline and candidate aggregate/peak error rates must also stay at or below $MaxAbsoluteNon2xxPercent%. The worst paired delta remains diagnostic. Steady memory follows the full endpoint/concurrency workload, but sequential variants may need different adaptive warmup counts and do not have guaranteed equal process age. Each sample records warmup rounds and retains smaps and cgroup evidence, plus JVM pools for Servlet MVC. Do not attribute the whole process delta to agent allocations. Per-cell RSS/cgroup maxima remain diagnostics; deterministic agent-owned and exact-source resident maxima are enforced by the separate footprint gates.")
 $lines.Add("Steady memory normalization: $(if ($IsRustJavaRest) { 'equal idle window' } else { 'benchmark-only explicit full GC followed by an equal idle window' }). This removes unrelated GC-phase noise without changing any RPS or p99 measurement. Paired delta: process RSS=$([math]::Round($steadyRssDelta,3)) MiB; cgroup=$([math]::Round($steadyContainerDelta,3)) MiB; threads=$([int]$steadyThreadDelta); gate=$(if ($steadyMemoryPassed) { 'PASS' } else { 'FAIL' }).")
 $lines.Add("")
 $lines.Add("| Endpoint | C | RPS off/on med | Paired RPS delta | p99 off/on med ms | Paired p99 delta | RSS paired med/max MiB | cgroup paired med/max MiB | Thread paired med/max | non-2xx off/on agg % | non-2xx off/on peak % | non-2xx delta med/agg/max pp | Host sibling med/max; steal max | Gate |")

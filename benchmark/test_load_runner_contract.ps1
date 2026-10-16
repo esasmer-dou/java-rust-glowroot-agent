@@ -78,6 +78,9 @@ $invalidPairHelpers = Get-FunctionTextUntilMarker `
         "`nfunction Test-EarlyReleaseDecision"
 
 Assert-Contains $gate 'function Start-LoadRunner' "The gate must start one persistent load runner."
+Assert-Contains $gate 'function Save-SteadyMemoryEvidence' "Memory gates must retain attribution evidence."
+Assert-Contains $gate 'warmup_rounds = \$MaxWarmupRounds \+ \$confirmationRoundsUsed' `
+        "Sequential memory evidence must disclose adaptive warmup rounds."
 Assert-Contains $gate 'function Get-ApplicationExecutionCpuSet' `
         "The gate must separate the reserved SMT group from the one-CPU execution set."
 Assert-Contains $gate '\$ContainerCpuSets\[\$Name\] = \$executionCpuSet' `

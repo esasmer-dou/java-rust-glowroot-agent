@@ -9,6 +9,10 @@
 Spring Boot bellek kontrolü geçmediği için bu sürüm henüz GitHub Packages'a yayımlanmadı.
 Aşağıdaki yeni scheduler/provider örnekleri hazırlanan `0.6.0` API'sini anlatır. `0.5.4` bu API'leri içermez.
 
+`0.6.0` ile micro profilinde başlangıç ve kapanış, diagnostic thread MXBean oluşturmaz.
+Bu nesne yalnız diagnostic ölçüm gerektiğinde alınır. Profil küçültülünce agent referansları
+bırakılır ve uygulamanın önceki sayaç ayarları korunur. JVM sınıfları ve JIT kodu zorla silinmez.
+
 Rust-Java REST ve Spring Boot uygulamaları için sınırlı kaynak kullanan Rust tabanlı telemetri
 çözümüdür. HTTP toplamlarını, yavaş ve hatalı istek ayrıntılarını, process/JVM ölçümlerini ve mevcut
 Dubbo/Redis sürelerini Glowroot Central'a gönderir. Spring MVC uygulamalarında HTTP metodu, durum

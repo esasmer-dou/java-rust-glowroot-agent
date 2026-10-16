@@ -17,9 +17,7 @@ public final class HttpThreadStats {
             UNAVAILABLE, UNAVAILABLE, UNAVAILABLE, UNAVAILABLE
     };
 
-    private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
-    private static final com.sun.management.ThreadMXBean ALLOCATIONS =
-            THREADS instanceof com.sun.management.ThreadMXBean bean ? bean : null;
+    private static volatile Counters counters;
     private static final Object LIFECYCLE_LOCK = new Object();
     private static boolean agentEnabledCpuTime;
     private static boolean agentEnabledContention;
@@ -30,35 +28,43 @@ public final class HttpThreadStats {
     /** Enables diagnostic counters only while the diagnostic profile owns them. */
     public static void setEnabled(boolean required) {
         synchronized (LIFECYCLE_LOCK) {
+            Counters active = counters;
+            // A micro start/stop must not initialize JVM management just to disable diagnostics.
+            if (!required && active == null) return;
             try {
+                if (active == null) {
+                    active = diagnosticCounters();
+                }
+                ThreadMXBean threads = active.threads();
+                com.sun.management.ThreadMXBean allocations = active.allocations();
                 if (required) {
-                    if (THREADS.isThreadCpuTimeSupported() && !THREADS.isThreadCpuTimeEnabled()) {
-                        THREADS.setThreadCpuTimeEnabled(true);
+                    if (threads.isThreadCpuTimeSupported() && !threads.isThreadCpuTimeEnabled()) {
+                        threads.setThreadCpuTimeEnabled(true);
                         agentEnabledCpuTime = true;
                     }
-                    if (THREADS.isThreadContentionMonitoringSupported()
-                            && !THREADS.isThreadContentionMonitoringEnabled()) {
-                        THREADS.setThreadContentionMonitoringEnabled(true);
+                    if (threads.isThreadContentionMonitoringSupported()
+                            && !threads.isThreadContentionMonitoringEnabled()) {
+                        threads.setThreadContentionMonitoringEnabled(true);
                         agentEnabledContention = true;
                     }
-                    if (ALLOCATIONS != null
-                            && ALLOCATIONS.isThreadAllocatedMemorySupported()
-                            && !ALLOCATIONS.isThreadAllocatedMemoryEnabled()) {
-                        ALLOCATIONS.setThreadAllocatedMemoryEnabled(true);
+                    if (allocations != null
+                            && allocations.isThreadAllocatedMemorySupported()
+                            && !allocations.isThreadAllocatedMemoryEnabled()) {
+                        allocations.setThreadAllocatedMemoryEnabled(true);
                         agentEnabledAllocatedMemory = true;
                     }
                     return;
                 }
                 if (agentEnabledAllocatedMemory
-                        && ALLOCATIONS != null
-                        && ALLOCATIONS.isThreadAllocatedMemoryEnabled()) {
-                    ALLOCATIONS.setThreadAllocatedMemoryEnabled(false);
+                        && allocations != null
+                        && allocations.isThreadAllocatedMemoryEnabled()) {
+                    allocations.setThreadAllocatedMemoryEnabled(false);
                 }
-                if (agentEnabledContention && THREADS.isThreadContentionMonitoringEnabled()) {
-                    THREADS.setThreadContentionMonitoringEnabled(false);
+                if (agentEnabledContention && threads.isThreadContentionMonitoringEnabled()) {
+                    threads.setThreadContentionMonitoringEnabled(false);
                 }
-                if (agentEnabledCpuTime && THREADS.isThreadCpuTimeEnabled()) {
-                    THREADS.setThreadCpuTimeEnabled(false);
+                if (agentEnabledCpuTime && threads.isThreadCpuTimeEnabled()) {
+                    threads.setThreadCpuTimeEnabled(false);
                 }
             } catch (RuntimeException | LinkageError ignored) {
                 // Unsupported or restricted JVM counters remain unavailable in trace detail.
@@ -67,6 +73,7 @@ public final class HttpThreadStats {
                     agentEnabledCpuTime = false;
                     agentEnabledContention = false;
                     agentEnabledAllocatedMemory = false;
+                    counters = null;
                 }
             }
         }
@@ -76,15 +83,17 @@ public final class HttpThreadStats {
     public static long[] begin(boolean enabled) {
         if (!enabled) return null;
         try {
+            Counters active = diagnosticCounters();
+            ThreadMXBean threads = active.threads();
             long threadId = Thread.currentThread().threadId();
-            ThreadInfo info = THREADS.getThreadInfo(threadId, 0);
+            ThreadInfo info = threads.getThreadInfo(threadId, 0);
             return new long[] {
                     threadId,
-                    THREADS.isThreadCpuTimeSupported() && THREADS.isThreadCpuTimeEnabled()
-                            ? THREADS.getThreadCpuTime(threadId) : UNAVAILABLE,
+                    threads.isThreadCpuTimeSupported() && threads.isThreadCpuTimeEnabled()
+                            ? threads.getThreadCpuTime(threadId) : UNAVAILABLE,
                     info == null ? UNAVAILABLE : info.getBlockedTime(),
                     info == null ? UNAVAILABLE : info.getWaitedTime(),
-                    allocatedBytes(threadId)
+                    allocatedBytes(active.allocations(), threadId)
             };
         } catch (RuntimeException | LinkageError ignored) {
             return null;
@@ -94,15 +103,18 @@ public final class HttpThreadStats {
     /** Converts a start snapshot into deltas, reusing the same array. */
     public static long[] finish(Object value) {
         if (!(value instanceof long[] start) || start.length < 5) return UNAVAILABLE_STATS;
+        Counters active = counters;
+        if (active == null) return UNAVAILABLE_STATS;
         try {
+            ThreadMXBean threads = active.threads();
             long threadId = Thread.currentThread().threadId();
             if (threadId != start[THREAD_ID]) return UNAVAILABLE_STATS;
-            ThreadInfo info = THREADS.getThreadInfo(threadId, 0);
-            long cpu = THREADS.isThreadCpuTimeSupported() && THREADS.isThreadCpuTimeEnabled()
-                    ? THREADS.getThreadCpuTime(threadId) : UNAVAILABLE;
+            ThreadInfo info = threads.getThreadInfo(threadId, 0);
+            long cpu = threads.isThreadCpuTimeSupported() && threads.isThreadCpuTimeEnabled()
+                    ? threads.getThreadCpuTime(threadId) : UNAVAILABLE;
             long blocked = info == null ? UNAVAILABLE : info.getBlockedTime();
             long waited = info == null ? UNAVAILABLE : info.getWaitedTime();
-            long allocated = allocatedBytes(threadId);
+            long allocated = allocatedBytes(active.allocations(), threadId);
             start[0] = delta(cpu, start[CPU_NANOS], 1L);
             start[1] = delta(blocked, start[BLOCKED_MILLIS], 1_000_000L);
             start[2] = delta(waited, start[WAITED_MILLIS], 1_000_000L);
@@ -113,13 +125,30 @@ public final class HttpThreadStats {
         }
     }
 
-    private static long allocatedBytes(long threadId) {
-        if (ALLOCATIONS == null
-                || !ALLOCATIONS.isThreadAllocatedMemorySupported()
-                || !ALLOCATIONS.isThreadAllocatedMemoryEnabled()) {
+    private record Counters(ThreadMXBean threads, com.sun.management.ThreadMXBean allocations) {}
+
+    private static Counters diagnosticCounters() {
+        Counters active = counters;
+        if (active != null) return active;
+        synchronized (LIFECYCLE_LOCK) {
+            active = counters;
+            if (active == null) {
+                ThreadMXBean threads = ManagementFactory.getThreadMXBean();
+                active = new Counters(threads,
+                        threads instanceof com.sun.management.ThreadMXBean bean ? bean : null);
+                counters = active;
+            }
+            return active;
+        }
+    }
+
+    private static long allocatedBytes(com.sun.management.ThreadMXBean allocations, long threadId) {
+        if (allocations == null
+                || !allocations.isThreadAllocatedMemorySupported()
+                || !allocations.isThreadAllocatedMemoryEnabled()) {
             return UNAVAILABLE;
         }
-        return ALLOCATIONS.getThreadAllocatedBytes(threadId);
+        return allocations.getThreadAllocatedBytes(threadId);
     }
 
     private static long delta(long current, long started, long multiplier) {

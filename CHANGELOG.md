@@ -8,6 +8,9 @@ Publication is blocked by the Spring Boot memory qualification. No 0.6.0 tag, Ma
 or stable release has been published. Functional and throughput qualification do not override this gate.
 
 - Add an aggregate-only Tomcat completion path that skips unused diagnostic attributes and sampling work while preserving exact counters, route caching, errors, and diagnostic profile transitions.
+- Initialize diagnostic thread MXBeans only on a diagnostic request/profile, not during a micro start or stop. Release agent-owned bean references after restoring application-owned counter settings on downgrade.
+- Retain smaps, cgroup, JVM pool and warmup-count evidence alongside memory gates. Independent JVM RSS deltas include heap/JIT/allocator variation, not just agent-owned allocations.
+- Wait for the native diagnostic execution guard as well as the output file in lifecycle tests, avoiding a race with profile downgrade and temporary-file cleanup.
 
 - Add bounded `NativeOperation` timing for non-web Scheduler/Background transactions, including explicit CompletionStage completion.
 - Observe Spring scheduler registrations without replacing application executors or losing named scheduler routing.

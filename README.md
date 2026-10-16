@@ -9,6 +9,10 @@
 but is not published to GitHub Packages: its Spring Boot memory qualification has not passed.
 The new scheduler/provider examples below describe the prepared `0.6.0` APIs, not `0.5.4`.
 
+In `0.6.0`, micro start/stop does not initialize diagnostic thread MXBeans. They are acquired
+only when diagnostic measurements are needed. Downgrading releases agent references and restores
+application-owned counter settings; it does not force JVM classes or JIT code to unload.
+
 Bounded, Rust-first telemetry for Rust-Java REST applications and Spring Boot services. It sends
 exact HTTP aggregates, bounded slow/error traces, Spring controller and Dubbo consumer timing,
 process/JVM gauges, and authorized live JVM diagnostics to an existing Glowroot Central collector.
