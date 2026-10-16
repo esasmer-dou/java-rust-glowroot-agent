@@ -27,6 +27,8 @@ public final class HttpRequestTraceState {
         enabled = required;
     }
 
+    public static boolean isEnabled() { return enabled; }
+
     /** Installs the web adapter lookup without making the runtime core depend on Spring. */
     public static void setCurrentLookup(CurrentLookup lookup) {
         currentLookup = lookup;

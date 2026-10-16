@@ -69,13 +69,16 @@ final class RustGlowrootTomcatValve extends ValveBase {
             if (captured instanceof Throwable dispatchedError) error = dispatchedError;
         }
         if (error != null && status < 500) status = 500;
-        int observation = telemetry.observation(status);
-        if (observation == 0) return;
-
         long startedAtNanos = request.getCoyoteRequest().getStartTimeNanos();
         long durationNanos = startedAtNanos <= 0L
                 ? 0L
                 : Math.max(0L, System.nanoTime() - startedAtNanos);
+        if (telemetry.aggregateOnly()) {
+            telemetry.recordAggregate(request.getAttribute(ROUTE_ATTRIBUTE), status, durationNanos, error);
+            return;
+        }
+        int observation = telemetry.observation(status);
+        if (observation == 0) return;
         Object threadStatsStart = request.getAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
         request.removeAttribute(HttpTraceMetadata.THREAD_STATS_ATTRIBUTE);
         Object requestTraceValue = request.getAttribute(HttpTraceMetadata.REQUEST_TRACE_STATE_ATTRIBUTE);

@@ -4,6 +4,8 @@ All notable changes to this project are recorded here.
 
 ## [0.6.0] - 2026-10-16
 
+- Add an aggregate-only Tomcat completion path that skips unused diagnostic attributes and sampling work while preserving exact counters, route caching, errors, and diagnostic profile transitions.
+
 - Add bounded `NativeOperation` timing for non-web Scheduler/Background transactions, including explicit CompletionStage completion.
 - Observe Spring scheduler registrations without replacing application executors or losing named scheduler routing.
 - Add Apache Dubbo provider SPI observation and a separate optional generated/native-Dubbo provider adapter. Both record asynchronous completion and business failures.

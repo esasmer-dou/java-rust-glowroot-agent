@@ -43,6 +43,27 @@ public final class BoundedHttpTelemetry {
         this.routeSlots = new RouteRegistry(config.maxRoutes());
     }
 
+    /** Whether completion needs no diagnostic request metadata in the current profile. */
+    public boolean aggregateOnly() {
+        return !traceSamplingEnabled && !errorDetailsEnabled && !HttpRequestTraceState.isEnabled();
+    }
+
+    /** Exact aggregate-only completion without diagnostic metadata or sampler work. */
+    public void recordAggregate(Object route, int status, long durationNanos, Throwable error) {
+        int normalizedStatus = error != null && status < 500 ? 500 : status;
+        String routeValue = route == null ? UNMATCHED_ROUTE
+                : route instanceof String text ? text : route.toString();
+        try {
+            int slot = routeSlots.getOrRegister(routeValue, telemetry);
+            if (slot == DISABLED_SLOT) return;
+            long duration = Math.max(0L, durationNanos);
+            telemetry.recordHttp(slot, normalizedStatus, duration, 0);
+            if (error != null) telemetry.recordError(slot, duration, error);
+        } catch (RuntimeException ignored) {
+            // Keep the same fail-open boundary as detailed completion.
+        }
+    }
+
     /** Starts exact aggregate observation and marks an optional trace sample. */
     public int observation(int status) {
         // Direct server adapters already own request timing. Avoid ThreadLocal sampler state in the
