@@ -5,9 +5,8 @@
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Release status:** `0.5.4` is the published stable version. Source version `0.6.0` is prepared,
-but is not published to GitHub Packages: its Spring Boot memory qualification has not passed.
-The new scheduler/provider examples below describe the prepared `0.6.0` APIs, not `0.5.4`.
+**Current stable release:** [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).
+Maven packages, matching DLL/SO files, checksums and qualification reports are published together.
 
 In `0.6.0`, micro start/stop does not initialize diagnostic thread MXBeans. They are acquired
 only when diagnostic measurements are needed. Downgrading releases agent references and restores
@@ -44,7 +43,7 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 ## Scheduler And Provider Transactions
 
-**Prepared for 0.6.0, not published:** use the matching agent JAR and native library when released. Glowroot ABI `6` stays compatible; operation
+**Available in 0.6.0:** use the matching agent JAR and native library. Glowroot ABI `6` stays compatible; operation
 API capability `1` is checked separately. An older binary logs a startup warning and keeps
 HTTP telemetry running, but cannot emit the new operation transactions.
 
@@ -594,11 +593,11 @@ For `401 Unauthorized`, check the credential chain before changing the dependenc
 5. Retry with the command below. `-U` clears Maven's cached failed-resolution decision.
 
    ```powershell
-   mvn -U dependency:get "-Dartifact=com.reactor:java-rust-glowroot-spring-boot-starter:0.5.4"
+   mvn -U dependency:get "-Dartifact=com.reactor:java-rust-glowroot-spring-boot-starter:0.6.0"
    ```
 
-The command above checks access to published version `0.5.4`. A `401` indicates missing, unread,
-expired, revoked, or insufficient credentials. Prepared version `0.6.0` is not published yet.
+The command above checks access to published version `0.6.0`. A `401` indicates missing, unread,
+expired, revoked, or insufficient credentials.
 
 ## Kubernetes
 
@@ -1033,8 +1032,13 @@ paired median, request-weighted total, peak error envelope, and the absolute `0.
 together. The normal release matrix uses the zero-delta rule for every cell. The bounded `0.02`
 percentage-point margin applies only when heavy JSON is tested manually at the saturated embedded
 REST c256+ range. One saturated-run delta remains visible without replacing the overall error decision. After both
-variants complete the same full workload, a controlled equal-process-age phase requires
-paired-median process RSS and cgroup deltas at or below `+3 MiB` for `micro`. Both runtimes may add
+variants complete the full endpoint/concurrency workload, the memory phase requires
+paired-median process RSS and cgroup deltas at or below `+3 MiB` for `micro`. Sequential variants
+can require different adaptive warmup counts and process ages. These are not identical allocation
+histories; smaps, cgroup, warmup counts and JVM pools are retained for attribution. This is not a
+hard per-pod or per-sample ceiling. For example, the 0.6.0 Spring gate passed at a `+1.574 MiB`
+steady RSS median, while one steady pair reached `+4.500 MiB`. Full-GC/idle normalization does not
+bound transient memory during load. Do not size a pod with only 3 MiB of spare memory. Both runtimes may add
 one bounded exporter thread. `jvm`, `sql`, `full`, and `diagnostic` are separate temporary-profile
 gates because OpenJ9 management/error classes can create one-time JVM warm state. REST wire
 compatibility, collector-down fail-open, and
@@ -1047,7 +1051,7 @@ runner state, and raw evidence remain excluded from the repository and from ever
 
 ## Compatibility
 
-The `0.6.0` rows describe the prepared source release. The published agent remains `0.5.4`.
+The following versions describe the published `0.6.0` integration.
 
 | Component | Release | Contract |
 | --- | ---: | --- |

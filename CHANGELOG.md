@@ -2,10 +2,12 @@
 
 All notable changes to this project are recorded here.
 
-## [Unreleased] - Planned 0.6.0
+## [0.6.0] - 2026-10-16
 
-Publication is blocked by the Spring Boot memory qualification. No 0.6.0 tag, Maven package,
-or stable release has been published. Functional and throughput qualification do not override this gate.
+Published after exact-commit Production Gate run 38927189449 passed for Spring Boot and REST.
+Micro steady paired medians: Spring RSS +1.574 MiB / cgroup +1.914 MiB; REST RSS +0.317 MiB /
+cgroup +0.008 MiB. This is a median qualification, not a hard per-sample bound: one Spring steady
+pair reached +4.500 MiB. All measured RPS/p99/error cells passed the unchanged acceptance thresholds.
 
 - Add an aggregate-only Tomcat completion path that skips unused diagnostic attributes and sampling work while preserving exact counters, route caching, errors, and diagnostic profile transitions.
 - Initialize diagnostic thread MXBeans only on a diagnostic request/profile, not during a micro start or stop. Release agent-owned bean references after restoring application-owned counter settings on downgrade.
@@ -412,7 +414,8 @@ or stable release has been published. Functional and throughput qualification do
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.1...v0.5.2

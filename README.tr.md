@@ -5,9 +5,8 @@
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Yayın durumu:** Yayımlanan stable sürüm `0.5.4`'tür. `0.6.0` kaynak kodu hazırdır.
-Spring Boot bellek kontrolü geçmediği için bu sürüm henüz GitHub Packages'a yayımlanmadı.
-Aşağıdaki yeni scheduler/provider örnekleri hazırlanan `0.6.0` API'sini anlatır. `0.5.4` bu API'leri içermez.
+**Güncel stable sürüm:** [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).
+Maven paketleri, aynı sürümün DLL/SO dosyaları, checksum ve test raporları birlikte yayımlandı.
 
 `0.6.0` ile micro profilinde başlangıç ve kapanış, diagnostic thread MXBean oluşturmaz.
 Bu nesne yalnız diagnostic ölçüm gerektiğinde alınır. Profil küçültülünce agent referansları
@@ -46,7 +45,7 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 
 ## Scheduler Ve Provider İşlemleri
 
-**0.6.0 için hazırlandı, henüz yayımlanmadı:** Yayımlandığında agent JAR'ını ve aynı sürümün native dosyasını birlikte kullanın.
+**0.6.0 ile kullanılabilir:** Agent JAR'ını ve aynı sürümün native dosyasını birlikte kullanın.
 Glowroot ABI `6` korunur.
 Yeni işlem API'sinin `1` numaralı desteği ayrıca kontrol edilir. Eski binary kullanılırsa
 başlangıçta uyarı yazılır. HTTP telemetrisi sürer; yeni işlem türleri gönderilemez.
@@ -600,12 +599,11 @@ Uygulama POM'una package repository tanımını ekleyin:
    yeniler.
 
    ```powershell
-   mvn -U dependency:get "-Dartifact=com.reactor:java-rust-glowroot-spring-boot-starter:0.5.4"
+   mvn -U dependency:get "-Dartifact=com.reactor:java-rust-glowroot-spring-boot-starter:0.6.0"
    ```
 
-Bu komut yayımlanan `0.5.4` sürümüne erişimi kontrol eder. `401`, kimlik bilgisinin okunmadığını,
+Bu komut yayımlanan `0.6.0` sürümüne erişimi kontrol eder. `401`, kimlik bilgisinin okunmadığını,
 geçersiz olduğunu, süresinin dolduğunu veya yetkinin yetersiz olduğunu gösterir.
-Hazırlanan `0.6.0` sürümü henüz yayımlanmadı.
 
 ## Kubernetes
 
@@ -1047,9 +1045,14 @@ Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırı
 yüksek hata oranını ve mutlak `%0,05` sınırını birlikte kullanır. Normal release matrisindeki bütün
 hücrelerde sıfır artış kuralı uygulanır. `0,02` yüzde puanlık sınırlı marj yalnız heavy JSON manuel
 olarak embedded REST c256+ doygunluk bölgesinde ölçülürse geçerlidir. Doygun bir koşudaki tek fark raporda görünür; genel hata
-kararının yerine geçmez. Aynı tam
-yükten sonra eşit process yaşında ölçülen RSS ve cgroup medyan farkları en fazla
-`micro` için `+3 MiB` olabilir. İki runtime da yalnız tek sınırlı exporter thread'i ekleyebilir.
+kararının yerine geçmez. Tam endpoint ve concurrency yükünden sonra RSS ve cgroup medyan
+farkları `micro` için en fazla `+3 MiB` olabilir. Sırayla çalışan süreçlerin warmup tur sayısı
+ve yaşı farklı olabilir. Tahsis geçmişleri bire bir aynı değildir. Smaps, cgroup, warmup ve
+JVM pool verileri bu farkı incelemek için saklanır. Bu kural her pod veya her ölçüm için
+kesin üst sınır değildir. Örneğin 0.6.0 Spring kontrolünde RSS medyan farkı `+1,574 MiB`
+oldu. Tek bir çiftte `+4,500 MiB` görüldü. GC ve idle sonrası ölçüm, yük sırasındaki geçici
+belleği sınırlandırmaz. Pod belleğinde yalnız 3 MiB boşluk bırakmayın.
+İki runtime da yalnız tek sınırlı exporter thread'i ekleyebilir.
 `jvm`, `sql`, `full` ve `diagnostic` profilleri ayrı ve geçici profil gate'leriyle ölçülür. OpenJ9
 yönetim ve hata sınıfları tek seferlik JVM ısınma state'i oluşturabilir. REST wire uyumu, collector
 kapalıyken fail-open ve opsiyonel bootstrap ayrıca zorunlu
@@ -1062,7 +1065,7 @@ sonuçlar, makineye özel runner durumu ve ham kanıtlar repoya veya Maven artif
 
 ## Uyumluluk
 
-Tablodaki `0.6.0` satırları hazırlanan kaynak sürümünü anlatır. Yayımlanan agent sürümü `0.5.4`'tür.
+Aşağıdaki sürümler yayımlanan `0.6.0` entegrasyonunu anlatır.
 
 | Bileşen | Sürüm | Sözleşme |
 | --- | ---: | --- |
