@@ -2,7 +2,10 @@
 
 All notable changes to this project are recorded here.
 
-## [0.6.0] - 2026-10-16
+## [Unreleased] - Planned 0.6.0
+
+Publication is blocked by the Spring Boot memory qualification. No 0.6.0 tag, Maven package,
+or stable release has been published. Functional and throughput qualification do not override this gate.
 
 - Add an aggregate-only Tomcat completion path that skips unused diagnostic attributes and sampling work while preserving exact counters, route caching, errors, and diagnostic profile transitions.
 
@@ -406,7 +409,7 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[0.6.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.4...v0.6.0
+[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.4...HEAD
 [0.5.4]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.1...v0.5.2

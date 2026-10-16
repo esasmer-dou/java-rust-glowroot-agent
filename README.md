@@ -5,6 +5,10 @@
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
+**Release status:** `0.5.4` is the published stable version. Source version `0.6.0` is prepared,
+but is not published to GitHub Packages: its Spring Boot memory qualification has not passed.
+The new scheduler/provider examples below describe the prepared `0.6.0` APIs, not `0.5.4`.
+
 Bounded, Rust-first telemetry for Rust-Java REST applications and Spring Boot services. It sends
 exact HTTP aggregates, bounded slow/error traces, Spring controller and Dubbo consumer timing,
 process/JVM gauges, and authorized live JVM diagnostics to an existing Glowroot Central collector.
@@ -36,7 +40,7 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 
 ## Scheduler And Provider Transactions
 
-**New in 0.6.0:** use the matching agent JAR and native library. Glowroot ABI `6` stays compatible; operation
+**Prepared for 0.6.0, not published:** use the matching agent JAR and native library when released. Glowroot ABI `6` stays compatible; operation
 API capability `1` is checked separately. An older binary logs a startup warning and keeps
 HTTP telemetry running, but cannot emit the new operation transactions.
 
@@ -586,11 +590,11 @@ For `401 Unauthorized`, check the credential chain before changing the dependenc
 5. Retry with the command below. `-U` clears Maven's cached failed-resolution decision.
 
    ```powershell
-   mvn -U dependency:get "-Dartifact=com.reactor:java-rust-glowroot-spring-boot-starter:0.6.0"
+   mvn -U dependency:get "-Dartifact=com.reactor:java-rust-glowroot-spring-boot-starter:0.5.4"
    ```
 
-Version `0.6.0` is published. A `401` for its POM indicates missing, unread, expired, revoked, or
-insufficient credentials; it does not indicate a missing package version.
+The command above checks access to published version `0.5.4`. A `401` indicates missing, unread,
+expired, revoked, or insufficient credentials. Prepared version `0.6.0` is not published yet.
 
 ## Kubernetes
 
@@ -1038,6 +1042,8 @@ release-gate source is version-controlled under `benchmark/`; generated results,
 runner state, and raw evidence remain excluded from the repository and from every Maven artifact.
 
 ## Compatibility
+
+The `0.6.0` rows describe the prepared source release. The published agent remains `0.5.4`.
 
 | Component | Release | Contract |
 | --- | ---: | --- |

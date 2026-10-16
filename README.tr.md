@@ -5,6 +5,10 @@
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
+**Yayın durumu:** Yayımlanan stable sürüm `0.5.4`'tür. `0.6.0` kaynak kodu hazırdır.
+Spring Boot bellek kontrolü geçmediği için bu sürüm henüz GitHub Packages'a yayımlanmadı.
+Aşağıdaki yeni scheduler/provider örnekleri hazırlanan `0.6.0` API'sini anlatır. `0.5.4` bu API'leri içermez.
+
 Rust-Java REST ve Spring Boot uygulamaları için sınırlı kaynak kullanan Rust tabanlı telemetri
 çözümüdür. HTTP toplamlarını, yavaş ve hatalı istek ayrıntılarını, process/JVM ölçümlerini ve mevcut
 Dubbo/Redis sürelerini Glowroot Central'a gönderir. Spring MVC uygulamalarında HTTP metodu, durum
@@ -38,7 +42,7 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 
 ## Scheduler Ve Provider İşlemleri
 
-**0.6.0 yeniliği:** Agent JAR'ını ve aynı sürümün native dosyasını birlikte kullanın.
+**0.6.0 için hazırlandı, henüz yayımlanmadı:** Yayımlandığında agent JAR'ını ve aynı sürümün native dosyasını birlikte kullanın.
 Glowroot ABI `6` korunur.
 Yeni işlem API'sinin `1` numaralı desteği ayrıca kontrol edilir. Eski binary kullanılırsa
 başlangıçta uyarı yazılır. HTTP telemetrisi sürer; yeni işlem türleri gönderilemez.
@@ -592,12 +596,12 @@ Uygulama POM'una package repository tanımını ekleyin:
    yeniler.
 
    ```powershell
-   mvn -U dependency:get "-Dartifact=com.reactor:java-rust-glowroot-spring-boot-starter:0.6.0"
+   mvn -U dependency:get "-Dartifact=com.reactor:java-rust-glowroot-spring-boot-starter:0.5.4"
    ```
 
-`0.6.0` sürümü yayınlanmıştır. Bu sürümün POM isteğinde alınan `401`; package'ın eksik olduğunu değil,
-credential'ın Maven tarafından okunmadığını, geçersiz/expired/revoked olduğunu veya yeterli yetkisi
-bulunmadığını gösterir.
+Bu komut yayımlanan `0.5.4` sürümüne erişimi kontrol eder. `401`, kimlik bilgisinin okunmadığını,
+geçersiz olduğunu, süresinin dolduğunu veya yetkinin yetersiz olduğunu gösterir.
+Hazırlanan `0.6.0` sürümü henüz yayımlanmadı.
 
 ## Kubernetes
 
@@ -1053,6 +1057,8 @@ ve uyumluluk ayrıntıları için [0.6.0 sürüm notlarını](docs/releases/0.6.
 sonuçlar, makineye özel runner durumu ve ham kanıtlar repoya veya Maven artifact'lerine eklenmez.
 
 ## Uyumluluk
+
+Tablodaki `0.6.0` satırları hazırlanan kaynak sürümünü anlatır. Yayımlanan agent sürümü `0.5.4`'tür.
 
 | Bileşen | Sürüm | Sözleşme |
 | --- | ---: | --- |
