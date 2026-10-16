@@ -7,7 +7,7 @@
   <parent>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-glowroot-parent</artifactId>
-    <version>0.5.4</version>
+    <version>0.6.0</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -16,6 +16,11 @@
   <description>One dependency for the bounded native runtime and optimized Spring MVC server adapters.</description>
 
   <dependencies>
+    <dependency>
+      <groupId>com.reactor</groupId>
+      <artifactId>java-rust-glowroot-spring-native-dubbo-adapter</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>com.reactor</groupId>
       <artifactId>java-rust-glowroot-spring-runtime</artifactId>

@@ -8,9 +8,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 
 /** Process-scoped facade for the bounded native telemetry runtime. */
-public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
+public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, OperationTelemetrySink {
 
     static final int EXPECTED_GLOWROOT_ABI = 6;
+    private static volatile NativeTelemetry current;
+    private static volatile boolean operationsSupported;
+    private NativeTelemetry previous;
     private static final Object LIFECYCLE_LOCK = new Object();
     private static int references;
     private static volatile TelemetryProfile activeProfile = TelemetryProfile.MICRO;
@@ -22,6 +25,10 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
     private final int profileReleaseTimeoutMs;
     private final TelemetryProfile configuredProfile;
     private volatile boolean closed;
+    private volatile boolean providerObservationEnabled = true;
+
+    public boolean providerObservationEnabled() { return providerObservationEnabled; }
+    public void setProviderObservationEnabled(boolean enabled) { providerObservationEnabled = enabled; }
 
     private NativeTelemetry(
             int maxRoutes,
@@ -57,6 +64,13 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
                 );
             }
             boolean firstReference = references == 0;
+            if (firstReference) {
+                try { operationsSupported = nativeOperationApiVersion() >= 1; }
+                catch (UnsatisfiedLinkError olderNative) { operationsSupported = false; }
+                if (!operationsSupported) System.err.println("Java-Rust Glowroot: native operation API "
+                        + "unavailable; update DLL/SO to enable Scheduler/Background/Provider transactions. "
+                        + "Existing HTTP telemetry remains active.");
+            }
             nativeConfigure(
                         config.collectorAddress(),
                         config.agentId(),
@@ -98,11 +112,14 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
                 );
             }
             references++;
-            return new NativeTelemetry(
+            NativeTelemetry telemetry = new NativeTelemetry(
                     config.maxRoutes(),
                     config.profileReleaseTimeoutMs(),
                     processConfiguredProfile
             );
+            telemetry.previous = current;
+            current = telemetry;
+            return telemetry;
         }
     }
 
@@ -125,6 +142,33 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
     public int registerHttpRoute(String method, String route) {
         requireOpen();
         return nativeRegisterHttpRoute(method, route);
+    }
+
+    /** Active facade, or null without native loading when the agent is disabled. */
+    public static NativeTelemetry current() {
+        NativeTelemetry value = current;
+        return value == null || value.closed ? null : value;
+    }
+
+    public NativeOperation operation(String type, String name) {
+        return NativeOperation.register(this, type, name);
+    }
+
+    @Override
+    public int registerOperation(String type, String name) {
+        if (closed || !operationsSupported) return -1;
+        if (type == null || type.isBlank() || type.length() > 64
+                || name == null || name.isBlank() || name.length() > 4096) {
+            return -1;
+        }
+        return nativeRegisterOperation(type, name);
+    }
+
+    @Override
+    public void recordOperation(int slot, long durationNanos, Throwable error) {
+        if (closed || slot < 0 || !operationsSupported) return;
+        nativeRecordOperation(slot, Math.max(0L, durationNanos), error != null);
+        if (error != null) recordError(slot, durationNanos, error);
     }
 
     /**
@@ -410,10 +454,12 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
             if (references > 1) {
                 references--;
                 closed = true;
+                unlinkCurrent();
                 return;
             }
             if (references <= 0) {
                 closed = true;
+                unlinkCurrent();
                 return;
             }
 
@@ -429,7 +475,16 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
             nativeStop();
             references = 0;
             closed = true;
+            unlinkCurrent();
         }
+    }
+
+    private void unlinkCurrent() {
+        if (current == this) current = previous;
+        else for (NativeTelemetry value = current; value != null; value = value.previous) {
+            if (value.previous == this) { value.previous = previous; break; }
+        }
+        previous = null;
     }
 
     private static void awaitProfileRelease(long transitionId, int timeoutMs) {
@@ -523,6 +578,9 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink {
             boolean error,
             long rows);
 
+    private static native int nativeRegisterOperation(String type, String name);
+    private static native int nativeOperationApiVersion();
+    private static native void nativeRecordOperation(int slot, long durationNanos, boolean error);
     private static native boolean nativeRecordError(
             int slot,
             long durationNanos,

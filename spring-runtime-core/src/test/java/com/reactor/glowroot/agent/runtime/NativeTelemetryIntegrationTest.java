@@ -53,6 +53,17 @@ class NativeTelemetryIntegrationTest {
             String diagnostics = telemetry.diagnosticsJson();
             assertTrue(diagnostics.contains("\"enabled\":true"));
             assertTrue(diagnostics.contains("\"registered_routes\":1"));
+            if (Boolean.getBoolean("reactor.glowroot.test.operation-api")) {
+                NativeOperation job = telemetry.operation("Scheduler", "CacheRefresh#run");
+                NativeOperation provider = telemetry.operation("Dubbo Provider", "Catalog#find");
+                assertTrue(job.isEnabled(), "Updated native operation API is required");
+                assertTrue(provider.isEnabled());
+                job.success(job.start());
+                provider.failure(provider.start(), new IllegalArgumentException("provider failed"));
+                assertTrue(telemetry.diagnosticsJson().contains("\"registered_routes\":3"));
+                assertTrue(NativeTelemetry.current() == telemetry);
+                verifyNonWebSchedulerAutoConfiguration(telemetry);
+            }
 
             telemetry.updateProfile(TelemetryProfile.FULL, Duration.ofSeconds(2));
             assertEquals(TelemetryProfile.FULL, telemetry.activeProfile());
@@ -60,6 +71,7 @@ class NativeTelemetryIntegrationTest {
                 assertEquals(TelemetryProfile.MICRO, sharedBaseline.configuredProfile());
                 assertEquals(TelemetryProfile.FULL, sharedBaseline.activeProfile());
             }
+            assertTrue(NativeTelemetry.current() == telemetry);
             assertThrows(
                     IllegalStateException.class,
                     () -> NativeTelemetry.start(withProfile(config, TelemetryProfile.FULL))
@@ -143,6 +155,47 @@ class NativeTelemetryIntegrationTest {
             assertTrue(diagnostics.contains("\"active_profile_memory_ceiling_bytes\":0"));
             assertTrue(diagnostics.contains("\"profile_release_pending\":false"));
             assertTrue(diagnostics.contains("\"jvm_probe_registered\":false"));
+        }
+    }
+
+    private static void verifyNonWebSchedulerAutoConfiguration(NativeTelemetry telemetry) throws Exception {
+        try (var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+            context.getEnvironment().getPropertySources().addFirst(
+                    new org.springframework.core.env.MapPropertySource("operation-test", java.util.Map.of(
+                            "reactor.glowroot.enabled", "true")));
+            context.registerBean("existingTelemetry", NativeTelemetry.class, () -> telemetry,
+                    definition -> definition.setDestroyMethodName(""));
+            context.register(SchedulerFixture.class,
+                    com.reactor.glowroot.agent.spring.RustGlowrootSpringAutoConfiguration.class);
+            context.refresh();
+            assertTrue(context.getBean(ScheduledJob.class).ticks.await(3, TimeUnit.SECONDS),
+                    "Non-web Spring scheduler did not run");
+            assertTrue(telemetry.diagnosticsJson().contains("\"registered_routes\":4"),
+                    "Scheduling auto-configuration did not register a native transaction");
+        }
+        assertTrue(NativeTelemetry.current() == telemetry, "Closing a scheduler context closed the shared facade");
+    }
+
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    @org.springframework.scheduling.annotation.EnableScheduling
+    static class SchedulerFixture {
+        @org.springframework.context.annotation.Bean
+        ScheduledJob scheduledJob() { return new ScheduledJob(); }
+
+        @org.springframework.context.annotation.Bean
+        org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler operationsScheduler() {
+            var scheduler = new org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler();
+            scheduler.setThreadNamePrefix("operations-scheduler-");
+            return scheduler;
+        }
+    }
+
+    static class ScheduledJob {
+        final CountDownLatch ticks = new CountDownLatch(3);
+        @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 10, scheduler = "operationsScheduler")
+        public void refresh() {
+            assertTrue(Thread.currentThread().getName().startsWith("operations-scheduler-"));
+            ticks.countDown();
         }
     }
 

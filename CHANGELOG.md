@@ -2,7 +2,14 @@
 
 All notable changes to this project are recorded here.
 
-## [Unreleased]
+## [0.6.0] - 2026-10-16
+
+- Add bounded `NativeOperation` timing for non-web Scheduler/Background transactions, including explicit CompletionStage completion.
+- Observe Spring scheduler registrations without replacing application executors or losing named scheduler routing.
+- Add Apache Dubbo provider SPI observation and a separate optional generated/native-Dubbo provider adapter. Both record asynchronous completion and business failures.
+- Keep aggregation, histograms, trace queues, error capture, and export in the isolated Rust runtime; reuse the existing HTTP/operation slot budget.
+- Preserve Glowroot ABI `6`; detect additive native operation API capability `1` separately and warn explicitly when an older binary lacks non-web support.
+- Document fixed transaction names, independent adapter switches, async scheduling boundaries, and the need for matching rebuilt native artifacts.
 
 ## [0.5.4] - 2026-08-27
 
@@ -397,7 +404,7 @@ All notable changes to this project are recorded here.
 - The published Rust-Java REST 4.3.0 ABI 26 runtime is not compatible.
 - The embedded properties/environment path is the recommended strict-memory production mode.
 
-[Unreleased]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.4...HEAD
+[0.6.0]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/esasmer-dou/java-rust-glowroot-agent/compare/v0.5.1...v0.5.2

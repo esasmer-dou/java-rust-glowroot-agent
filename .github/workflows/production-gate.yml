@@ -43,6 +43,9 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Install the optional native-Dubbo compile contract
+        uses: ./.github/actions/native-dubbo-build-contract
+
       - name: Verify benchmark decision statistics
         shell: pwsh
         run: |
@@ -53,7 +56,7 @@ jobs:
           ./scripts/test-verify-production-gate.ps1
 
       - name: Build exact-commit Java artifacts
-        run: mvn -B -ntp clean install
+        run: mvn -B -ntp clean install -Dreactor.glowroot.test.operation-api=true
 
       - name: Verify embedded Servlet server dependency isolation
         shell: pwsh
@@ -101,6 +104,9 @@ jobs:
             -MinLogicalCpu 4 `
             -MinPhysicalCpuGroups 2 `
             -EvidencePath benchmark/results/runner-preflight/spring-boot-agent.json
+
+      - name: Install the optional native-Dubbo compile contract
+        uses: ./.github/actions/native-dubbo-build-contract
 
       - name: Run full paired Spring Boot matrix
         shell: pwsh
@@ -188,6 +194,9 @@ jobs:
             -MinLogicalCpu 4 `
             -MinPhysicalCpuGroups 2 `
             -EvidencePath benchmark/results/runner-preflight/rust-java-rest-agent.json
+
+      - name: Install the optional native-Dubbo compile contract
+        uses: ./java-rust-glowroot-agent/.github/actions/native-dubbo-build-contract
 
       - name: Run full paired Rust-Java REST matrix
         if: inputs.rest_evidence_run_id == ''

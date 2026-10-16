@@ -1,0 +1,17 @@
+name: Native Dubbo build contract
+description: Install the released public Java contract needed to compile the optional adapter.
+runs:
+  using: composite
+  steps:
+    - name: Check out the public released Java surface
+      uses: actions/checkout@v5
+      with:
+        repository: esasmer-dou/java-rust-dubbo-spring-boot
+        ref: v0.7.0
+        path: .native-dubbo-build-contract
+        persist-credentials: false
+    - name: Install only the annotations and runtime build contract
+      shell: bash
+      run: >-
+        mvn -B -ntp -f "$GITHUB_WORKSPACE/.native-dubbo-build-contract/pom.xml"
+        -pl java-rust-dubbo-runtime -am install -DskipTests

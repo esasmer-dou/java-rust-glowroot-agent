@@ -86,6 +86,9 @@ jobs:
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
+      - name: Install the optional native-Dubbo compile contract
+        uses: ./.github/actions/native-dubbo-build-contract
+
       - name: Verify release metadata
         id: release_metadata
         shell: bash
@@ -309,6 +312,7 @@ jobs:
             "com.reactor.java-rust-glowroot-spring-boot-starter"
             "com.reactor.java-rust-glowroot-spring-webflux-adapter"
             "com.reactor.java-rust-glowroot-spring-dubbo-adapter"
+            "com.reactor.java-rust-glowroot-spring-native-dubbo-adapter"
           )
           for package in "${PACKAGES[@]}"; do
             API_PATH="/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${package}/versions"
@@ -321,6 +325,7 @@ jobs:
       - name: Test and publish Maven packages
         run: >-
           mvn -B -ntp clean deploy
+          -Dreactor.glowroot.test.operation-api=true
           -DretryFailedDeploymentCount=5
           -Daether.connector.basic.threads=1
           -Dmaven.wagon.http.retryHandler.count=5
@@ -340,6 +345,7 @@ jobs:
             "com.reactor.java-rust-glowroot-spring-boot-starter"
             "com.reactor.java-rust-glowroot-spring-webflux-adapter"
             "com.reactor.java-rust-glowroot-spring-dubbo-adapter"
+            "com.reactor.java-rust-glowroot-spring-native-dubbo-adapter"
           )
           for package in "${PACKAGES[@]}"; do
             API_PATH="/users/${GITHUB_REPOSITORY_OWNER}/packages/maven/${package}/versions"
@@ -369,6 +375,7 @@ jobs:
             "spring-boot-starter:java-rust-glowroot-spring-boot-starter"
             "spring-webflux-adapter:java-rust-glowroot-spring-webflux-adapter"
             "spring-dubbo-adapter:java-rust-glowroot-spring-dubbo-adapter"
+            "spring-native-dubbo-adapter:java-rust-glowroot-spring-native-dubbo-adapter"
           )
           for entry in "${MODULES[@]}"; do
             module="${entry%%:*}"

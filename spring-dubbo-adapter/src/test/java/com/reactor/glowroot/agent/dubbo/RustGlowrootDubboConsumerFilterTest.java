@@ -29,6 +29,38 @@ class RustGlowrootDubboConsumerFilterTest {
         assertTrue(ExtensionLoader.getExtensionLoader(org.apache.dubbo.rpc.Filter.class)
                 .getSupportedExtensions()
                 .contains("rust-glowroot"));
+        assertTrue(ExtensionLoader.getExtensionLoader(org.apache.dubbo.rpc.Filter.class)
+                .getSupportedExtensions().contains("rust-glowroot-provider"));
+    }
+
+    @Test
+    void providerCompletesOnlyAtResponseAndRecordsBusinessFailuresExactlyOnce() {
+        var errors = new java.util.ArrayList<Throwable>();
+        var sink = new com.reactor.glowroot.agent.runtime.OperationTelemetrySink() {
+            public int registerOperation(String type, String name) {
+                assertEquals("Dubbo Provider", type);
+                assertEquals("Catalog#find", name);
+                return 1;
+            }
+            public void recordOperation(int slot, long duration, Throwable error) { errors.add(error); }
+        };
+        var registry = new com.reactor.glowroot.agent.runtime.OperationRegistry(sink, "Dubbo Provider", 2);
+        var filter = new RustGlowrootDubboProviderFilter(registry);
+        Invocation invocation = invocation("Catalog", "find");
+        var failure = new IllegalArgumentException("not found");
+        Result result = (Result) Proxy.newProxyInstance(Result.class.getClassLoader(),
+                new Class<?>[] {Result.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "getException" -> failure;
+                    case "hasException" -> true;
+                    default -> defaultValue(method.getReturnType());
+                });
+        var invoker = invoker(result);
+        assertSame(result, filter.invoke(invoker, invocation));
+        assertTrue(errors.isEmpty(), "Async invocation must not complete when invoke returns");
+        filter.onResponse(result, invoker, invocation);
+        filter.onError(failure, invoker, invocation);
+        assertEquals(1, errors.size());
+        assertSame(failure, errors.getFirst());
     }
 
     @Test

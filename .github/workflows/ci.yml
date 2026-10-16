@@ -22,8 +22,11 @@ jobs:
           java-version: "21"
           cache: maven
 
+      - name: Install the optional native-Dubbo compile contract
+        uses: ./.github/actions/native-dubbo-build-contract
+
       - name: Build and test
-        run: mvn -B -ntp clean verify
+        run: mvn -B -ntp clean verify -Dreactor.glowroot.test.operation-api=true
 
       - name: Verify fail-closed release gate logic
         shell: pwsh

@@ -6,7 +6,7 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-parent</artifactId>
-  <version>0.5.4</version>
+  <version>0.6.0</version>
   <packaging>pom</packaging>
 
   <modules>
@@ -19,6 +19,7 @@
     <module>spring-boot-starter</module>
     <module>spring-webflux-adapter</module>
     <module>spring-dubbo-adapter</module>
+    <module>spring-native-dubbo-adapter</module>
   </modules>
 
   <name>java-rust-glowroot-parent</name>

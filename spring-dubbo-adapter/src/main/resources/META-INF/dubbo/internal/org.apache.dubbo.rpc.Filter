@@ -1,1 +1,2 @@
 rust-glowroot=com.reactor.glowroot.agent.dubbo.RustGlowrootDubboConsumerFilter
+rust-glowroot-provider=com.reactor.glowroot.agent.dubbo.RustGlowrootDubboProviderFilter

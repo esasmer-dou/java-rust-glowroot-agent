@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 
 /**
@@ -16,6 +17,7 @@ import org.springframework.core.env.Environment;
  * process, JVM, explicit SQL, error, and diagnostic telemetry without adding a web stack.</p>
  */
 @AutoConfiguration
+@Import(RustGlowrootSchedulingConfiguration.class)
 @ConditionalOnProperty(prefix = "reactor.glowroot", name = "enabled", havingValue = "true")
 public class RustGlowrootSpringAutoConfiguration {
 
@@ -27,6 +29,9 @@ public class RustGlowrootSpringAutoConfiguration {
             value = NativeTelemetry.class,
             name = "rustGlowrootFilterRegistration")
     NativeTelemetry rustGlowrootNativeTelemetry(Environment environment) {
-        return NativeTelemetry.start(TelemetryConfig.from(environment::getProperty));
+        NativeTelemetry telemetry = NativeTelemetry.start(TelemetryConfig.from(environment::getProperty));
+        telemetry.setProviderObservationEnabled(environment.getProperty(
+                "reactor.glowroot.dubbo.provider.enabled", Boolean.class, true));
+        return telemetry;
     }
 }
