@@ -1,13 +1,13 @@
 name: Native Dubbo build contract
-description: Install the released public Java contract needed to compile the optional adapter.
+description: Install the pinned public 0.7.0 Java contract needed to compile the optional adapter.
 runs:
   using: composite
   steps:
-    - name: Check out the public released Java surface
+    - name: Check out the pinned public Java surface
       uses: actions/checkout@v5
       with:
         repository: esasmer-dou/java-rust-dubbo-spring-boot
-        ref: v0.7.0
+        ref: 4adec86e99f3c52ca0413cf14f52349d8489809e
         path: .native-dubbo-build-contract
         persist-credentials: false
     - name: Install only the annotations and runtime build contract
