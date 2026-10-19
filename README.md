@@ -8,6 +8,7 @@ Plain Java integration: [Explicit, bounded operations](docs/functional-operation
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
 **Release line: `0.7.0`.** Publication requires a passing exact-commit performance gate.
+The latest completed candidate is blocked by Spring memory and small-JSON REST RPS. Stable remains `0.6.0`.
 Its matching embedded REST runtime is `4.7.1`; Spring uses the standalone native file inside the agent package.
 Use a version listed in [stable releases](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases).
 The [release notes](docs/releases/0.7.0.md) distinguish earlier failed tests from the final reports

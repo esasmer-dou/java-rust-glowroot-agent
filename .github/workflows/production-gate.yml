@@ -170,7 +170,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: esasmer-dou/rust-java-rest
-          ref: a8efc84b560d1d269eadc3d7339088aa56694bb0
+          ref: 8299090dd6ab191b348e96273ae984ae8cd9e9c0
           path: rust-java-rest
 
       - name: Check out pinned Glowroot wire contract
