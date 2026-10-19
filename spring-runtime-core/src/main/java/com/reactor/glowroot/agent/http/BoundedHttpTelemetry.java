@@ -2,9 +2,6 @@ package com.reactor.glowroot.agent.http;
 
 import com.reactor.glowroot.agent.runtime.TelemetryConfig;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-
 /** Shared allocation-bounded HTTP aggregate, trace sampler, and native route registry. */
 public final class BoundedHttpTelemetry {
 
@@ -314,14 +311,9 @@ public final class BoundedHttpTelemetry {
     }
 
     private static final class RouteRegistry {
-        private static final VarHandle STRING_ELEMENT =
-                MethodHandles.arrayElementVarHandle(String[].class);
-
         private final int maxNamedRoutes;
         private final int mask;
-        private final String[] routes;
-        private final int[] slots;
-        private volatile int size;
+        private volatile RouteTable table;
         private volatile int overflowSlot = DISABLED_SLOT;
         private volatile boolean overflowRegistrationAttempted;
 
@@ -332,23 +324,23 @@ public final class BoundedHttpTelemetry {
             // completed requests disappear silently from Glowroot transaction aggregates.
             this.maxNamedRoutes = maxRoutes - 1;
             this.mask = capacity - 1;
-            this.routes = new String[capacity];
-            this.slots = new int[capacity];
+            this.table = new RouteTable(new String[capacity], new int[capacity], 0);
         }
 
         private int getOrRegister(String route, HttpTelemetrySink telemetry) {
-            int registered = find(route);
+            RouteTable snapshot = table;
+            int registered = find(snapshot, route);
             if (registered != DISABLED_SLOT) return registered;
-            if (size >= maxNamedRoutes) return overflowSlot(telemetry);
+            if (snapshot.size >= maxNamedRoutes) return overflowSlot(telemetry);
             return register(route, telemetry);
         }
 
-        private int find(String route) {
+        private int find(RouteTable snapshot, String route) {
             int index = spreadHash(route) & mask;
             String registeredRoute;
-            while ((registeredRoute = (String) STRING_ELEMENT.getAcquire(routes, index)) != null) {
+            while ((registeredRoute = snapshot.routes[index]) != null) {
                 if (registeredRoute.equals(route)) {
-                    return slots[index];
+                    return snapshot.slots[index];
                 }
                 index = (index + 1) & mask;
             }
@@ -356,19 +348,24 @@ public final class BoundedHttpTelemetry {
         }
 
         private synchronized int register(String route, HttpTelemetrySink telemetry) {
-            int registered = find(route);
+            RouteTable snapshot = table;
+            int registered = find(snapshot, route);
             if (registered != DISABLED_SLOT) return registered;
-            if (size >= maxNamedRoutes) return registerOverflow(telemetry);
+            if (snapshot.size >= maxNamedRoutes) return registerOverflow(telemetry);
 
             int index = spreadHash(route) & mask;
-            while ((String) STRING_ELEMENT.getAcquire(routes, index) != null) {
+            while (snapshot.routes[index] != null) {
                 index = (index + 1) & mask;
             }
             int slot = telemetry.registerHttpRoute("", route);
             if (slot == DISABLED_SLOT) return DISABLED_SLOT;
+            // Registration is bounded to at most 63 named routes. Publish one complete snapshot;
+            // steady HTTP lookup needs only one volatile read and plain immutable array access.
+            String[] routes = snapshot.routes.clone();
+            int[] slots = snapshot.slots.clone();
             slots[index] = slot;
-            STRING_ELEMENT.setRelease(routes, index, route);
-            size++;
+            routes[index] = route;
+            table = new RouteTable(routes, slots, snapshot.size + 1);
             return slot;
         }
 
@@ -393,6 +390,18 @@ public final class BoundedHttpTelemetry {
         private static int spreadHash(String route) {
             int hash = route.hashCode();
             return hash ^ (hash >>> 16);
+        }
+
+        private static final class RouteTable {
+            final String[] routes;
+            final int[] slots;
+            final int size;
+
+            RouteTable(String[] routes, int[] slots, int size) {
+                this.routes = routes;
+                this.slots = slots;
+                this.size = size;
+            }
         }
     }
 }

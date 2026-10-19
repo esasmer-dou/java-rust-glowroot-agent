@@ -8,9 +8,15 @@ Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operati
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
 **Güncel stable sürüm: [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).**
-Bu branch `0.7.0` hazırlığıdır. Henüz yayımlanmadı. Son Spring testinde bellek ve small JSON c256
-RPS sınırları aşılmıştır. Production bağımlılığını henüz 0.7.0 yapmayın.
-Aynı commit üzerindeki yayın kontrolleri zorunlu kalır. [Sonuçları okuyun](docs/releases/0.7.0.tr.md).
+`0.7.0`, yayımlanmadan önce aynı commit üzerindeki performans kontrolünden geçmelidir.
+[Stable yayınlarda](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) bulunan bir sürümü kullanın.
+[Sürüm notları](docs/releases/0.7.0.tr.md), önceki başarısız testleri yayına eklenen son raporlardan ayırır.
+Yayın için bellek, RPS veya p99 sınırları gevşetilmez.
+
+Yeni adayda route araması, boyutu sınırlı ve değişmez bir tabloyu okur. Tablo yalnız yeni route
+kaydedilince yenilenir. Normal çağrıda route nesnesi üretilmez. JNI, nanosaniye değerini doğrudan
+Rust sayaçlarına iletir. Trace seçimi, hatalar, profiller ve mevcut ayarlar değişmez.
+Yeni test geçmeden bu değişiklikler için bellek veya hız kazanımı iddia etmiyoruz.
 
 `0.7.0` ile micro profilinde başlangıç ve kapanış, diagnostic thread MXBean oluşturmaz.
 Bu nesne yalnız diagnostic ölçüm gerektiğinde alınır. Profil küçültülünce agent referansları

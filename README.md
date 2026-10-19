@@ -8,9 +8,15 @@ Plain Java integration: [Explicit, bounded operations](docs/functional-operation
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
 **Current stable release: [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).**
-This branch prepares `0.7.0`; it is not published. The latest Spring test still exceeds the memory
-ceiling and small JSON c256 RPS limit. Do not select 0.7.0 as a production dependency yet.
-The exact-commit release checks remain mandatory. See the [qualification results](docs/releases/0.7.0.md).
+Version `0.7.0` requires a passing exact-commit performance gate before publication.
+Use a version listed in [stable releases](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases).
+The [release notes](docs/releases/0.7.0.md) distinguish earlier failed tests from the final reports
+attached to a published release. Memory, RPS and p99 limits are not relaxed for publication.
+
+The next candidate keeps route lookup on one immutable, bounded table. Only a new route creates
+a replacement table; normal completions do not allocate a route entry. JNI passes nanoseconds
+directly to Rust counters. Trace selection, errors, profiles and existing configuration stay unchanged.
+These implementation changes are not a memory or throughput claim until the new gate passes.
 
 In `0.7.0`, micro start/stop does not initialize diagnostic thread MXBeans. They are acquired
 only when diagnostic measurements are needed. Downgrading releases agent references and restores
