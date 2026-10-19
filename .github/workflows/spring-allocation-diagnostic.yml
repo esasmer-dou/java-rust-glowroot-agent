@@ -1,6 +1,9 @@
 name: Spring Allocation Diagnostic
 on:
   workflow_dispatch:
+  push:
+    branches: ['release/0.7.0']
+    paths: ['.github/workflows/spring-allocation-diagnostic.yml', '.github/diagnostics/loader-probe/**']
 permissions:
   contents: read
 jobs:
