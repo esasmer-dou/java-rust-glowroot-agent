@@ -2,7 +2,8 @@
 
 [English](functional-operations.md) | [Turkish](functional-operations.tr.md)
 
-Available in 0.7.0. No Spring server is required. Native ABI remains 6.
+Prepared for 0.7.0; not published yet. See the [qualification status](releases/0.7.0.md#qualification-status).
+No Spring server is required. Native ABI remains 6.
 Use the `java-rust-glowroot-spring-runtime` artifact; Spring dependencies are provided,
 not mandatory transitives for this explicit API.
 
@@ -64,6 +65,9 @@ A published snapshot and a normal lock skip are successful outcomes. A failed re
 The adapter returns the original result and rethrows the original exception. It does not retry a write.
 
 Start with `REACTOR_GLOWROOT_PROFILE=micro`. No payload, key value, SQL value or customer data is captured.
-For a plain Apache Dubbo provider, start the same standalone lifecycle and add the optional
-`java-rust-glowroot-spring-dubbo-adapter:0.7.0`. Its SPI observes provider completion; Spring is not required.
+For a normal Apache Dubbo `ServiceConfig` provider with its filter chain enabled, start the same
+standalone lifecycle and add `java-rust-glowroot-spring-dubbo-adapter:0.7.0`. Its SPI observes completion.
+The minimal provider sample deliberately bypasses SPI filters. Use its `full-provider,glowroot`
+profiles and the `java-rust-dubbo:0.8.1` dispatcher hook instead. It decorates selected dispatchers at
+startup and does not restore the full Apache filter chain. Spring is not required in either case.
 Keep both libraries out of applications that do not need those adapters.

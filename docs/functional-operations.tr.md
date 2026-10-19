@@ -2,7 +2,8 @@
 
 [English](functional-operations.md) | [Turkish](functional-operations.tr.md)
 
-Bu API 0.7.0 ile kullanılabilir. Spring veya HTTP sunucusu gerektirmez.
+Bu API 0.7.0 için hazırlandı. Henüz yayımlanmadı. [Yayın kontrolünü okuyun](releases/0.7.0.tr.md#yayın-kontrolü).
+Spring veya HTTP sunucusu gerektirmez.
 Native ABI 6 olarak kalır.
 `java-rust-glowroot-spring-runtime` paketini kullanın.
 Bu açık API için Spring bağımlılıkları zorunlu olarak uygulamaya taşınmaz.
@@ -66,9 +67,11 @@ Adaptör aynı sonucu döndürür. Aynı exception'ı iletir. Yazmayı yeniden d
 Plain Java uygulaması `com.reactor:java-rust-glowroot-spring-runtime:0.7.0` paketini kullanır.
 Paket adında Spring bulunur. Ancak bu açık API Spring veya HTTP sunucusu başlatmaz.
 
-Plain Apache Dubbo provider'da aynı yaşam döngüsünü açın. İsteğe bağlı
-`java-rust-glowroot-spring-dubbo-adapter:0.7.0` paketini ekleyin.
-SPI adaptörü provider işleminin tamamlanmasını izler. Spring gerekmez.
+Filtre zinciri açık normal Apache Dubbo `ServiceConfig` provider'da aynı yaşam döngüsünü açın.
+`java-rust-glowroot-spring-dubbo-adapter:0.7.0` paketini ekleyin. SPI adaptörü işlemin tamamlanmasını izler.
+Minimal provider sample ise SPI filtrelerini bilinçli olarak atlar. Bu sample için `full-provider,glowroot`
+profillerini ve `java-rust-dubbo:0.8.1` bağlantısını kullanın. Yalnız seçilen işlemler başlangıçta izlemeye
+alınır. Tüm Apache filtre zinciri açılmaz. İki kullanımda da Spring gerekmez.
 
 İlk ayar olarak `REACTOR_GLOWROOT_PROFILE=micro` kullanın.
 Payload, anahtar değeri, SQL değeri veya müşteri bilgisi toplanmaz.

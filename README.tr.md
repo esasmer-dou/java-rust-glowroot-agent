@@ -2,13 +2,15 @@
 
 [English](README.md) | [Türkçe](README.tr.md)
 
-Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operations.tr.md). 0.7.0 ile kullanılabilir.
+Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operations.tr.md). 0.7.0 için hazırlandı.
 
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Güncel stable sürüm:** [`0.7.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.0).
-Maven paketleri, aynı sürümün DLL/SO dosyaları, checksum ve test raporları birlikte yayımlandı.
+**Güncel stable sürüm:** [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).
+Bu branch `0.7.0` hazırlığını içerir. Spring micro profilinin bellek testi geçmediği için henüz yayımlanmadı.
+Production bağımlılıklarınızı henüz `0.7.0` yapmayın. [Yayın kontrolünün durumunu okuyun](docs/releases/0.7.0.tr.md#yayın-kontrolü).
+Maven paketleri, aynı sürümün DLL/SO dosyaları, checksum ve test raporları ancak tüm zorunlu kontroller geçince birlikte yayımlanır.
 
 `0.7.0` ile micro profilinde başlangıç ve kapanış, diagnostic thread MXBean oluşturmaz.
 Bu nesne yalnız diagnostic ölçüm gerektiğinde alınır. Profil küçültülünce agent referansları
@@ -131,6 +133,7 @@ ve kapasite ayarlarına bağlıdır.
 | Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.7.0` | Küçük standalone agent kütüphanesini ve uygun isteğe bağlı sunucu adaptörünü yükler | `1` |
 | Spring Boot `3.x`, web olmayan | Minimum: `java-rust-glowroot-spring-runtime:0.7.0`; ana starter da çalışır | Minimum kurulumda yalnız web'den bağımsız standalone agent kütüphanesini yükler | `1` |
 | Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.7.0` | Aynı standalone native runtime'ı kullanır | `1` |
+| Plain Java worker veya provider | `java-rust-glowroot-spring-runtime:0.7.0` ve `StandaloneTelemetry` | Varsa uyumlu native runtime'ı kullanır. Yoksa standalone kütüphaneyi yükler. | Agent açıkken `1` |
 | `-javaagent` standardı kullanan iki ortam | Tek sınıflı `java-rust-glowroot-agent:0.7.0` bootstrap | Yukarıdaki çalışma şekli değişmez | Aynı tek exporter kullanılır; bootstrap eklemez |
 
 Bootstrap JAR yalnızca `-javaagent:key=value` değerlerini property'lere aktarır. İçinde tek sınıf
@@ -157,13 +160,14 @@ Central zorunlu olmaz.
 |---|---|---|
 | [`rest-sample-cache-reader`](https://github.com/esasmer-dou/rest-sample-cache-reader) | Rust-Java REST içindeki runtime | Property ile açılır; HTTP ve native Redis read toplamları alınır |
 | [`rest-sample-dubbo-consumer`](https://github.com/esasmer-dou/rest-sample-dubbo-consumer) | Rust-Java REST içindeki runtime | Property ile açılır; HTTP ve native Dubbo toplamları alınır |
-| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | `0.7.0` bağımsız plain-Java runtime sunmaz; bootstrap tek başına yeterli değildir |
-| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | `0.7.0`, resmi Java provider runtime'ını instrument etmez |
+| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | İsteğe bağlı `glowroot` derleme profili | Projection işleri `Scheduler` altında görünür. Spring veya HTTP sunucusu açılmaz. |
+| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | İsteğe bağlı `full-provider,glowroot` derleme profilleri | Seçilen işlemler `Dubbo Provider` altında görünür. Dubbo `0.8.1` başlangıç bağlantısı açıkça kullanılır. |
 
-Yalnız telemetri almak için plain-Java sample'a Spring Boot veya REST server eklemeyin. Uygulama
-gerçek bir iş ihtiyacı nedeniyle zaten Spring Boot kullanıyorsa non-web starter'ı kullanın. Aksi
-halde daha küçük runtime'ı koruyun ve bağımsız standalone runtime hazırlanana kadar platform
-ölçümlerini kullanın.
+Yalnız telemetri almak için plain-Java sample'a Spring Boot veya REST sunucusu eklemeyin.
+Hazırlanan standalone API başlangıcı ve kapanışı açıkça yönetir. Bootstrap JAR tek başına başlatmaz.
+Provider sample, Apache SPI filtrelerini bilinçli olarak atlar. Tüm filtre zincirini açmak yerine yalnız
+seçilen işlemler izlenir. Normal sample derlemelerine bu adaptörler eklenmez.
+Bu isteğe bağlı profiller sample `release/0.7.1` branch'lerinde hazırdır. Henüz stable indirme değildir.
 
 Reader ve consumer README dosyalarında lokal ve Kubernetes için kopyalanabilir örnekler vardır. Yeni
 production deployment'ında agent `0.7.0` açılmadan önce uygulamayı Rust-Java REST `4.7.0` hattına
@@ -1099,6 +1103,7 @@ Maven reactor şu dosyaları üretir:
 
 - `agent-bootstrap/target/java-rust-glowroot-agent-0.7.0.jar`
 - `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.7.0.jar`
+- `cache-adapter/target/java-rust-glowroot-cache-adapter-0.7.0.jar`
 - `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.7.0.jar`
 - `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.7.0.jar`
 - `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.7.0.jar`

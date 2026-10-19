@@ -2,13 +2,15 @@
 
 [English](README.md) | [Turkish](README.tr.md)
 
-Plain Java integration: [Explicit, bounded operations](docs/functional-operations.md). Available in 0.7.0.
+Plain Java integration: [Explicit, bounded operations](docs/functional-operations.md). Prepared for 0.7.0.
 
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Current stable release:** [`0.7.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.7.0).
-Maven packages, matching DLL/SO files, checksums and qualification reports are published together.
+**Current stable release:** [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).
+This branch prepares `0.7.0`. It is not published: the Spring micro-profile memory gate failed.
+Do not change production dependencies to `0.7.0` yet. See the [qualification status](docs/releases/0.7.0.md#qualification-status).
+Maven packages, matching DLL/SO files, checksums and qualification reports must be published together after every required gate passes.
 
 In `0.7.0`, micro start/stop does not initialize diagnostic thread MXBeans. They are acquired
 only when diagnostic measurements are needed. Downgrading releases agent references and restores
@@ -126,6 +128,7 @@ aggregate counts. Micro has aggregates; bounded slow/error trace detail follows 
 | Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.7.0` | Loads the small standalone agent library and the matching optional server adapter | `1` |
 | Spring Boot `3.x`, non-web | Minimum: `java-rust-glowroot-spring-runtime:0.7.0`; the umbrella starter also works | Loads only the web-independent standalone agent library in the minimum setup | `1` |
 | Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.7.0` | Uses the same standalone native runtime | `1` |
+| Plain Java worker or provider | `java-rust-glowroot-spring-runtime:0.7.0` and `StandaloneTelemetry` | Reuses a coordinated native runtime when present, otherwise loads the standalone library | `1` when enabled |
 | Either runtime with `-javaagent` syntax | Add the one-class `java-rust-glowroot-agent:0.7.0` bootstrap | Same runtime as the row above | Same single exporter; bootstrap adds none |
 
 The bootstrap JAR only maps `-javaagent:key=value` arguments to properties. It contains one class,
@@ -138,7 +141,7 @@ The existing Glowroot collector, UI, and database stay unchanged.
 > ABI `6`. Use agent `0.7.0` with Rust-Java REST `4.7.0`. Do not copy DLL/SO files from an older
 > package.
 
-Version `0.7.0` adds the complete Spring diagnostic trace path. After one export interval, open
+Version `0.7.0` retains the existing Spring diagnostic trace path. After one export interval, open
 Glowroot **Transactions** and select transaction type **Web**. Route patterns such as
 `/orders/{id}` appear as `/orders/*`. A selected slow or failed MVC trace also shows the HTTP
 method, response code, controller timer, Dubbo consumer timer, thread counters, and bounded error.
@@ -152,13 +155,14 @@ Glowroot Central deployment.
 |---|---|---|
 | [`rest-sample-cache-reader`](https://github.com/esasmer-dou/rest-sample-cache-reader) | Embedded Rust-Java REST runtime | Enable through properties; HTTP and native Redis read aggregates are available |
 | [`rest-sample-dubbo-consumer`](https://github.com/esasmer-dou/rest-sample-dubbo-consumer) | Embedded Rust-Java REST runtime | Enable through properties; HTTP and native Dubbo aggregates are available |
-| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Plain Java scheduler | Release `0.7.0` does not provide a standalone plain-Java runtime; bootstrap alone is insufficient |
-| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Plain Java Dubbo/Netty provider | Release `0.7.0` does not instrument the official Java provider runtime |
+| [`rest-sample-cache-writer`](https://github.com/esasmer-dou/rest-sample-cache-writer) | Optional `glowroot` build profile | Projection jobs appear under `Scheduler`; no Spring or HTTP server is started |
+| [`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider) | Optional `full-provider,glowroot` build profiles | Selected dispatchers appear under `Dubbo Provider`; requires the explicit Dubbo `0.8.1` startup hook |
 
-Do not add Spring Boot or a REST server to a plain-Java sample only to obtain telemetry. If an
-application already uses Spring Boot for a real application requirement, use the non-web starter.
-Otherwise keep the smaller runtime and use platform-level metrics until a dedicated standalone
-runtime is available.
+Do not add Spring Boot or a REST server to a plain-Java sample only to obtain telemetry.
+The prepared standalone API owns startup and shutdown explicitly. The bootstrap JAR alone does
+not start it. The provider sample intentionally bypasses Apache SPI filters; it observes its selected
+dispatchers instead of enabling the full filter chain. Default sample builds do not include these adapters.
+These optional profiles are prepared in sample `release/0.7.1` branches and are not stable downloads yet.
 
 The reader and consumer READMEs contain copy-paste local and Kubernetes examples. For a new
 production deployment, align them to Rust-Java REST `4.7.0` before enabling agent `0.7.0`.
@@ -1085,6 +1089,7 @@ The Maven reactor builds:
 
 - `agent-bootstrap/target/java-rust-glowroot-agent-0.7.0.jar`
 - `spring-runtime-core/target/java-rust-glowroot-spring-runtime-0.7.0.jar`
+- `cache-adapter/target/java-rust-glowroot-cache-adapter-0.7.0.jar`
 - `spring-mvc-adapter/target/java-rust-glowroot-spring-mvc-adapter-0.7.0.jar`
 - `spring-tomcat-adapter/target/java-rust-glowroot-spring-tomcat-adapter-0.7.0.jar`
 - `spring-jetty-adapter/target/java-rust-glowroot-spring-jetty-adapter-0.7.0.jar`
