@@ -224,7 +224,7 @@ Assert-Contains $workflow '-SkipBuild:\$skipBuild' `
         "A reused REST artifact must rebuild protocol images on the fresh runner."
 Assert-Contains $workflow 'ref: 022dc03fb242279d7b1958313aa8a3a6dfd6681f' `
         "The production workflow must pin the coordinated Rust-Java REST 4.7.0 commit."
-Assert-Contains $workflow '-RequiredRestVersion "4\.6\.2"' `
+Assert-Contains $workflow '-RequiredRestVersion "4\.7\.0"' `
         "The production workflow must reject a different Rust-Java REST release."
 Assert-Contains $release 'verify-production-gate\.ps1' `
         "Release publication must require an exact-commit successful Production Gate."
