@@ -2,7 +2,6 @@ package com.reactor.glowroot.agent.webflux;
 
 import com.reactor.glowroot.agent.http.HttpTelemetryAdapter;
 import com.reactor.glowroot.agent.runtime.NativeTelemetry;
-import com.reactor.glowroot.agent.runtime.TelemetryConfig;
 import com.reactor.glowroot.agent.spring.RustGlowrootSpringAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -35,7 +34,7 @@ public class RustGlowrootWebFluxAutoConfiguration {
             Environment environment) {
         return new RustGlowrootWebFilter(
                 telemetry,
-                TelemetryConfig.from(environment::getProperty),
+                telemetry.configuration(),
                 resolveFilterOrder(environment));
     }
 

@@ -7,14 +7,27 @@ Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operati
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Güncel stable sürüm:** [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).
-Bu branch `0.7.0` hazırlığını içerir. Spring micro profilinin bellek testi geçmediği için henüz yayımlanmadı.
-Production bağımlılıklarınızı henüz `0.7.0` yapmayın. [Yayın kontrolünün durumunu okuyun](docs/releases/0.7.0.tr.md#yayın-kontrolü).
-Maven paketleri, aynı sürümün DLL/SO dosyaları, checksum ve test raporları ancak tüm zorunlu kontroller geçince birlikte yayımlanır.
+**Sürüm: `0.7.0`.** Birbiriyle eşleşen JAR ve native dosyalarını
+[yayımlanan sürümlerden](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) alın.
+Yayın akışı, aynı release commit'inin Spring ve REST kontrollerini geçmesini zorunlu tutar.
+Maven paketleri, DLL/SO dosyaları, checksum ve raporlar bu kontrolden sonra yayımlanır.
+[Geçiş ve sürüm notlarını okuyun](docs/releases/0.7.0.tr.md).
 
 `0.7.0` ile micro profilinde başlangıç ve kapanış, diagnostic thread MXBean oluşturmaz.
 Bu nesne yalnız diagnostic ölçüm gerektiğinde alınır. Profil küçültülünce agent referansları
 bırakılır ve uygulamanın önceki sayaç ayarları korunur. JVM sınıfları ve JIT kodu zorla silinmez.
+
+Micro profilinde trace ayrıntıları kapalıysa MVC ayrıntı nesnesi de oluşturulmaz. Sunucu
+adaptörleri aynı başlangıç ayarını kullanır. OpenJ9/Linux üzerinde Rust, JVM başlangıç
+argümanlarını bootstrap VM'den alır. Fiziksel bellek ve container sınırını boyutu sınırlı
+işletim sistemi dosyalarından okur. Bu yol yönetim bean'lerini açmaz. Diğer JVM'lerde veya
+desteklenmeyen cgroup yerleşiminde standart MXBean yolu kullanılır.
+
+Collector'a yeniden bağlanırken aynı küçük başlangıç kaydı kullanılır. Java thread'i yeniden
+bağlanmaz ve bilgiler tekrar toplanmaz. Bu kayıt HTTP yanıtlarını değil, JVM başlangıç bilgilerini
+tutar. `jvm_init_source`, `jvm_init_retained_bytes` ve `jvm_init_argument_count` alanları seçilen
+yolu gösterir. Argümanlar gizli değerlerden arındırılır ve sınırlandırılır. Eksik bırakılan bilgi
+işaretlenir. Mevcut bellek bütçesi, HTTP ölçümleri, profil geçişleri ve tek Rust exporter korunur.
 
 Rust-Java REST ve Spring Boot uygulamaları için sınırlı kaynak kullanan Rust tabanlı telemetri
 çözümüdür. HTTP toplamlarını, yavaş ve hatalı istek ayrıntılarını, process/JVM ölçümlerini ve mevcut

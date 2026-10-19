@@ -56,7 +56,7 @@ jobs:
           ./scripts/test-verify-production-gate.ps1
 
       - name: Build exact-commit Java artifacts
-        run: mvn -B -ntp clean install -Dreactor.glowroot.test.operation-api=true
+        run: mvn -B -ntp clean install -Dreactor.glowroot.test.operation-api=true -Dreactor.glowroot.test.cached-init=true
 
       - name: Verify embedded Servlet server dependency isolation
         shell: pwsh

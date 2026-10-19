@@ -7,14 +7,27 @@ Plain Java integration: [Explicit, bounded operations](docs/functional-operation
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Current stable release:** [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).
-This branch prepares `0.7.0`. It is not published: the Spring micro-profile memory gate failed.
-Do not change production dependencies to `0.7.0` yet. See the [qualification status](docs/releases/0.7.0.md#qualification-status).
-Maven packages, matching DLL/SO files, checksums and qualification reports must be published together after every required gate passes.
+**Version: `0.7.0`.** Download matching JAR and native files from the
+[published releases](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases).
+The release workflow requires passing Spring and REST checks on the exact release commit before
+publishing Maven packages, DLL/SO files, checksums and reports. See the
+[release and upgrade notes](docs/releases/0.7.0.md).
 
 In `0.7.0`, micro start/stop does not initialize diagnostic thread MXBeans. They are acquired
 only when diagnostic measurements are needed. Downgrading releases agent references and restores
 application-owned counter settings; it does not force JVM classes or JIT code to unload.
+
+Micro also avoids creating the MVC trace enricher when trace details are disabled. All server
+adapters reuse the same validated startup configuration. On OpenJ9/Linux, Rust reads JVM startup
+arguments from the bootstrap VM and physical/container memory from bounded OS files, without
+initializing management beans. Other JVMs or unsupported cgroup layouts use the public MXBean
+fallback. Collector reconnect reuses one compact startup snapshot; it does not attach a new Java
+thread or recapture it. This snapshot is startup metadata, not an HTTP response cache.
+
+Native diagnostics expose `jvm_init_source`, `jvm_init_retained_bytes`, and
+`jvm_init_argument_count`. Argument text is redacted and bounded; omission is marked. The snapshot
+fits within the existing native bridge budget. HTTP collection, diagnostic profile switching, and
+the single isolated Rust exporter remain unchanged.
 
 Bounded, Rust-first telemetry for Rust-Java REST applications and Spring Boot services. It sends
 exact HTTP aggregates, bounded slow/error traces, Spring controller and Dubbo consumer timing,

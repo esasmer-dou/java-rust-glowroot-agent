@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,10 +48,22 @@ class NativeTelemetryIntegrationTest {
         );
 
         try (NativeTelemetry telemetry = NativeTelemetry.start(config)) {
+            assertSame(config, telemetry.configuration(), "Adapters must reuse the validated startup configuration");
             assertEquals(TelemetryProfile.MICRO, telemetry.configuredProfile());
             int slot = telemetry.registerHttpRoute("GET", "/integration/{id}");
             telemetry.recordHttp(slot, 200, 100_000, 256);
             String diagnostics = telemetry.diagnosticsJson();
+            if (Boolean.getBoolean("reactor.glowroot.test.cached-init")) {
+                assertTrue(diagnostics.contains("\"jvm_init_source\":"), diagnostics);
+                assertTrue(!diagnostics.contains("\"jvm_init_source\":\"unavailable\""), diagnostics);
+                if (System.getProperty("java.vm.name", "").contains("OpenJ9")) {
+                    assertTrue(diagnostics.contains("\"jvm_init_source\":\"openj9-bootstrap/"), diagnostics);
+                }
+                var bytes = java.util.regex.Pattern.compile("\"jvm_init_retained_bytes\":(\\d+)").matcher(diagnostics);
+                assertTrue(bytes.find(), diagnostics);
+                long retained = Long.parseLong(bytes.group(1));
+                assertTrue(retained > 0 && retained < 65_536, diagnostics);
+            }
             assertTrue(diagnostics.contains("\"enabled\":true"));
             assertTrue(diagnostics.contains("\"registered_routes\":1"));
             if (Boolean.getBoolean("reactor.glowroot.test.operation-api")) {

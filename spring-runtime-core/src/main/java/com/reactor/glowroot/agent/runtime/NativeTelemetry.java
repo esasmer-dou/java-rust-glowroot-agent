@@ -24,6 +24,7 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
     private final int maxRoutes;
     private final int profileReleaseTimeoutMs;
     private final TelemetryProfile configuredProfile;
+    private final TelemetryConfig configuration;
     private volatile boolean closed;
     private volatile boolean providerObservationEnabled = true;
 
@@ -33,10 +34,12 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
     private NativeTelemetry(
             int maxRoutes,
             int profileReleaseTimeoutMs,
-            TelemetryProfile configuredProfile) {
+            TelemetryProfile configuredProfile,
+            TelemetryConfig configuration) {
         this.maxRoutes = maxRoutes;
         this.profileReleaseTimeoutMs = profileReleaseTimeoutMs;
         this.configuredProfile = configuredProfile;
+        this.configuration = configuration;
     }
 
     /**
@@ -101,8 +104,10 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
                 long transitionId = nativeUpdateProfile(config.profile().featureMask());
                 activeProfile = config.profile();
                 processConfiguredProfile = config.profile();
-                HttpRequestTraceState.setEnabled(config.profile().diagnosticsEnabled());
-                HttpThreadStats.setEnabled(config.profile().diagnosticsEnabled());
+                if (config.profile().diagnosticsEnabled()) {
+                    HttpRequestTraceState.setEnabled(true);
+                    HttpThreadStats.setEnabled(true);
+                }
                 profileGeneration++;
                 awaitProfileRelease(transitionId, config.profileReleaseTimeoutMs());
                 System.err.println(
@@ -115,7 +120,8 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
             NativeTelemetry telemetry = new NativeTelemetry(
                     config.maxRoutes(),
                     config.profileReleaseTimeoutMs(),
-                    processConfiguredProfile
+                    processConfiguredProfile,
+                    config
             );
             telemetry.previous = current;
             current = telemetry;
@@ -130,6 +136,14 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
      */
     public int maxRoutes() {
         return maxRoutes;
+    }
+
+    /**
+     * Returns the immutable startup configuration reused by optional adapters.
+     * @return the validated baseline; use {@link #activeProfile()} for the current profile
+     */
+    public TelemetryConfig configuration() {
+        return configuration;
     }
 
     /**
