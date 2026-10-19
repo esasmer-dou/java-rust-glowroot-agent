@@ -153,9 +153,11 @@ jobs:
           done
 
           CURRENT_COMMIT="$(git rev-parse HEAD)"
-          jq -e --arg current "$CURRENT_COMMIT" '.schema == 1 and .passed == true and
+          NATIVE_REVISION="$(sed -n 's/^source.revision=//p' spring-runtime-core/src/main/resources/native/native-provenance.properties)"
+          jq -e --arg current "$CURRENT_COMMIT" --arg native "$NATIVE_REVISION" '.schema == 1 and .passed == true and
             .current_commit == $current and
-            .required_rest_version == "4.7.0" and .required_rest_native_abi == 29 and
+            .required_rest_version == "4.7.1" and .required_rest_native_abi == 29 and
+            .required_rest_native_revision == $native and
             (.evidence_commit | type == "string" and length == 40) and
             (.evidence_run_id | type == "string" and length > 0) and
             (.runtime_objects | length) == 4 and
@@ -231,9 +233,10 @@ jobs:
               .candidate_peak_non_2xx_pct <= .absolute_non_2xx_ceiling_pct)' \
             "$SPRING_SUMMARY" >/dev/null
 
-          jq -e '.passed == true and .benchmark_classification == "production" and
+          jq -e --arg native "$NATIVE_REVISION" '.passed == true and .benchmark_classification == "production" and
             .release_evidence == true and .application_kind == "rust-java-rest" and
-            .required_rest_version == "4.7.0" and .required_rest_native_abi == 29 and
+            .required_rest_version == "4.7.1" and .required_rest_native_abi == 29 and
+            .required_rest_native_revision == $native and
             .activation_mode == "embedded_native_properties" and .pair_repeats >= 3 and
             .pair_attempts == (.pair_repeats + .invalid_pair_attempts) and
             .invalid_pair_attempts <= 2 and .maximum_invalid_pair_attempts == 2 and

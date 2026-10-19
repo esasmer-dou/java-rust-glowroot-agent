@@ -4,8 +4,9 @@ param(
     [string] $ApplicationKind = "spring-boot",
     [ValidateSet("tomcat", "jetty", "undertow", "reactor-netty")]
     [string] $ServletContainer = "tomcat",
-    [string] $RequiredRestVersion = "4.7.0",
+    [string] $RequiredRestVersion = "4.7.1",
     [int] $RequiredRestNativeAbi = 29,
+    [string] $RequiredRestNativeRevision = "",
     [int] $PairRepeats = 3,
     [int] $MinimumPairRepeats = 3,
     [int] $MaxInvalidPairAttempts = 2,
@@ -112,6 +113,7 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "benchmark_isolation.ps1")
 . (Join-Path $ScriptDir "gate_statistics.ps1")
 . (Join-Path $ScriptDir "warmup_statistics.ps1")
+. (Join-Path $ScriptDir "native_runtime_contract.ps1")
 $ProjectRoot = Split-Path -Parent $ScriptDir
 [xml]$rootPom = Get-Content -Raw -LiteralPath (Join-Path $ProjectRoot "pom.xml")
 $agentVersion = "$($rootPom.project.version)".Trim()
@@ -260,9 +262,8 @@ function Prepare-Build {
             }
             $frameworkProvenance = Get-Content -Raw -LiteralPath `
                     (Join-Path $FrameworkRoot "src\main\resources\native\native-provenance.properties")
-            if ($frameworkProvenance -notmatch "(?m)^rest\.abi=$RequiredRestNativeAbi\r?$") {
-                throw "Rust-Java REST packaged native provenance is not ABI $RequiredRestNativeAbi."
-            }
+            [void](Assert-ReactorNativeRuntimeContract -Manifest $frameworkProvenance `
+                    -Abi $RequiredRestNativeAbi -SourceRevision $RequiredRestNativeRevision)
             Invoke-Checked mvn @("-B", "-ntp", "-DskipTests", "clean", "package") $FrameworkRoot | Out-Null
         } elseif ($IsWebFlux) {
             Invoke-Checked mvn @(
@@ -1522,6 +1523,7 @@ ConvertTo-Json -InputObject @($invalidPairAttemptDetails) -Depth 8 |
     measured_endpoint_classes = @($endpoints)
     smoked_endpoint_classes = @($EndpointMap.Keys | Sort-Object)
     required_rest_version = if ($IsRustJavaRest) { $RequiredRestVersion } else { $null }
+    required_rest_native_revision = if ($IsRustJavaRest) { $RequiredRestNativeRevision } else { $null }
     required_rest_native_abi = if ($IsRustJavaRest) { $RequiredRestNativeAbi } else { $null }
     pair_repeats = $completedPairs
     pair_attempts = $completedPairs + $invalidPairAttemptDetails.Count

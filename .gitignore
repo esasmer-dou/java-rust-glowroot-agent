@@ -18,6 +18,7 @@
 !/benchmark/gate_statistics.ps1
 !/benchmark/glowroot_gate.ps1
 !/benchmark/non_web_gate.ps1
+!/benchmark/native_runtime_contract.ps1
 !/benchmark/performance_runner_preflight.ps1
 !/benchmark/runtime_evidence_identity.ps1
 !/benchmark/spring.Dockerfile
@@ -26,6 +27,7 @@
 !/benchmark/test_benchmark_isolation.ps1
 !/benchmark/test_gate_statistics.ps1
 !/benchmark/test_load_runner_contract.ps1
+!/benchmark/test_native_runtime_contract.ps1
 !/benchmark/test_warmup_statistics.ps1
 !/benchmark/warmup_statistics.ps1
 !/benchmark/mock-collector/

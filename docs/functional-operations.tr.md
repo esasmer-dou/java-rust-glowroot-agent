@@ -2,7 +2,7 @@
 
 [English](functional-operations.md) | [Turkish](functional-operations.tr.md)
 
-Bu API 0.7.0 için hazırlandı. Henüz yayımlanmadı. [Yayın kontrolünü okuyun](releases/0.7.0.tr.md#yayın-kontrolü).
+Birlikte `0.7.0` modüllerini kullanın. Kurulumdan önce [yayın kontrolünü](releases/0.7.0.tr.md#yayın-kontrolü) ve yayımlanan stable sürümü doğrulayın.
 Spring veya HTTP sunucusu gerektirmez.
 Native ABI 6 olarak kalır.
 `java-rust-glowroot-spring-runtime` paketini kullanın.

@@ -222,10 +222,14 @@ Assert-Contains $workflow '\$skipBuild = \[string\]::IsNullOrWhiteSpace\(\$env:R
         "Only a same-job REST matrix may reuse its already-built protocol images."
 Assert-Contains $workflow '-SkipBuild:\$skipBuild' `
         "A reused REST artifact must rebuild protocol images on the fresh runner."
-Assert-Contains $workflow 'ref: 022dc03fb242279d7b1958313aa8a3a6dfd6681f' `
-        "The production workflow must pin the coordinated Rust-Java REST 4.7.0 commit."
-Assert-Contains $workflow '-RequiredRestVersion "4\.7\.0"' `
+Assert-Contains $workflow 'repository: esasmer-dou/rust-java-rest\s+ref: [0-9a-f]{40}\s' `
+        "The production workflow must pin the coordinated Rust-Java REST commit, not a mutable branch."
+Assert-Contains $workflow '-RequiredRestVersion "4\.7\.1"' `
         "The production workflow must reject a different Rust-Java REST release."
+Assert-Contains $workflow '-RequiredRestNativeRevision ' `
+        "The production workflow must reject ABI-compatible but stale native binaries."
+Assert-Contains $release '\.required_rest_native_revision == \$native' `
+        "Publication must verify the matching native source, not only the Maven version and ABI."
 Assert-Contains $release 'verify-production-gate\.ps1' `
         "Release publication must require an exact-commit successful Production Gate."
 Assert-Contains $release 'runtime-evidence-identity\.json' `

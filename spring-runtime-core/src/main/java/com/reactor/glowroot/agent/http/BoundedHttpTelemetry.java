@@ -22,7 +22,7 @@ public final class BoundedHttpTelemetry {
     private final boolean traceSamplingEnabled;
     private final boolean errorDetailsEnabled;
     private final long slowThresholdNanos;
-    private final ThreadLocal<SampleState> sampleState;
+    private volatile ThreadLocal<SampleState> sampleState;
     private final RouteRegistry routeSlots;
 
     public BoundedHttpTelemetry(HttpTelemetrySink telemetry, TelemetryConfig config) {
@@ -35,8 +35,6 @@ public final class BoundedHttpTelemetry {
         this.slowThresholdNanos = config.traceCapacity() == 0
                 ? Long.MAX_VALUE
                 : config.slowThresholdMs() * 1_000_000L;
-        this.sampleState = ThreadLocal.withInitial(() ->
-                new SampleState(initialSampleOffset(Thread.currentThread().threadId(), sampleMask)));
         this.routeSlots = new RouteRegistry(config.maxRoutes());
     }
 
@@ -66,7 +64,7 @@ public final class BoundedHttpTelemetry {
         // Direct server adapters already own request timing. Avoid ThreadLocal sampler state in the
         // default aggregate-only profile; exact aggregation itself needs no Java request state.
         int observation = traceSamplingEnabled
-                ? nextObservation(sampleState.get())
+                ? nextObservation(currentSampleState())
                 : EXACT_AGGREGATE;
         if (status >= 500) observation |= FAILED;
         return observation;
@@ -75,13 +73,13 @@ public final class BoundedHttpTelemetry {
     /** Starts lifecycle observation without allocating a request object. */
     public int beginObservation() {
         return traceSamplingEnabled
-                ? nextObservation(sampleState.get())
+                ? nextObservation(currentSampleState())
                 : EXACT_AGGREGATE;
     }
 
     /** Starts one thread-bound MVC observation without allocating request state. */
     public void beginThreadObservation() {
-        SampleState state = sampleState.get();
+        SampleState state = currentSampleState();
         int flags = nextObservation(state);
         state.activeToken = ((long) flags << TOKEN_FLAG_SHIFT)
                 | (System.nanoTime() & TOKEN_TIME_MASK);
@@ -89,11 +87,32 @@ public final class BoundedHttpTelemetry {
 
     /** Detaches and clears the current thread-bound observation for sync or async completion. */
     public long takeThreadObservation() {
-        SampleState state = sampleState.get();
+        ThreadLocal<SampleState> states = sampleState;
+        if (states == null) return 0L;
+        SampleState state = states.get();
+        if (state == null) return 0L;
         long token = state.activeToken;
         state.activeToken = 0L;
         return token;
     }
+
+    private SampleState currentSampleState() {
+        ThreadLocal<SampleState> states = sampleState;
+        if (states == null) states = initializeSampleState();
+        SampleState state = states.get();
+        if (state == null) {
+            state = new SampleState(initialSampleOffset(Thread.currentThread().threadId(), sampleMask));
+            states.set(state);
+        }
+        return state;
+    }
+
+    private synchronized ThreadLocal<SampleState> initializeSampleState() {
+        if (sampleState == null) sampleState = new ThreadLocal<>();
+        return sampleState;
+    }
+
+    boolean threadStateInitialized() { return sampleState != null; }
 
     /** Returns the sampler flags stored in a detached primitive observation token. */
     public int observationFlags(long token) {

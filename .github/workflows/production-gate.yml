@@ -53,6 +53,7 @@ jobs:
           ./benchmark/test_warmup_statistics.ps1
           ./benchmark/test_benchmark_isolation.ps1
           ./benchmark/test_load_runner_contract.ps1
+          ./benchmark/test_native_runtime_contract.ps1
           ./scripts/test-verify-production-gate.ps1
 
       - name: Build exact-commit Java artifacts
@@ -169,7 +170,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: esasmer-dou/rust-java-rest
-          ref: 022dc03fb242279d7b1958313aa8a3a6dfd6681f
+          ref: a8efc84b560d1d269eadc3d7339088aa56694bb0
           path: rust-java-rest
 
       - name: Check out pinned Glowroot wire contract
@@ -210,8 +211,9 @@ jobs:
           }
           ./benchmark/spring_boot_gate.ps1 `
             -ApplicationKind rust-java-rest `
-            -RequiredRestVersion "4.7.0" `
+            -RequiredRestVersion "4.7.1" `
             -RequiredRestNativeAbi 29 `
+            -RequiredRestNativeRevision ((ConvertFrom-StringData (Get-Content spring-runtime-core/src/main/resources/native/native-provenance.properties -Raw)).'source.revision') `
             -PairRepeats 6 `
             -MinimumPairRepeats 3 `
             -MaxInvalidPairAttempts 2 `

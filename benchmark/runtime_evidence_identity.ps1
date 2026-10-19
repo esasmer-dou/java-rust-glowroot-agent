@@ -10,12 +10,14 @@ param(
     [string] $EvidenceRoot,
     [Parameter(Mandatory)]
     [string] $OutputPath,
-    [string] $RequiredRestVersion = "4.7.0",
+    [string] $RequiredRestVersion = "4.7.1",
     [int] $RequiredRestNativeAbi = 29
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$expectedNativeRevision = (ConvertFrom-StringData (Get-Content -Raw -LiteralPath `
+        (Join-Path $projectRoot 'spring-runtime-core/src/main/resources/native/native-provenance.properties'))).'source.revision'
 $runtimePaths = @(
     "agent-bootstrap/src/main",
     "spring-runtime-core/src/main/resources/native",
@@ -42,6 +44,7 @@ if ($summary.passed -ne $true -or $summary.release_evidence -ne $true `
         -or $summary.application_kind -ne "rust-java-rest" `
         -or $summary.required_rest_version -ne $RequiredRestVersion `
         -or [int] $summary.required_rest_native_abi -ne $RequiredRestNativeAbi `
+        -or $summary.required_rest_native_revision -ne $expectedNativeRevision `
         -or $summary.warmup_stability.gate -ne "PASS" `
         -or @($summary.rows).Count -ne 4 `
         -or @($summary.rows | Where-Object gate -ne "PASS").Count -ne 0) {
@@ -77,6 +80,7 @@ if (-not [string]::IsNullOrWhiteSpace($outputDirectory)) {
     evidence_reused = $CurrentCommit -ne $EvidenceCommit
     required_rest_version = $RequiredRestVersion
     required_rest_native_abi = $RequiredRestNativeAbi
+    required_rest_native_revision = $expectedNativeRevision
     summary_path = [IO.Path]::GetRelativePath(
         [IO.Path]::GetFullPath($EvidenceRoot),
         $summaries[0].FullName)

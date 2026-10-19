@@ -7,9 +7,8 @@ Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operati
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Güncel stable sürüm: [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).**
-`0.7.0`, yayımlanmadan önce aynı commit üzerindeki performans kontrolünden geçmelidir.
-Son aday Spring kontrolünü geçti. REST başarılı RPS sınırı ise yayını engelliyor. Stable sürüm hâlâ `0.6.0`.
+**Sürüm hattı: `0.7.0`.** Yayın için aynı commit üzerindeki performans kontrolü geçmelidir.
+Eşleşen embedded REST sürümü `4.7.1` olur. Spring, agent paketinin içindeki ayrı native dosyayı kullanır.
 [Stable yayınlarda](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) bulunan bir sürümü kullanın.
 [Sürüm notları](docs/releases/0.7.0.tr.md), önceki başarısız testleri yayına eklenen son raporlardan ayırır.
 Yayın için bellek, RPS veya p99 sınırları gevşetilmez.
@@ -18,6 +17,12 @@ Yeni adayda route araması, boyutu sınırlı ve değişmez bir tabloyu okur. Ta
 kaydedilince yenilenir. Normal çağrıda route nesnesi üretilmez. JNI, nanosaniye değerini doğrudan
 Rust sayaçlarına iletir. Trace seçimi, hatalar, profiller ve mevcut ayarlar değişmez.
 Yeni test geçmeden bu değişiklikler için bellek veya hız kazanımı iddia etmiyoruz.
+
+Micro, trace seçimi veya genel MVC süre ölçümü gerekmeden thread başına ölçüm nesnesi oluşturmaz.
+Embedded REST, trace kapasitesi sıfırken kullanılmayan trace seçimini atlar. Toplam istek ve hata
+sayıları yine eksiksizdir. Yayın kontrolü, REST ABI 29 yanında native kaynak commit'ini de doğrular.
+Testi geçirmek için host bellek politikası, JVM ayarı, worker sayısı veya kuyruk limiti değiştirilmez.
+3 MiB sınırı eş koşullu medyan RSS/container farkıdır. Her süreç tepesinin bu sınırda kalacağını garanti etmez.
 
 `0.7.0` ile micro profilinde başlangıç ve kapanış, diagnostic thread MXBean oluşturmaz.
 Bu nesne yalnız diagnostic ölçüm gerektiğinde alınır. Profil küçültülünce agent referansları

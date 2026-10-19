@@ -2,7 +2,7 @@
 
 [English](functional-operations.md) | [Turkish](functional-operations.tr.md)
 
-Prepared for 0.7.0; not published yet. See the [qualification status](releases/0.7.0.md#qualification-status).
+Use the matching `0.7.0` modules. Before deployment, check the [qualification status](releases/0.7.0.md#qualification-status) and published stable release.
 No Spring server is required. Native ABI remains 6.
 Use the `java-rust-glowroot-spring-runtime` artifact; Spring dependencies are provided,
 not mandatory transitives for this explicit API.
