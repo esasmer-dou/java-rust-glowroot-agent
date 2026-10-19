@@ -2,6 +2,20 @@
 
 All notable changes to this project are recorded here.
 
+## [0.7.0]
+
+Publication requires the exact-commit Spring and REST Production Gate. Source branches and
+diagnostic runs are not published packages. The release assets carry the final measured verdict.
+
+- Preload the verified native library after Spring configuration, before the application bean graph.
+  Start the engine/exporter only from the existing lifecycle bean; disabled applications do neither.
+- Resolve native path/extraction settings from Spring's Environment as well as system/env settings.
+- Keep route lookup allocation-free after bounded registration and initialize Java sampler state lazily.
+- Reuse REST's HTTP histogram selection; pass scalar nanoseconds through the standalone JNI edge.
+- Cache bounded JVM startup metadata once; do not attach/reprobe Java on micro reconnect.
+- Require matching native source revisions, not just matching ABI numbers, in coordinated REST gates.
+- Preserve REST ABI 29 / Glowroot ABI 6, exact counters, failure handling and isolated Rust execution.
+
 ## [0.6.0] - 2026-10-16
 
 Published after exact-commit Production Gate run 38927189449 passed for Spring Boot and REST.

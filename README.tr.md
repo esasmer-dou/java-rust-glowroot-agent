@@ -8,11 +8,16 @@ Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operati
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
 **Sürüm hattı: `0.7.0`.** Yayın için aynı commit üzerindeki performans kontrolü geçmelidir.
-Son tamamlanan aday REST kontrolünü geçti. Spring belleği ve iki Spring RPS ölçümü yayını engelliyor. Stable sürüm `0.6.0` olarak kalır.
 Eşleşen embedded REST sürümü `4.7.1` olur. Spring, agent paketinin içindeki ayrı native dosyayı kullanır.
 [Stable yayınlarda](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) bulunan bir sürümü kullanın.
 [Sürüm notları](docs/releases/0.7.0.tr.md), önceki başarısız testleri yayına eklenen son raporlardan ayırır.
 Yayın için bellek, RPS veya p99 sınırları gevşetilmez.
+
+Spring, ayarlar okunduktan sonra native kütüphaneyi doğrular ve yükler. Bu işlem uygulamanın
+bean nesneleri oluşturulmadan yapılır. Exporter yine telemetri bean'i ile başlar. Agent kapalıysa
+kütüphane yüklenmez. Böylece native dosyanın çıkarılması büyük bean grafiğinden ayrılır.
+Controller, executor ve JVM heap politikası değişmez. `reactor.glowroot.native.path` ve
+`reactor.glowroot.native.extract-dir` Spring ayarlarından da okunur. Paket hash denetimi ve ABI denetimi korunur.
 
 Yeni adayda route araması, boyutu sınırlı ve değişmez bir tabloyu okur. Tablo yalnız yeni route
 kaydedilince yenilenir. Normal çağrıda route nesnesi üretilmez. JNI, nanosaniye değerini doğrudan
@@ -154,7 +159,7 @@ ve kapasite ayarlarına bağlıdır.
 
 | Uygulama | Uygulamaya eklenecek paket | Native çalışma şekli | Ek telemetri thread'i |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.7.0` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
+| Rust-Java REST `4.7.1` | Starter gerekmez | Framework içindeki `rust_hyper` kütüphanesini kullanır | Agent açıkken `1` |
 | Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.7.0` | Küçük standalone agent kütüphanesini ve uygun isteğe bağlı sunucu adaptörünü yükler | `1` |
 | Spring Boot `3.x`, web olmayan | Minimum: `java-rust-glowroot-spring-runtime:0.7.0`; ana starter da çalışır | Minimum kurulumda yalnız web'den bağımsız standalone agent kütüphanesini yükler | `1` |
 | Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.7.0` | Aynı standalone native runtime'ı kullanır | `1` |
@@ -168,7 +173,7 @@ kalır. Böylece Spring Boot executable JAR classloader sınırı bozulmaz.
 Mevcut Glowroot collector, kullanıcı arayüzü ve veritabanı değişmez.
 
 > **Uyumluluk sınırı:** Çalışma sırasında profil değiştirme özelliği REST native ABI `29` ve
-> Glowroot ABI `6` gerektirir. Agent `0.7.0` ile Rust-Java REST `4.7.0` kullanın. Eski bir paketten
+> Glowroot ABI `6` gerektirir. Agent `0.7.0` ile Rust-Java REST `4.7.1` kullanın. Eski bir paketten
 > DLL/SO kopyalamayın.
 
 `0.7.0` sürümü Spring için tam tanılama trace yolunu içerir. Bir export aralığı bekledikten sonra
@@ -195,7 +200,7 @@ seçilen işlemler izlenir. Normal sample derlemelerine bu adaptörler eklenmez.
 Bu isteğe bağlı profiller sample `release/0.7.1` branch'lerinde hazırdır. Henüz stable indirme değildir.
 
 Reader ve consumer README dosyalarında lokal ve Kubernetes için kopyalanabilir örnekler vardır. Yeni
-production deployment'ında agent `0.7.0` açılmadan önce uygulamayı Rust-Java REST `4.7.0` hattına
+production deployment'ında agent `0.7.0` açılmadan önce uygulamayı Rust-Java REST `4.7.1` hattına
 hizalayın.
 
 ## Hangi Verileri Alırsınız?
@@ -259,14 +264,14 @@ Netty; WebFlux uygulamasına da agent üzerinden MVC ya da Servlet motoru eklenm
 
 ## Rust-Java REST Kurulumu
 
-Uyumlu `4.7.0` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `6` içerir. Native dosyanın
+Uyumlu `4.7.1` framework sürümünü kullanın. Bu sürüm Glowroot native ABI `6` içerir. Native dosyanın
 kaynak revision ve ABI bilgisi HTTP server başlamadan doğrulanır.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.7.0</version>
+  <version>4.7.1</version>
 </dependency>
 ```
 
@@ -1101,7 +1106,7 @@ Aşağıdaki sürümler yayımlanan `0.7.0` entegrasyonunu anlatır.
 | Bileşen | Sürüm | Sözleşme |
 | --- | ---: | --- |
 | Java | `21` | Ana test JVM'i Semeru OpenJ9'dur |
-| Rust-Java REST | `4.7.0` | REST ABI `29`, Glowroot ABI `6` |
+| Rust-Java REST | `4.7.1` | REST ABI `29`, Glowroot ABI `6` |
 | Agent bootstrap | `0.7.0` | Tek sınıf; iki desteklenen ortamda da çalışır |
 | Spring Boot starter | `0.7.0` | Spring Boot `3.x`; web'den bağımsız çekirdek ve Tomcat, Jetty, Undertow için doğrudan tam yaşam döngüsü adaptörleri; sunucu motoru bağımlılığı yoktur |
 | Spring Dubbo adaptörü | `0.7.0` | Dubbo `3.3.0-beta.4` ile derlenen consumer bağlantısı ve provider ölçümü; uygulamaya Dubbo runtime eklemez |

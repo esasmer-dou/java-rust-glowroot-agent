@@ -8,11 +8,16 @@ Plain Java integration: [Explicit, bounded operations](docs/functional-operation
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
 **Release line: `0.7.0`.** Publication requires a passing exact-commit performance gate.
-The latest completed candidate passes REST. Spring memory and two Spring RPS cells still block publication. Stable remains `0.6.0`.
 Its matching embedded REST runtime is `4.7.1`; Spring uses the standalone native file inside the agent package.
 Use a version listed in [stable releases](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases).
 The [release notes](docs/releases/0.7.0.md) distinguish earlier failed tests from the final reports
 attached to a published release. Memory, RPS and p99 limits are not relaxed for publication.
+
+Spring verifies and loads the native library after configuration is available, before creating the
+application beans. The exporter still starts with the telemetry bean. Disabled applications do not
+load it. This separates native extraction from the large bean graph without changing your controllers,
+executors or JVM heap policy. `reactor.glowroot.native.path` and `reactor.glowroot.native.extract-dir`
+can also come from Spring configuration. Packaged binary hash checks and the ABI check are preserved.
 
 The next candidate keeps route lookup on one immutable, bounded table. Only a new route creates
 a replacement table; normal completions do not allocate a route entry. JNI passes nanoseconds
@@ -149,7 +154,7 @@ aggregate counts. Micro has aggregates; bounded slow/error trace detail follows 
 
 | Application | Add to the application | Native runtime | Extra telemetry thread |
 | --- | --- | --- | ---: |
-| Rust-Java REST `4.7.0` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
+| Rust-Java REST `4.7.1` | No starter is required | Uses the framework's `rust_hyper` library | `1` when enabled |
 | Spring Boot `3.x`, MVC | `java-rust-glowroot-spring-boot-starter:0.7.0` | Loads the small standalone agent library and the matching optional server adapter | `1` |
 | Spring Boot `3.x`, non-web | Minimum: `java-rust-glowroot-spring-runtime:0.7.0`; the umbrella starter also works | Loads only the web-independent standalone agent library in the minimum setup | `1` |
 | Spring Boot `3.x`, WebFlux | `java-rust-glowroot-spring-webflux-adapter:0.7.0` | Uses the same standalone native runtime | `1` |
@@ -163,7 +168,7 @@ so Spring classes never cross the executable-JAR classloader boundary.
 The existing Glowroot collector, UI, and database stay unchanged.
 
 > **Compatibility boundary:** runtime profile switching requires REST native ABI `29` and Glowroot
-> ABI `6`. Use agent `0.7.0` with Rust-Java REST `4.7.0`. Do not copy DLL/SO files from an older
+> ABI `6`. Use agent `0.7.0` with Rust-Java REST `4.7.1`. Do not copy DLL/SO files from an older
 > package.
 
 Version `0.7.0` retains the existing Spring diagnostic trace path. After one export interval, open
@@ -190,7 +195,7 @@ dispatchers instead of enabling the full filter chain. Default sample builds do 
 These optional profiles are prepared in sample `release/0.7.1` branches and are not stable downloads yet.
 
 The reader and consumer READMEs contain copy-paste local and Kubernetes examples. For a new
-production deployment, align them to Rust-Java REST `4.7.0` before enabling agent `0.7.0`.
+production deployment, align them to Rust-Java REST `4.7.1` before enabling agent `0.7.0`.
 
 ## What You Get
 
@@ -256,14 +261,14 @@ from the agent.
 
 ## Rust-Java REST Setup
 
-Use the coordinated `4.7.0` framework line. It contains Glowroot native ABI `6` and validates the
+Use the coordinated `4.7.1` framework line. It contains Glowroot native ABI `6` and validates the
 native provenance before the HTTP server starts.
 
 ```xml
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>rust-java-rest</artifactId>
-  <version>4.7.0</version>
+  <version>4.7.1</version>
 </dependency>
 ```
 
@@ -1087,7 +1092,7 @@ The following versions describe the published `0.7.0` integration.
 | Component | Release | Contract |
 | --- | ---: | --- |
 | Java | `21` | Semeru OpenJ9 is the primary tested JVM |
-| Rust-Java REST | `4.7.0` | REST ABI `29`, Glowroot ABI `6` |
+| Rust-Java REST | `4.7.1` | REST ABI `29`, Glowroot ABI `6` |
 | Agent bootstrap | `0.7.0` | One class; works with either supported runtime |
 | Spring Boot starter | `0.7.0` | Spring Boot `3.x`; web-independent core plus direct full-lifecycle adapters for Tomcat, Jetty, and Undertow; no server engine dependency |
 | Spring Dubbo adapter | `0.7.0` | Optional consumer correlation and provider transactions compiled against Dubbo `3.3.0-beta.4`; no transitive Dubbo runtime |

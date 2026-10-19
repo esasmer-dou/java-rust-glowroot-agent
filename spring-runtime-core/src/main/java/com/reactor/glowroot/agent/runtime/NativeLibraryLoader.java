@@ -12,11 +12,11 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.function.Function;
 
 final class NativeLibraryLoader {
 
     private static final String PATH_PROPERTY = "reactor.glowroot.native.path";
-    private static final String PATH_ENV = "REACTOR_GLOWROOT_NATIVE_PATH";
     private static final String EXTRACT_PROPERTY = "reactor.glowroot.native.extract-dir";
     private static final String EXTRACT_ENV = "REACTOR_GLOWROOT_NATIVE_EXTRACT_DIR";
     private static boolean loaded;
@@ -24,8 +24,12 @@ final class NativeLibraryLoader {
     private NativeLibraryLoader() {}
 
     static synchronized void load() {
+        load(key -> configured(key, key.toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_')));
+    }
+
+    static synchronized void load(Function<String, String> properties) {
         if (loaded) return;
-        String explicitPath = configured(PATH_PROPERTY, PATH_ENV);
+        String explicitPath = property(properties, PATH_PROPERTY);
         if (explicitPath != null) {
             Path library = Path.of(explicitPath).toAbsolutePath().normalize();
             if (!Files.isRegularFile(library)) {
@@ -46,7 +50,7 @@ final class NativeLibraryLoader {
         require(provenance, "schema", "1");
         require(provenance, "glowroot.abi", Integer.toString(NativeTelemetry.EXPECTED_GLOWROOT_ABI));
         String expectedHash = required(provenance, platform + ".sha256");
-        Path directory = extractionRoot().resolve(expectedHash.substring(0, 16));
+        Path directory = extractionRoot(properties).resolve(expectedHash.substring(0, 16));
         String fileName = resource.substring(resource.lastIndexOf('/') + 1);
         Path library = directory.resolve(fileName);
         try {
@@ -129,8 +133,8 @@ final class NativeLibraryLoader {
         }
     }
 
-    private static Path extractionRoot() {
-        String configured = configured(EXTRACT_PROPERTY, EXTRACT_ENV);
+    private static Path extractionRoot(Function<String, String> properties) {
+        String configured = property(properties, EXTRACT_PROPERTY);
         if (configured != null) return Path.of(configured);
         String home = System.getProperty("user.home");
         if (home == null || home.isBlank()) {
@@ -144,6 +148,11 @@ final class NativeLibraryLoader {
     private static String configured(String property, String environment) {
         String value = System.getProperty(property);
         if (value == null || value.isBlank()) value = System.getenv(environment);
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static String property(Function<String, String> properties, String key) {
+        String value = properties.apply(key);
         return value == null || value.isBlank() ? null : value.trim();
     }
 
