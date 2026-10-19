@@ -7,11 +7,10 @@ Plain Java integration: [Explicit, bounded operations](docs/functional-operation
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Version: `0.7.0`.** Download matching JAR and native files from the
-[published releases](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases).
-The release workflow requires passing Spring and REST checks on the exact release commit before
-publishing Maven packages, DLL/SO files, checksums and reports. See the
-[release and upgrade notes](docs/releases/0.7.0.md).
+**Current stable release: [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).**
+This branch prepares `0.7.0`; it is not published. The latest Spring test still exceeds the memory
+ceiling and small JSON c256 RPS limit. Do not select 0.7.0 as a production dependency yet.
+The exact-commit release checks remain mandatory. See the [qualification results](docs/releases/0.7.0.md).
 
 In `0.7.0`, micro start/stop does not initialize diagnostic thread MXBeans. They are acquired
 only when diagnostic measurements are needed. Downgrading releases agent references and restores

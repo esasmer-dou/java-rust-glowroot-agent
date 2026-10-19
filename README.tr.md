@@ -7,11 +7,10 @@ Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operati
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Sürüm: `0.7.0`.** Birbiriyle eşleşen JAR ve native dosyalarını
-[yayımlanan sürümlerden](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) alın.
-Yayın akışı, aynı release commit'inin Spring ve REST kontrollerini geçmesini zorunlu tutar.
-Maven paketleri, DLL/SO dosyaları, checksum ve raporlar bu kontrolden sonra yayımlanır.
-[Geçiş ve sürüm notlarını okuyun](docs/releases/0.7.0.tr.md).
+**Güncel stable sürüm: [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).**
+Bu branch `0.7.0` hazırlığıdır. Henüz yayımlanmadı. Son Spring testinde bellek ve small JSON c256
+RPS sınırları aşılmıştır. Production bağımlılığını henüz 0.7.0 yapmayın.
+Aynı commit üzerindeki yayın kontrolleri zorunlu kalır. [Sonuçları okuyun](docs/releases/0.7.0.tr.md).
 
 `0.7.0` ile micro profilinde başlangıç ve kapanış, diagnostic thread MXBean oluşturmaz.
 Bu nesne yalnız diagnostic ölçüm gerektiğinde alınır. Profil küçültülünce agent referansları
