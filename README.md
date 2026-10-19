@@ -9,6 +9,7 @@ Plain Java integration: [Explicit, bounded operations](docs/functional-operation
 
 **Current stable release: [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).**
 Version `0.7.0` requires a passing exact-commit performance gate before publication.
+The latest candidate passes Spring, but REST useful RPS still blocks publication. `0.6.0` remains stable.
 Use a version listed in [stable releases](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases).
 The [release notes](docs/releases/0.7.0.md) distinguish earlier failed tests from the final reports
 attached to a published release. Memory, RPS and p99 limits are not relaxed for publication.

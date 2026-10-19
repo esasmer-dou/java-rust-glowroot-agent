@@ -9,6 +9,7 @@ Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operati
 
 **Güncel stable sürüm: [`0.6.0`](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases/tag/v0.6.0).**
 `0.7.0`, yayımlanmadan önce aynı commit üzerindeki performans kontrolünden geçmelidir.
+Son aday Spring kontrolünü geçti. REST başarılı RPS sınırı ise yayını engelliyor. Stable sürüm hâlâ `0.6.0`.
 [Stable yayınlarda](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) bulunan bir sürümü kullanın.
 [Sürüm notları](docs/releases/0.7.0.tr.md), önceki başarısız testleri yayına eklenen son raporlardan ayırır.
 Yayın için bellek, RPS veya p99 sınırları gevşetilmez.
