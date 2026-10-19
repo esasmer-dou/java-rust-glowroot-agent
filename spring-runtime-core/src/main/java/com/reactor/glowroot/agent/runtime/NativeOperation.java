@@ -2,6 +2,12 @@ package com.reactor.glowroot.agent.runtime;
 
 /** Register once, then time synchronous work using a primitive token without per-call allocation. */
 public final class NativeOperation {
+    private static final class FailureMarker {
+        private static final Throwable INSTANCE = new BusinessFailure();
+    }
+    private static final class BusinessFailure extends RuntimeException {
+        BusinessFailure() { super("Business operation reported failure", null, false, false); }
+    }
     public static final NativeOperation NOOP = new NativeOperation(null, -1);
     private final OperationTelemetrySink sink;
     private final int slot;
@@ -29,6 +35,11 @@ public final class NativeOperation {
 
     public void failure(long startedAt, Throwable error) {
         complete(startedAt, java.util.Objects.requireNonNull(error, "error"));
+    }
+
+    /** Count a rejected business result without allocating an exception per call. */
+    public void complete(long startedAt, boolean successful) {
+        if (sink != null) complete(startedAt, successful ? null : FailureMarker.INSTANCE);
     }
 
     private void complete(long startedAt, Throwable error) {

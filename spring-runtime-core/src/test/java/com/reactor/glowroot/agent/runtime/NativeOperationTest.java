@@ -5,6 +5,14 @@ import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 
 class NativeOperationTest {
+    @Test void businessFailuresReuseStacklessMarker() {
+        Sink sink = new Sink();
+        var operation = NativeOperation.register(sink,"Background","refresh");
+        operation.complete(operation.start(),false);
+        operation.complete(operation.start(),false);
+        assertSame(sink.errors.get(0),sink.errors.get(1));
+        assertEquals(0,sink.errors.get(0).getStackTrace().length);
+    }
     @Test void disabledDoesNotLoadNativeCodeOrAllocateWrappers() {
         Runnable task = () -> {};
         NativeOperation operation = NativeOperation.register(null, "Scheduler", "refresh");

@@ -15,7 +15,6 @@ import java.util.Properties;
 
 final class NativeLibraryLoader {
 
-    private static final String MANIFEST = "native/native-provenance.properties";
     private static final String PATH_PROPERTY = "reactor.glowroot.native.path";
     private static final String PATH_ENV = "REACTOR_GLOWROOT_NATIVE_PATH";
     private static final String EXTRACT_PROPERTY = "reactor.glowroot.native.extract-dir";
@@ -43,7 +42,7 @@ final class NativeLibraryLoader {
 
         String resource = platformResource();
         String platform = resource.contains("windows-x64") ? "windows-x64" : "linux-x64";
-        Properties provenance = loadProvenance();
+        Properties provenance = loadProvenance(resource);
         require(provenance, "schema", "1");
         require(provenance, "glowroot.abi", Integer.toString(NativeTelemetry.EXPECTED_GLOWROOT_ABI));
         String expectedHash = required(provenance, platform + ".sha256");
@@ -159,11 +158,21 @@ final class NativeLibraryLoader {
         throw new IllegalStateException("Unsupported Glowroot native platform: " + os + "/" + arch);
     }
 
-    private static Properties loadProvenance() {
-        try (InputStream input = resource(MANIFEST)) {
-            Properties properties = new Properties();
-            properties.load(input);
-            return properties;
+    private static Properties loadProvenance(String binary) {
+        java.net.URL selected = NativeLibraryLoader.class.getClassLoader().getResource(binary);
+        if (selected == null) throw new IllegalStateException("Missing packaged resource: " + binary);
+        return provenanceFor(selected);
+    }
+
+    static Properties provenanceFor(java.net.URL selected) {
+        try {
+            var connection = new java.net.URL(selected, "../native-provenance.properties").openConnection();
+            connection.setUseCaches(false);
+            try (InputStream input = connection.getInputStream()) {
+                Properties properties = new Properties();
+                properties.load(input);
+                return properties;
+            }
         } catch (IOException error) {
             throw new IllegalStateException("Cannot read packaged Glowroot native provenance", error);
         }

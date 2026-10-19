@@ -4,7 +4,7 @@
   <parent>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-glowroot-parent</artifactId>
-    <version>0.6.0</version>
+    <version>0.7.0</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>java-rust-glowroot-spring-native-dubbo-adapter</artifactId>

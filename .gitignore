@@ -4,6 +4,7 @@
 /.release-native-clean/
 /.release-staging/
 /.release-temp/
+/.cache-build-contract/
 /.idea/
 /.vscode/
 /*.iml

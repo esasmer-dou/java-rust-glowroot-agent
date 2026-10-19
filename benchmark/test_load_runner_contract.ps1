@@ -222,8 +222,8 @@ Assert-Contains $workflow '\$skipBuild = \[string\]::IsNullOrWhiteSpace\(\$env:R
         "Only a same-job REST matrix may reuse its already-built protocol images."
 Assert-Contains $workflow '-SkipBuild:\$skipBuild' `
         "A reused REST artifact must rebuild protocol images on the fresh runner."
-Assert-Contains $workflow 'ref: 869f69aa94eeac6346ca9dc535c54b70505a19c5' `
-        "The production workflow must pin the coordinated Rust-Java REST 4.6.2 commit."
+Assert-Contains $workflow 'ref: 022dc03fb242279d7b1958313aa8a3a6dfd6681f' `
+        "The production workflow must pin the coordinated Rust-Java REST 4.7.0 commit."
 Assert-Contains $workflow '-RequiredRestVersion "4\.6\.2"' `
         "The production workflow must reject a different Rust-Java REST release."
 Assert-Contains $release 'verify-production-gate\.ps1' `

@@ -6,12 +6,13 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-glowroot-parent</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
   <packaging>pom</packaging>
 
   <modules>
     <module>agent-bootstrap</module>
     <module>spring-runtime-core</module>
+    <module>cache-adapter</module>
     <module>spring-mvc-adapter</module>
     <module>spring-tomcat-adapter</module>
     <module>spring-jetty-adapter</module>

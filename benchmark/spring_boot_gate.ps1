@@ -4,7 +4,7 @@ param(
     [string] $ApplicationKind = "spring-boot",
     [ValidateSet("tomcat", "jetty", "undertow", "reactor-netty")]
     [string] $ServletContainer = "tomcat",
-    [string] $RequiredRestVersion = "4.6.2",
+    [string] $RequiredRestVersion = "4.7.0",
     [int] $RequiredRestNativeAbi = 29,
     [int] $PairRepeats = 3,
     [int] $MinimumPairRepeats = 3,

@@ -10,7 +10,7 @@ param(
     [string] $EvidenceRoot,
     [Parameter(Mandatory)]
     [string] $OutputPath,
-    [string] $RequiredRestVersion = "4.6.2",
+    [string] $RequiredRestVersion = "4.7.0",
     [int] $RequiredRestNativeAbi = 29
 )
 

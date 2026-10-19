@@ -24,6 +24,7 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -154,7 +155,7 @@ jobs:
           CURRENT_COMMIT="$(git rev-parse HEAD)"
           jq -e --arg current "$CURRENT_COMMIT" '.schema == 1 and .passed == true and
             .current_commit == $current and
-            .required_rest_version == "4.6.2" and .required_rest_native_abi == 29 and
+            .required_rest_version == "4.7.0" and .required_rest_native_abi == 29 and
             (.evidence_commit | type == "string" and length == 40) and
             (.evidence_run_id | type == "string" and length > 0) and
             (.runtime_objects | length) == 4 and
@@ -232,7 +233,7 @@ jobs:
 
           jq -e '.passed == true and .benchmark_classification == "production" and
             .release_evidence == true and .application_kind == "rust-java-rest" and
-            .required_rest_version == "4.6.2" and .required_rest_native_abi == 29 and
+            .required_rest_version == "4.7.0" and .required_rest_native_abi == 29 and
             .activation_mode == "embedded_native_properties" and .pair_repeats >= 3 and
             .pair_attempts == (.pair_repeats + .invalid_pair_attempts) and
             .invalid_pair_attempts <= 2 and .maximum_invalid_pair_attempts == 2 and
@@ -305,6 +306,7 @@ jobs:
             "com.reactor.java-rust-glowroot-parent"
             "com.reactor.java-rust-glowroot-agent"
             "com.reactor.java-rust-glowroot-spring-runtime"
+            "com.reactor.java-rust-glowroot-cache-adapter"
             "com.reactor.java-rust-glowroot-spring-mvc-adapter"
             "com.reactor.java-rust-glowroot-spring-tomcat-adapter"
             "com.reactor.java-rust-glowroot-spring-jetty-adapter"
@@ -338,6 +340,7 @@ jobs:
             "com.reactor.java-rust-glowroot-parent"
             "com.reactor.java-rust-glowroot-agent"
             "com.reactor.java-rust-glowroot-spring-runtime"
+            "com.reactor.java-rust-glowroot-cache-adapter"
             "com.reactor.java-rust-glowroot-spring-mvc-adapter"
             "com.reactor.java-rust-glowroot-spring-tomcat-adapter"
             "com.reactor.java-rust-glowroot-spring-jetty-adapter"
@@ -368,6 +371,7 @@ jobs:
           MODULES=(
             "agent-bootstrap:java-rust-glowroot-agent"
             "spring-runtime-core:java-rust-glowroot-spring-runtime"
+            "cache-adapter:java-rust-glowroot-cache-adapter"
             "spring-mvc-adapter:java-rust-glowroot-spring-mvc-adapter"
             "spring-tomcat-adapter:java-rust-glowroot-spring-tomcat-adapter"
             "spring-jetty-adapter:java-rust-glowroot-spring-jetty-adapter"

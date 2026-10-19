@@ -76,6 +76,7 @@ public final class MockCollectorApplication {
         private final Set<String> transactionNames = new ConcurrentSkipListSet<>();
         private final ConcurrentHashMap<String, AtomicLong> transactionCounts =
                 new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<String, AtomicLong> transactionErrors = new ConcurrentHashMap<>();
         private final Set<String> gaugeNames = new ConcurrentSkipListSet<>();
 
         private Collector(Path report) {
@@ -123,6 +124,8 @@ public final class MockCollectorApplication {
                     transactionCounts.computeIfAbsent(
                             transactionType + '|' + transactionName,
                             ignored -> new AtomicLong()).addAndGet(aggregate.getTransactionCount());
+                    transactionErrors.computeIfAbsent(transactionType + '|' + transactionName,
+                            ignored -> new AtomicLong()).addAndGet(aggregate.getErrorCount());
                     validateTransactionName(transactionType, transactionName);
                     validateAggregate(aggregate, transactionName, transactionType);
                     aggregateTransactions.addAndGet(aggregate.getTransactionCount());
@@ -181,6 +184,9 @@ public final class MockCollectorApplication {
                 case "Web" -> "http request";
                 case "SQL" -> "sql";
                 case "Dubbo" -> "dubbo";
+                case "Dubbo Provider" -> "dubbo provider";
+                case "Scheduler" -> "scheduled task";
+                case "Background" -> "background task";
                 case "Redis" -> "redis";
                 default -> transactionType;
             };
@@ -254,6 +260,7 @@ public final class MockCollectorApplication {
                         "\"transaction_types\":" + jsonArray(transactionTypes) + ',' +
                         "\"transaction_names\":" + jsonArray(transactionNames) + ',' +
                         "\"transaction_counts\":" + jsonLongMap(transactionCounts) + ',' +
+                        "\"transaction_errors\":" + jsonLongMap(transactionErrors) + ',' +
                         "\"gauge_names\":" + jsonArray(gaugeNames) +
                         '}';
                 Files.writeString(temporary, json, StandardCharsets.UTF_8);
