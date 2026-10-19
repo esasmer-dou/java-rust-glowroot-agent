@@ -8,7 +8,7 @@ Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operati
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
 **Sürüm hattı: `0.7.0`.** Yayın için aynı commit üzerindeki performans kontrolü geçmelidir.
-Son tamamlanan aday, Spring belleği ve küçük JSON REST RPS sınırını geçmedi. Stable sürüm `0.6.0` olarak kalır.
+Son tamamlanan aday REST kontrolünü geçti. Spring belleği ve iki Spring RPS ölçümü yayını engelliyor. Stable sürüm `0.6.0` olarak kalır.
 Eşleşen embedded REST sürümü `4.7.1` olur. Spring, agent paketinin içindeki ayrı native dosyayı kullanır.
 [Stable yayınlarda](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) bulunan bir sürümü kullanın.
 [Sürüm notları](docs/releases/0.7.0.tr.md), önceki başarısız testleri yayına eklenen son raporlardan ayırır.
