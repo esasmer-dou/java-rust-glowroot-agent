@@ -1,0 +1,14 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.reactor.diagnostic</groupId><artifactId>spring-loader-probe</artifactId><version>1.0.0</version>
+  <dependencyManagement><dependencies><dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-dependencies</artifactId><version>3.5.5</version><type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement>
+  <dependencies>
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId><version>3.5.5</version></dependency>
+    <dependency><groupId>com.reactor</groupId><artifactId>java-rust-glowroot-spring-boot-starter</artifactId><version>0.7.0</version></dependency>
+  </dependencies>
+  <build><sourceDirectory>java</sourceDirectory><resources><resource><directory>../../../benchmark/spring-app/src/main/resources</directory></resource></resources><plugins>
+    <plugin><groupId>org.codehaus.mojo</groupId><artifactId>build-helper-maven-plugin</artifactId><version>3.6.0</version><executions><execution><id>app</id><phase>generate-sources</phase><goals><goal>add-source</goal></goals><configuration><sources><source>../../../benchmark/spring-app/src/main/java</source></sources></configuration></execution></executions></plugin>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version><configuration><release>21</release></configuration></plugin>
+    <plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><version>3.5.5</version><configuration><mainClass>com.reactor.glowroot.agent.runtime.LoaderProbeApplication</mainClass></configuration><executions><execution><goals><goal>repackage</goal></goals></execution></executions></plugin>
+  </plugins></build>
+</project>

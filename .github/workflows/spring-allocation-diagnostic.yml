@@ -1,0 +1,37 @@
+name: Spring Allocation Diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  allocation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: glowroot/glowroot
+          ref: 622dc6f800228cccc6fa37b0ed9e779446d7c41e
+          path: glowroot-upstream
+      - uses: actions/setup-java@v5
+        with:
+          distribution: semeru
+          java-version: '21'
+          cache: maven
+      - uses: ./.github/actions/native-dubbo-build-contract
+      - name: Build exact-source diagnostic and wire oracle
+        run: |
+          mvn -B -ntp clean install -DskipTests
+          mvn -B -ntp -f .github/diagnostics/loader-probe/pom.xml package
+          mvn -B -ntp -f benchmark/mock-collector/pom.xml package -Dglowroot.source.dir=$GITHUB_WORKSPACE/glowroot-upstream
+          docker build -t g07-loader-collector benchmark/mock-collector
+      - name: Controlled startup-order ablation (not release evidence)
+        shell: pwsh
+        run: ./.github/diagnostics/loader-probe/run.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spring-allocation-diagnostic
+          path: benchmark/results/loader-probe/
+          retention-days: 14
