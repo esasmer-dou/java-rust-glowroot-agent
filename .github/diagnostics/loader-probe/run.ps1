@@ -33,9 +33,9 @@ try {
         } }
         $cells = foreach ($c in @(64,256)) { foreach ($endpoint in @('small','raw')) {
             $path = if ($endpoint -eq 'small') { '/api/small?id=42' } else { '/api/raw' }
-            $out = (& docker exec g07-loader-wrk wrk -t2 -c$c -d12s --latency "http://g07-loader-app:8080$path") -join "`n"
-            if ($LASTEXITCODE) { throw 'Load failed' }
+            $out = (& docker exec g07-loader-wrk wrk -t2 "-c$c" -d12s --latency "http://g07-loader-app:8080$path") -join "`n"
             $out | Set-Content "$results/$mode-$endpoint-c$c.txt"
+            if ($LASTEXITCODE) { throw "Load failed: $out" }
             if ($out -notmatch 'Requests/sec:\s+([\d.]+)') { throw 'No RPS' }; $rps = [double]$Matches[1]
             [pscustomobject]@{endpoint=$endpoint;concurrency=$c;rps=$rps}
         } }
