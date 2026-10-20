@@ -199,7 +199,9 @@ Do not add Spring Boot or a REST server to a plain-Java sample only to obtain te
 The prepared standalone API owns startup and shutdown explicitly. The bootstrap JAR alone does
 not start it. The provider sample intentionally bypasses Apache SPI filters; it observes its selected
 dispatchers instead of enabling the full filter chain. Default sample builds do not include these adapters.
-These optional profiles are prepared in sample `release/0.7.1` branches and are not stable downloads yet.
+These optional profiles are published in the stable sample `v0.7.1` releases. The writer and provider
+releases include separate `-glowroot-runtime.zip` bundles. Choose those bundles only when telemetry
+is needed; the default runtime bundles do not add the agent adapters.
 
 The reader and consumer READMEs contain copy-paste local and Kubernetes examples. For a new
 production deployment, align them to Rust-Java REST `4.7.1` before enabling agent `0.7.0`.

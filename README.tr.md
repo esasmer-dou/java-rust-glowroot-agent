@@ -204,7 +204,9 @@ Yalnız telemetri almak için plain-Java sample'a Spring Boot veya REST sunucusu
 Hazırlanan standalone API başlangıcı ve kapanışı açıkça yönetir. Bootstrap JAR tek başına başlatmaz.
 Provider sample, Apache SPI filtrelerini bilinçli olarak atlar. Tüm filtre zincirini açmak yerine yalnız
 seçilen işlemler izlenir. Normal sample derlemelerine bu adaptörler eklenmez.
-Bu isteğe bağlı profiller sample `release/0.7.1` branch'lerinde hazırdır. Henüz stable indirme değildir.
+Bu isteğe bağlı profiller sample `v0.7.1` stable sürümlerinde yayımlandı. Writer ve provider
+sürümlerinde ayrı `-glowroot-runtime.zip` paketleri de vardır. Telemetri gerekiyorsa bu paketleri
+seçin. Normal runtime paketlerine agent adaptörleri eklenmez.
 
 Reader ve consumer README dosyalarında lokal ve Kubernetes için kopyalanabilir örnekler vardır. Yeni
 production deployment'ında agent `0.7.0` açılmadan önce uygulamayı Rust-Java REST `4.7.1` hattına
