@@ -1094,6 +1094,19 @@ compatibility details are in the [0.7.0 release notes](docs/releases/0.7.0.md). 
 release-gate source is version-controlled under `benchmark/`; generated results, host-specific
 runner state, and raw evidence remain excluded from the repository and from every Maven artifact.
 
+### What Belongs In This Repository
+
+| Path | Why it is kept |
+| --- | --- |
+| `agent-bootstrap/` and adapter modules | Source code used to build the published JARs. `agent-bootstrap` provides the optional `-javaagent` entry point. |
+| `docs/` | English/Turkish usage guides, architecture boundaries, and release notes. Internal working notes and raw evidence are excluded. |
+| `scripts/` | Only the five installation, native packaging, and release-verification tools are tracked. Local experiments are excluded. |
+| `benchmark/` | Only the allowlisted source needed to reproduce release gates is tracked. Generated results and build output are excluded. |
+
+Temporary allocation probes, their diagnostic workflow, logs, heap dumps, recordings, and scratch
+directories stay local. Ignoring those files does not disable the Production Gate. These maintenance
+directories do not become runtime dependencies merely because they are present in the source checkout.
+
 ## Compatibility
 
 The following versions describe the published `0.7.0` integration.

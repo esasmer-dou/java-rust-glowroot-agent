@@ -1108,6 +1108,19 @@ ve uyumluluk ayrıntıları için [0.7.0 sürüm notlarını](docs/releases/0.7.
 üretilebilen release gate kaynakları `benchmark/` altında version control içinde tutulur. Üretilen
 sonuçlar, makineye özel runner durumu ve ham kanıtlar repoya veya Maven artifact'lerine eklenmez.
 
+### Repoda Hangi Dosyalar Bulunur?
+
+| Dizin | Neden tutulur? |
+| --- | --- |
+| `agent-bootstrap/` ve adaptör modülleri | Yayımlanan JAR dosyalarının kaynak kodudur. `agent-bootstrap`, isteğe bağlı `-javaagent` girişini sağlar. |
+| `docs/` | Türkçe/İngilizce kullanım kılavuzları, mimari sınırlar ve sürüm notlarıdır. İç çalışma notları ve ham ölçümler eklenmez. |
+| `scripts/` | Yalnız kurulum, native paketleme ve yayın doğrulaması için gereken beş araç takip edilir. Yerel denemeler eklenmez. |
+| `benchmark/` | Yalnız yayın kontrollerini yeniden çalıştırmak için gereken izinli kaynaklar takip edilir. Üretilen sonuçlar ve derleme çıktıları eklenmez. |
+
+Geçici bellek tanılama kodları, bunların özel workflow'u, loglar, heap dump dosyaları, kayıtlar ve
+geçici dizinler yerelde kalır. Bunları hariç tutmak Production Gate kontrolünü kapatmaz. Kaynak repoda
+bu bakım dizinlerinin bulunması, uygulamanıza runtime bağımlılığı eklendiği anlamına gelmez.
+
 ## Uyumluluk
 
 Aşağıdaki sürümler yayımlanan `0.7.0` entegrasyonunu anlatır.

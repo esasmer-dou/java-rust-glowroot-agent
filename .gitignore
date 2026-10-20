@@ -42,7 +42,23 @@
 !/benchmark/webflux-app/**
 /benchmark/**/target/
 /benchmark/results/
+# Retain only reproducible release and installation tools, not local experiments.
+/scripts/*
+!/scripts/sync-native-artifacts.ps1
+!/scripts/test-verify-production-gate.ps1
+!/scripts/verify-container-runtime.sh
+!/scripts/verify-linux-native-compatibility.sh
+!/scripts/verify-production-gate.ps1
 /scripts/performance-runner/
+# Public guides and release notes belong in Git; internal working notes do not.
+/docs/*
+!/docs/ARCHITECTURE.md
+!/docs/ARCHITECTURE.tr.md
+!/docs/functional-operations.md
+!/docs/functional-operations.tr.md
+!/docs/releases/
+/docs/releases/*
+!/docs/releases/*.md
 /docs/evidence/
 /docs/UPSTREAM_ANALYSIS.md
 /docs/UPSTREAM_ANALYSIS.tr.md
@@ -50,6 +66,8 @@
 /docs/VALIDATION.tr.md
 /.github/workflows/focused-performance-diagnostic.yml
 /.github/workflows/performance-runner-smoke.yml
+/.github/workflows/spring-allocation-diagnostic.yml
+/.github/diagnostics/
 /.agents/
 /.codex/
 /AGENTS.md
@@ -59,3 +77,26 @@
 /docs/PROJECT_MEMORY.md
 /docs/MEMORY.md
 /docs/HANDOFF.md
+
+# Keep generated-output rules after allowlists so nested test apps cannot re-include them.
+/.tmp/
+/.tmp-*
+/tmp/
+/.cache/
+/logs/
+*.log
+*.tmp
+*.class
+*.jar
+*.zip
+*.hprof
+*.jfr
+*.dmp
+javacore.*.txt
+heapdump.*
+Snap.*.trc
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
