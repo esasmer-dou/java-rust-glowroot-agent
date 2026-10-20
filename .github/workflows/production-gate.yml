@@ -366,6 +366,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-cache-correctness
-          path: native-cache-evidence/
+          path: |
+            native-cache-evidence/summary.json
+            native-cache-evidence/*.log
+            native-cache-evidence/standalone/*.xml
+            native-cache-evidence/cluster/*.xml
+            native-cache-evidence/sentinel/*.xml
           if-no-files-found: error
           retention-days: 30
