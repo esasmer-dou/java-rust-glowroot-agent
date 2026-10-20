@@ -170,7 +170,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: esasmer-dou/rust-java-rest
-          ref: 8299090dd6ab191b348e96273ae984ae8cd9e9c0
+          ref: 9b45b6cb9aad7851b1d2e10542e0c46035cf5bb8
           path: rust-java-rest
 
       - name: Check out pinned Glowroot wire contract
@@ -313,5 +313,59 @@ jobs:
             java-rust-glowroot-agent/benchmark/results/glowroot_gate_*/
             java-rust-glowroot-agent/benchmark/results/runtime-evidence-identity.json
             java-rust-glowroot-agent/benchmark/results/runner-preflight/rust-java-rest-agent.json
+          if-no-files-found: error
+          retention-days: 30
+
+  native-cache-correctness:
+    needs: gate-statistics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out agent source
+        uses: actions/checkout@v5
+
+      - name: Check out coordinated REST runtime
+        uses: actions/checkout@v5
+        with:
+          repository: esasmer-dou/rust-java-rest
+          ref: 9b45b6cb9aad7851b1d2e10542e0c46035cf5bb8
+          path: framework
+
+      - name: Check out coordinated cache runtime
+        uses: actions/checkout@v5
+        with:
+          repository: esasmer-dou/java-rust-cache
+          ref: 130c2abcef0bb12c910abaa29937fef63d0f77a2
+          path: cache-runtime
+
+      - name: Set up Semeru OpenJ9 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: semeru
+          java-version: "21"
+
+      - name: Install optional adapter compile contracts
+        uses: ./.github/actions/native-dubbo-build-contract
+
+      - name: Verify coordinated native Redis commands and recovery
+        shell: pwsh
+        env:
+          JAVA_TOOL_OPTIONS: -Xms32m -Xmx384m -XX:ActiveProcessorCount=2 -Xgc:threads=1
+        run: |
+          mvn -B -ntp -f framework/pom.xml install -DskipTests
+          if ($LASTEXITCODE) { throw "REST build failed." }
+          mvn -B -ntp -f framework/platform/jdbc/pom.xml install -DskipTests
+          if ($LASTEXITCODE) { throw "JDBC build failed." }
+          $nativeRevision = (ConvertFrom-StringData (Get-Content spring-runtime-core/src/main/resources/native/native-provenance.properties -Raw)).'source.revision'
+          ./cache-runtime/.github/diagnostics/native-correctness.ps1 `
+            -OutputDirectory "$env:GITHUB_WORKSPACE/native-cache-evidence" `
+            -ExpectedNativeRevision $nativeRevision
+
+      - name: Upload Redis recovery correctness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-cache-correctness
+          path: native-cache-evidence/
           if-no-files-found: error
           retention-days: 30

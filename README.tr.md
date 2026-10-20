@@ -13,11 +13,13 @@ Eşleşen embedded REST sürümü `4.7.1` olur. Spring, agent paketinin içindek
 [Sürüm notları](docs/releases/0.7.0.tr.md), önceki başarısız testleri yayına eklenen son raporlardan ayırır.
 Yayın için bellek, RPS veya p99 sınırları gevşetilmez.
 
-Spring, ayarlar okunduktan sonra native kütüphaneyi doğrular ve yükler. Bu işlem uygulamanın
-bean nesneleri oluşturulmadan yapılır. Exporter yine telemetri bean'i ile başlar. Agent kapalıysa
-kütüphane yüklenmez. Böylece native dosyanın çıkarılması büyük bean grafiğinden ayrılır.
-Controller, executor ve JVM heap politikası değişmez. `reactor.glowroot.native.path` ve
-`reactor.glowroot.native.extract-dir` Spring ayarlarından da okunur. Paket hash denetimi ve ABI denetimi korunur.
+Spring önce Java erişim nesnesini hazırlar. Native motor, normal singleton nesneleri kurulduktan
+sonra başlar. Web/scheduler yaşam döngüsünden ve uygulamanın hazır olmasından önce etkinleşir.
+Başlatma maliyeti ilk API çağrısına bırakılmaz. Daha önce gerçek bir route veya işlem kaydı gelirse
+hemen başlatılır. Başlangıçtaki işler sessizce kaybedilmez. Proxy, Java executor veya bekleyen olay
+kuyruğu eklenmez. Agent kapalıysa native kod yüklenmez. `reactor.glowroot.native.path` ve
+`reactor.glowroot.native.extract-dir` Spring ayarlarından da okunur. Paket hash ve ABI denetimleri korunur.
+Plain Java uygulamalarında mevcut `NativeTelemetry.start(config)` kullanımı değişmez; motor hemen başlar.
 
 Yeni adayda route araması, boyutu sınırlı ve değişmez bir tabloyu okur. Tablo yalnız yeni route
 kaydedilince yenilenir. Normal çağrıda route nesnesi üretilmez. JNI, nanosaniye değerini doğrudan

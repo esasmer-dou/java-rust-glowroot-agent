@@ -7,8 +7,10 @@ All notable changes to this project are recorded here.
 Publication requires the exact-commit Spring and REST Production Gate. Source branches and
 diagnostic runs are not published packages. The release assets carry the final measured verdict.
 
-- Preload the verified native library after Spring configuration, before the application bean graph.
-  Start the engine/exporter only from the existing lifecycle bean; disabled applications do neither.
+- Prepare the Spring facade without native allocation; activate after singleton construction and before
+  normal web/scheduler readiness. Early real registration activates immediately. Plain Java start remains eager.
+- Remove the rejected early-preload candidate; it did not meet the 3 MiB memory gate.
+- Release native exporter ownership even when cancellation precedes the task's first poll.
 - Resolve native path/extraction settings from Spring's Environment as well as system/env settings.
 - Keep route lookup allocation-free after bounded registration and initialize Java sampler state lazily.
 - Reuse REST's HTTP histogram selection; pass scalar nanoseconds through the standalone JNI edge.

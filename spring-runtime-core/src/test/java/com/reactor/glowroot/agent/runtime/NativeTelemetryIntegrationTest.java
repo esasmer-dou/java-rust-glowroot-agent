@@ -11,6 +11,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -168,6 +170,43 @@ class NativeTelemetryIntegrationTest {
             assertTrue(diagnostics.contains("\"active_profile_memory_ceiling_bytes\":0"));
             assertTrue(diagnostics.contains("\"profile_release_pending\":false"));
             assertTrue(diagnostics.contains("\"jvm_probe_registered\":false"));
+        }
+        verifyPreparedSpringStartup(config, false);
+        verifyPreparedSpringStartup(config, true);
+    }
+
+    private static void verifyPreparedSpringStartup(TelemetryConfig config, boolean earlyRegistration)
+            throws Exception {
+        try (NativeTelemetry prepared = NativeTelemetry.prepare(config, key -> null);
+             var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+            assertFalse(prepared.isStarted());
+            context.getEnvironment().getPropertySources().addFirst(
+                    new org.springframework.core.env.MapPropertySource("prepared-test", java.util.Map.of(
+                            "reactor.glowroot.enabled", "true")));
+            context.registerBean("existingTelemetry", NativeTelemetry.class, () -> prepared,
+                    definition -> definition.setDestroyMethodName(""));
+            context.registerBean("ordinarySingleton", Object.class, () -> {
+                assertFalse(prepared.isStarted(), "Native activation preceded ordinary bean construction");
+                if (earlyRegistration) {
+                    int slot = prepared.registerHttpRoute("GET", "/integration/{id}");
+                    assertTrue(prepared.isStarted(), "An early real registration was silently deferred");
+                    prepared.recordHttp(slot, 200, 10_000, 0);
+                }
+                return new Object();
+            });
+            context.register(com.reactor.glowroot.agent.spring.RustGlowrootSpringAutoConfiguration.class);
+            context.refresh();
+            assertTrue(prepared.isStarted(), "Native runtime must be active before context readiness");
+            assertSame(prepared, prepared.activate(), "Bootstrap activation must be idempotent");
+            var resolver = NativeTelemetry.class.getDeclaredField("nativeProperties");
+            resolver.setAccessible(true);
+            assertNull(resolver.get(prepared), "Spring Environment was retained after native activation");
+            try (NativeTelemetry unused = NativeTelemetry.prepare(config)) {
+                assertFalse(unused.isStarted());
+            }
+            assertSame(prepared, NativeTelemetry.current());
+            assertTrue(prepared.diagnosticsJson().contains("\"enabled\":true"),
+                    "Closing an unused prepared handle stopped the active exporter");
         }
     }
 

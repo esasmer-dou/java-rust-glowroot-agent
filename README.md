@@ -13,11 +13,13 @@ Use a version listed in [stable releases](https://github.com/esasmer-dou/java-ru
 The [release notes](docs/releases/0.7.0.md) distinguish earlier failed tests from the final reports
 attached to a published release. Memory, RPS and p99 limits are not relaxed for publication.
 
-Spring verifies and loads the native library after configuration is available, before creating the
-application beans. The exporter still starts with the telemetry bean. Disabled applications do not
-load it. This separates native extraction from the large bean graph without changing your controllers,
-executors or JVM heap policy. `reactor.glowroot.native.path` and `reactor.glowroot.native.extract-dir`
-can also come from Spring configuration. Packaged binary hash checks and the ABI check are preserved.
+Spring prepares the Java facade first. Native activation runs after ordinary singleton construction,
+before normal web/scheduler lifecycle startup and application readiness. It is not deferred until the
+first API call. An earlier real route/operation registration activates immediately, so startup work
+is not silently dropped. No proxy, Java executor or pending-event queue is added. Disabled applications
+do not load native code. `reactor.glowroot.native.path` and `reactor.glowroot.native.extract-dir` can
+come from Spring configuration. Packaged hashes and ABI checks remain enforced. Plain Java applications
+continue to use the eager `NativeTelemetry.start(config)` API.
 
 The next candidate keeps route lookup on one immutable, bounded table. Only a new route creates
 a replacement table; normal completions do not allocate a route entry. JNI passes nanoseconds

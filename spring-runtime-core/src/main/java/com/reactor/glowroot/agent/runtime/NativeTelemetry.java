@@ -25,6 +25,8 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
     private final int profileReleaseTimeoutMs;
     private final TelemetryProfile configuredProfile;
     private final TelemetryConfig configuration;
+    private java.util.function.Function<String, String> nativeProperties;
+    private volatile boolean started;
     private volatile boolean closed;
     private volatile boolean providerObservationEnabled = true;
 
@@ -49,9 +51,65 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
      * @return process-scoped telemetry handle
      */
     public static NativeTelemetry start(TelemetryConfig config) {
+        NativeTelemetry telemetry = prepare(config);
+        try {
+            return telemetry.activate();
+        } catch (RuntimeException | Error failure) {
+            telemetry.close();
+            throw failure;
+        }
+    }
+
+    /**
+     * Prepares a facade without loading native code. Call {@link #activate()} before application
+     * readiness. A route/operation registration or diagnostic demand also activates it immediately.
+     * Plain Java applications should normally continue to use {@link #start(TelemetryConfig)}.
+     * @param config validated process configuration
+     * @return a closeable prepared facade
+     */
+    public static NativeTelemetry prepare(TelemetryConfig config) {
+        return prepare(config, null);
+    }
+
+    /**
+     * Prepares the facade with a startup-only native setting resolver, released on activation/close.
+     * @param config validated process configuration
+     * @param nativeProperties native path/extraction settings, or null for system/env settings
+     * @return a closeable prepared facade
+     */
+    public static NativeTelemetry prepare(
+            TelemetryConfig config, java.util.function.Function<String, String> nativeProperties) {
         java.util.Objects.requireNonNull(config, "config");
         synchronized (LIFECYCLE_LOCK) {
-            NativeLibraryLoader.load();
+            if ((references > 0 && config.profile() != processConfiguredProfile)
+                    || (current != null && config.profile() != current.configuredProfile)) {
+                throw new IllegalStateException("Concurrent Glowroot handles must use the same startup baseline");
+            }
+            NativeTelemetry telemetry = new NativeTelemetry(config.maxRoutes(),
+                    config.profileReleaseTimeoutMs(), config.profile(), config);
+            telemetry.nativeProperties = nativeProperties;
+            telemetry.previous = current;
+            current = telemetry;
+            return telemetry;
+        }
+    }
+
+    /**
+     * Activates this prepared facade once on the caller's bootstrap thread. No executor is added.
+     * @return this active facade
+     */
+    public NativeTelemetry activate() {
+        synchronized (LIFECYCLE_LOCK) {
+            if (closed) throw new IllegalStateException("Native telemetry is already closed");
+            if (started) return this;
+            TelemetryConfig config = configuration;
+            try {
+                if (nativeProperties == null) NativeLibraryLoader.load();
+                else NativeLibraryLoader.load(nativeProperties);
+            } finally {
+                // Never retain the Spring Environment/application graph for the handle's lifetime.
+                nativeProperties = null;
+            }
             int abi = nativeGlowrootAbiVersion();
             if (abi != EXPECTED_GLOWROOT_ABI) {
                 throw new IllegalStateException(
@@ -117,17 +175,13 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
                 );
             }
             references++;
-            NativeTelemetry telemetry = new NativeTelemetry(
-                    config.maxRoutes(),
-                    config.profileReleaseTimeoutMs(),
-                    processConfiguredProfile,
-                    config
-            );
-            telemetry.previous = current;
-            current = telemetry;
-            return telemetry;
+            started = true;
+            return this;
         }
     }
+
+    /** Whether native activation completed and this facade remains open; does not load native code. */
+    public boolean isStarted() { return started && !closed; }
 
     /**
      * Returns the configured native route-table bound.
@@ -158,7 +212,7 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
         return nativeRegisterHttpRoute(method, route);
     }
 
-    /** Active facade, or null without native loading when the agent is disabled. */
+    /** Current prepared/active facade, or null without loading native code when disabled. */
     public static NativeTelemetry current() {
         NativeTelemetry value = current;
         return value == null || value.closed ? null : value;
@@ -170,11 +224,13 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
 
     @Override
     public int registerOperation(String type, String name) {
-        if (closed || !operationsSupported) return -1;
+        if (closed) return -1;
         if (type == null || type.isBlank() || type.length() > 64
                 || name == null || name.isBlank() || name.length() > 4096) {
             return -1;
         }
+        requireOpen();
+        if (!operationsSupported) return -1;
         return nativeRegisterOperation(type, name);
     }
 
@@ -344,7 +400,7 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
 
     /** Returns the profile selected when this process-scoped handle was created. */
     public TelemetryProfile configuredProfile() {
-        requireOpen();
+        if (closed) throw new IllegalStateException("Native telemetry is already closed");
         return configuredProfile;
     }
 
@@ -465,6 +521,12 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
     public void close() {
         synchronized (LIFECYCLE_LOCK) {
             if (closed) return;
+            nativeProperties = null;
+            if (!started) {
+                closed = true;
+                unlinkCurrent();
+                return;
+            }
             if (references > 1) {
                 references--;
                 closed = true;
@@ -520,6 +582,7 @@ public final class NativeTelemetry implements AutoCloseable, HttpTelemetrySink, 
 
     private void requireOpen() {
         if (closed) throw new IllegalStateException("Native telemetry is already closed");
+        if (!started) activate();
     }
 
     static native int nativeGlowrootAbiVersion();

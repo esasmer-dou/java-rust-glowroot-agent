@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 
 /**
  * Web-independent native telemetry lifecycle.
@@ -29,9 +30,17 @@ public class RustGlowrootSpringAutoConfiguration {
             value = NativeTelemetry.class,
             name = "rustGlowrootFilterRegistration")
     NativeTelemetry rustGlowrootNativeTelemetry(Environment environment) {
-        NativeTelemetry telemetry = NativeTelemetry.start(TelemetryConfig.from(environment::getProperty));
+        NativeTelemetry telemetry = NativeTelemetry.prepare(
+                TelemetryConfig.from(environment::getProperty), environment::getProperty);
         telemetry.setProviderObservationEnabled(environment.getProperty(
                 "reactor.glowroot.dubbo.provider.enabled", Boolean.class, true));
         return telemetry;
+    }
+
+    /** Activates after ordinary singleton construction, before web/scheduler lifecycle startup. */
+    @Bean
+    @ConditionalOnMissingBean(name = "rustGlowrootNativeActivation")
+    SmartInitializingSingleton rustGlowrootNativeActivation(NativeTelemetry telemetry) {
+        return telemetry::activate;
     }
 }
