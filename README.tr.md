@@ -7,7 +7,7 @@ Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operati
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Sürüm hattı: `0.7.0`.** Yayın için aynı commit üzerindeki performans kontrolü geçmelidir.
+**Stable sürüm: `0.7.0`.** [Aynı commit üzerindeki performans kontrolü](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/runs/39381789571) geçti.
 Eşleşen embedded REST sürümü `4.7.1` olur. Spring, agent paketinin içindeki ayrı native dosyayı kullanır.
 [Stable yayınlarda](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) bulunan bir sürümü kullanın.
 [Sürüm notları](docs/releases/0.7.0.tr.md), önceki başarısız testleri yayına eklenen son raporlardan ayırır.
@@ -26,10 +26,10 @@ Bu bir callback adıdır. Agent, erişim log dosyası yazmaz. Süreyi Tomcat nan
 Senkron ve asenkron istekler aynı noktadan tamamlanır. Agent ek zamanlayıcı, async listener veya
 istek durumu nesnesi oluşturmaz. Sonuç, mevcut Rust sayaçlarına ve seçilen diagnostic alanlarına gider.
 
-Yeni adayda route araması, boyutu sınırlı ve değişmez bir tabloyu okur. Tablo yalnız yeni route
+Bu sürümde route araması, boyutu sınırlı ve değişmez bir tabloyu okur. Tablo yalnız yeni route
 kaydedilince yenilenir. Normal çağrıda route nesnesi üretilmez. JNI, nanosaniye değerini doğrudan
 Rust sayaçlarına iletir. Trace seçimi, hatalar, profiller ve mevcut ayarlar değişmez.
-Yeni test geçmeden bu değişiklikler için bellek veya hız kazanımı iddia etmiyoruz.
+Ölçülen iş yükü, eş koşu farkları ve kabul sınırları release dosyalarında yer alır.
 
 Micro, trace seçimi veya genel MVC süre ölçümü gerekmeden thread başına ölçüm nesnesi oluşturmaz.
 Embedded REST, trace kapasitesi sıfırken kullanılmayan trace seçimini atlar. Toplam istek ve hata

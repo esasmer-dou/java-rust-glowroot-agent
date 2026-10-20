@@ -7,7 +7,7 @@ Plain Java integration: [Explicit, bounded operations](docs/functional-operation
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
 
-**Release line: `0.7.0`.** Publication requires a passing exact-commit performance gate.
+**Stable release: `0.7.0`.** The [exact-commit performance gate](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/runs/39381789571) passed.
 Its matching embedded REST runtime is `4.7.1`; Spring uses the standalone native file inside the agent package.
 Use a version listed in [stable releases](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases).
 The [release notes](docs/releases/0.7.0.md) distinguish earlier failed tests from the final reports
@@ -26,10 +26,10 @@ not a request-log file: the agent writes no access-log file. Tomcat supplies the
 after sync or async completion. No agent timer, async listener or request-state allocation is added.
 The same Rust counters and configured diagnostic metadata receive the result.
 
-The next candidate keeps route lookup on one immutable, bounded table. Only a new route creates
+This release keeps route lookup on one immutable, bounded table. Only a new route creates
 a replacement table; normal completions do not allocate a route entry. JNI passes nanoseconds
 directly to Rust counters. Trace selection, errors, profiles and existing configuration stay unchanged.
-These implementation changes are not a memory or throughput claim until the new gate passes.
+See the release assets for the measured workload, paired deltas and qualification limits.
 
 Micro creates no per-thread sampler until trace selection or generic MVC timing actually needs it.
 Embedded REST skips trace selection when trace capacity is zero, without sampling aggregate counts.
