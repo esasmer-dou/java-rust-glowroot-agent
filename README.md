@@ -21,6 +21,11 @@ do not load native code. `reactor.glowroot.native.path` and `reactor.glowroot.na
 come from Spring configuration. Packaged hashes and ABI checks remain enforced. Plain Java applications
 continue to use the eager `NativeTelemetry.start(config)` API.
 
+Tomcat completes HTTP telemetry through its public `AccessLog` callback. This is a callback name,
+not a request-log file: the agent writes no access-log file. Tomcat supplies the elapsed nanoseconds
+after sync or async completion. No agent timer, async listener or request-state allocation is added.
+The same Rust counters and configured diagnostic metadata receive the result.
+
 The next candidate keeps route lookup on one immutable, bounded table. Only a new route creates
 a replacement table; normal completions do not allocate a route entry. JNI passes nanoseconds
 directly to Rust counters. Trace selection, errors, profiles and existing configuration stay unchanged.

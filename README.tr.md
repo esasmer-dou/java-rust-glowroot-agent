@@ -21,6 +21,11 @@ kuyruğu eklenmez. Agent kapalıysa native kod yüklenmez. `reactor.glowroot.nat
 `reactor.glowroot.native.extract-dir` Spring ayarlarından da okunur. Paket hash ve ABI denetimleri korunur.
 Plain Java uygulamalarında mevcut `NativeTelemetry.start(config)` kullanımı değişmez; motor hemen başlar.
 
+Tomcat tarafında HTTP tamamlanması, sunucunun açık `AccessLog` callback'i ile bildirilir.
+Bu bir callback adıdır. Agent, erişim log dosyası yazmaz. Süreyi Tomcat nanosaniye olarak verir.
+Senkron ve asenkron istekler aynı noktadan tamamlanır. Agent ek zamanlayıcı, async listener veya
+istek durumu nesnesi oluşturmaz. Sonuç, mevcut Rust sayaçlarına ve seçilen diagnostic alanlarına gider.
+
 Yeni adayda route araması, boyutu sınırlı ve değişmez bir tabloyu okur. Tablo yalnız yeni route
 kaydedilince yenilenir. Normal çağrıda route nesnesi üretilmez. JNI, nanosaniye değerini doğrudan
 Rust sayaçlarına iletir. Trace seçimi, hatalar, profiller ve mevcut ayarlar değişmez.

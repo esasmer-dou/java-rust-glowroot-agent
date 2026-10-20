@@ -11,6 +11,8 @@ diagnostic runs are not published packages. The release assets carry the final m
   normal web/scheduler readiness. Early real registration activates immediately. Plain Java start remains eager.
 - Remove the rejected early-preload candidate; it did not meet the 3 MiB memory gate.
 - Release native exporter ownership even when cancellation precedes the task's first poll.
+- Use Tomcat's public terminal AccessLog callback instead of an agent request timer/async listener;
+  preserve normalized routes, late transport errors and configured diagnostic metadata.
 - Resolve native path/extraction settings from Spring's Environment as well as system/env settings.
 - Keep route lookup allocation-free after bounded registration and initialize Java sampler state lazily.
 - Reuse REST's HTTP histogram selection; pass scalar nanoseconds through the standalone JNI edge.
