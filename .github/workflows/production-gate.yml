@@ -335,7 +335,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: esasmer-dou/java-rust-cache
-          ref: 130c2abcef0bb12c910abaa29937fef63d0f77a2
+          ref: 81c53c5bb911438d01c01d42296dce05208b78f1
           path: cache-runtime
 
       - name: Set up Semeru OpenJ9 21
