@@ -187,8 +187,9 @@ if (([regex]::Matches($workflow, '-AutoSelectCpuRoles')).Count -ne 3 -or
 }
 Assert-Contains $workflow 'REACTOR_PERFORMANCE_RUNNER_CLASS: github-hosted-linux' `
         "The release gate must identify its managed Linux runner class."
-if (([regex]::Matches($workflow, 'runs-on: ubuntu-24\.04')).Count -ne 2) {
-    throw "Spring and Rust-Java performance jobs must use pinned managed Linux images."
+foreach ($job in @('spring-boot-agent', 'rust-java-rest-agent')) {
+    Assert-Contains $workflow "(?m)^  ${job}:\r?\n    needs: gate-statistics\r?\n    runs-on: ubuntu-24\.04\r?$" `
+            "The $job performance job must use a pinned managed Linux image."
 }
 Assert-Contains $runnerPreflight 'ValidateSet\("github-hosted-linux",' `
         "Runner preflight must recognize the managed Linux release class."
