@@ -105,7 +105,7 @@ def main():
             if not all(existing):
                 if any(existing):
                     raise ValueError(f"Partial package exists: {artifact['id']}; repair explicitly before retrying")
-                subprocess.run(deploy_args(root, artifact, base, version), check=True)
+                subprocess.run(deploy_args(root, artifact, base, version), cwd=root, check=True)
             for item in artifact["downloads"]:
                 data = download(f"{base}/{prefix}/{item['name']}", actor, token)
                 if data is None or hashlib.sha256(data).hexdigest() != manifest["files"][item["file"]]:
