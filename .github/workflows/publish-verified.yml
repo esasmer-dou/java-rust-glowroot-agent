@@ -1,0 +1,52 @@
+name: Publish Verified Distribution
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable version with completed EmaTech validation
+        required: true
+        type: string
+      staging_tag:
+        description: Draft release containing distribution.zip
+        required: true
+        type: string
+      bundle_sha256:
+        description: SHA-256 of the reviewed distribution.zip
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: verified-release-${{ github.repository }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: semeru
+          java-version: '21'
+          server-id: github
+          server-username: GITHUB_ACTOR
+          server-password: GITHUB_TOKEN
+      - name: Download reviewed distribution
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_TAG: ${{ inputs.staging_tag }}
+        run: gh release download "$STAGING_TAG" --repo "$GITHUB_REPOSITORY" --pattern distribution.zip --dir "$RUNNER_TEMP/distribution"
+      - name: Verify evidence, publish packages and create stable release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.version }}
+          RELEASE_BUNDLE_SHA256: ${{ inputs.bundle_sha256 }}
+          RELEASE_BUNDLE: ${{ runner.temp }}/distribution/distribution.zip
+        run: python3 .github/scripts/publish-verified.py

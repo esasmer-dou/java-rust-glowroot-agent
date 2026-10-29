@@ -2,7 +2,7 @@
 
 [English](functional-operations.md) | [Turkish](functional-operations.tr.md)
 
-Birlikte `0.7.0` modüllerini kullanın. Kurulumdan önce [yayın kontrolünü](releases/0.7.0.tr.md#yayın-kontrolü) ve yayımlanan stable sürümü doğrulayın.
+Birlikte `0.7.1` modüllerini kullanın. Kurulumdan önce [yayın kontrolünü](releases/0.7.1.tr.md#yayın-kontrolü) ve yayımlanan stable sürümü doğrulayın.
 Spring veya HTTP sunucusu gerektirmez.
 Native ABI 6 olarak kalır.
 `java-rust-glowroot-spring-runtime` paketini kullanın.
@@ -45,7 +45,7 @@ Agent açıkken ek verinin maliyeti vardır. Seçtiğiniz profili ölçün.
 
 ## Cache Writer Yaşam Döngüsü
 
-Writer'a `com.reactor:java-rust-glowroot-cache-adapter:0.7.0` ekleyin.
+Writer'a `com.reactor:java-rust-glowroot-cache-adapter:0.7.1` ekleyin.
 Uygulama `java-rust-cache:0.8.0` bağımlılığını açıkça kullanmaya devam eder.
 Normal HTTP uygulaması bu adaptörü kendiliğinden almaz.
 
@@ -64,11 +64,11 @@ Snapshot yayını ve normal kilit atlaması başarılı işlem sayılır. Başar
 Adaptör aynı sonucu döndürür. Aynı exception'ı iletir. Yazmayı yeniden denemez.
 
 `StandaloneTelemetry` sınıfının tam adı `com.reactor.glowroot.agent.runtime.StandaloneTelemetry` şeklindedir.
-Plain Java uygulaması `com.reactor:java-rust-glowroot-spring-runtime:0.7.0` paketini kullanır.
+Plain Java uygulaması `com.reactor:java-rust-glowroot-spring-runtime:0.7.1` paketini kullanır.
 Paket adında Spring bulunur. Ancak bu açık API Spring veya HTTP sunucusu başlatmaz.
 
 Filtre zinciri açık normal Apache Dubbo `ServiceConfig` provider'da aynı yaşam döngüsünü açın.
-`java-rust-glowroot-spring-dubbo-adapter:0.7.0` paketini ekleyin. SPI adaptörü işlemin tamamlanmasını izler.
+`java-rust-glowroot-spring-dubbo-adapter:0.7.1` paketini ekleyin. SPI adaptörü işlemin tamamlanmasını izler.
 Minimal provider sample ise SPI filtrelerini bilinçli olarak atlar. Bu sample için `full-provider,glowroot`
 profillerini ve `java-rust-dubbo:0.8.1` bağlantısını kullanın. Yalnız seçilen işlemler başlangıçta izlemeye
 alınır. Tüm Apache filtre zinciri açılmaz. İki kullanımda da Spring gerekmez.

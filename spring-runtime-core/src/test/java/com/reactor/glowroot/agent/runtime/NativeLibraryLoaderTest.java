@@ -15,6 +15,22 @@ import static org.junit.jupiter.api.Assertions.*;
 class NativeLibraryLoaderTest {
     @TempDir Path directory;
 
+    @Test void platformSidecarOverridesGlobalWithoutLoadingAnyNativeLibrary() throws Exception {
+        Path folder = Files.createDirectories(directory.resolve("native/linux-arm64"));
+        Path binary = Files.write(folder.resolve("metadata-fixture.bin"), new byte[]{1});
+        Files.writeString(folder.getParent().resolve("native-provenance.properties"), "schema=1\nsource.revision=current-dirty\n");
+        Files.writeString(folder.resolve("native-provenance.properties"), "schema=1\nsource.revision=historical-clean\n");
+        assertEquals("historical-clean", NativeLibraryLoader.provenanceFor(binary.toUri().toURL()).getProperty("source.revision"));
+    }
+
+    @Test void malformedSidecarIsNotSilentlyReplacedByRootManifest() throws Exception {
+        Path folder = Files.createDirectories(directory.resolve("native/linux-x64"));
+        Path binary = Files.write(folder.resolve("agent.so"), new byte[]{1});
+        Files.writeString(folder.getParent().resolve("native-provenance.properties"), "schema=1\n");
+        Files.writeString(folder.resolve("native-provenance.properties"), "schema=\\uNOTHEX\n");
+        assertThrows(IllegalArgumentException.class, () -> NativeLibraryLoader.provenanceFor(binary.toUri().toURL()));
+    }
+
     @Test void manifestComesFromTheSelectedBinaryJarNotTheFirstClasspathManifest() throws Exception {
         Path cache = jar("cache.jar", "cache.so", "schema=2\nsource.revision=cache\n");
         Path agent = jar("agent.jar", "agent.so", "schema=1\nsource.revision=agent\n");

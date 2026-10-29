@@ -2,7 +2,7 @@
 
 [English](functional-operations.md) | [Turkish](functional-operations.tr.md)
 
-Use the matching `0.7.0` modules. Before deployment, check the [qualification status](releases/0.7.0.md#qualification-status) and published stable release.
+Use the matching `0.7.1` modules. Before deployment, check the [qualification status](releases/0.7.1.md#qualification-status) and published stable release.
 No Spring server is required. Native ABI remains 6.
 Use the `java-rust-glowroot-spring-runtime` artifact; Spring dependencies are provided,
 not mandatory transitives for this explicit API.
@@ -22,7 +22,7 @@ try (var telemetry = StandaloneTelemetry.startIfEnabled()) {
 ```
 
 Import `com.reactor.glowroot.agent.runtime.StandaloneTelemetry`.
-Add `com.reactor:java-rust-glowroot-spring-runtime:0.7.0` to a plain Java application.
+Add `com.reactor:java-rust-glowroot-spring-runtime:0.7.1` to a plain Java application.
 The artifact name is shared with Spring, but its Spring dependency is optional/provided.
 This API does not start Spring or an HTTP server.
 
@@ -47,7 +47,7 @@ Extra data still has a cost when enabled. Measure the chosen profile.
 
 ## Cache Writer Lifecycle
 
-Add `com.reactor:java-rust-glowroot-cache-adapter:0.7.0` only to a writer that needs telemetry.
+Add `com.reactor:java-rust-glowroot-cache-adapter:0.7.1` only to a writer that needs telemetry.
 The application still adds `java-rust-cache:0.8.0` explicitly. The adapter does not pull Redis into HTTP-only applications.
 
 ```java
@@ -66,7 +66,7 @@ The adapter returns the original result and rethrows the original exception. It 
 
 Start with `REACTOR_GLOWROOT_PROFILE=micro`. No payload, key value, SQL value or customer data is captured.
 For a normal Apache Dubbo `ServiceConfig` provider with its filter chain enabled, start the same
-standalone lifecycle and add `java-rust-glowroot-spring-dubbo-adapter:0.7.0`. Its SPI observes completion.
+standalone lifecycle and add `java-rust-glowroot-spring-dubbo-adapter:0.7.1`. Its SPI observes completion.
 The minimal provider sample deliberately bypasses SPI filters. Use its `full-provider,glowroot`
 profiles and the `java-rust-dubbo:0.8.1` dispatcher hook instead. It decorates selected dispatchers at
 startup and does not restore the full Apache filter chain. Spring is not required in either case.

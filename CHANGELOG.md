@@ -2,6 +2,13 @@
 
 All notable changes to this project are recorded here.
 
+## [0.7.1] - 2026-10-29
+
+- Resolve startup provenance from the selected native artifact's platform sidecar before
+  its own root manifest. Standalone native packaging remains x64. Glowroot ABI6
+  is unchanged. Linux startup validation and Windows compile/static inspection
+  remain separate. This release does not claim a new all-platform performance result.
+
 ## [0.7.0]
 
 Publication requires the exact-commit Spring and REST Production Gate. Source branches and

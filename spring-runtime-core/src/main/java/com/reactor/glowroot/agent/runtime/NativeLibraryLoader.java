@@ -1,6 +1,7 @@
 package com.reactor.glowroot.agent.runtime;
 
 import java.io.IOException;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -175,16 +176,37 @@ final class NativeLibraryLoader {
 
     static Properties provenanceFor(java.net.URL selected) {
         try {
-            var connection = new java.net.URL(selected, "../native-provenance.properties").openConnection();
-            connection.setUseCaches(false);
-            try (InputStream input = connection.getInputStream()) {
-                Properties properties = new Properties();
-                properties.load(input);
-                return properties;
+            try {
+                return readProvenance(new java.net.URL(selected, "native-provenance.properties"));
+            } catch (FileNotFoundException missingPlatformManifest) {
+                return readProvenance(new java.net.URL(selected, "../native-provenance.properties"));
             }
         } catch (IOException error) {
             throw new IllegalStateException("Cannot read packaged Glowroot native provenance", error);
         }
+    }
+
+    private static Properties readProvenance(java.net.URL resource) throws IOException {
+        try (InputStream input = openProvenance(resource)) {
+            Properties properties = new Properties();
+            properties.load(input);
+            return properties;
+        }
+    }
+
+    private static InputStream openProvenance(java.net.URL resource) throws IOException {
+        if ("file".equals(resource.getProtocol())) {
+            try {
+                return Files.newInputStream(Path.of(resource.toURI()));
+            } catch (java.nio.file.NoSuchFileException missing) {
+                throw new FileNotFoundException(resource.toString());
+            } catch (java.net.URISyntaxException malformed) {
+                throw new IOException("Invalid native manifest URI", malformed);
+            }
+        }
+        var connection = resource.openConnection();
+        connection.setUseCaches(false);
+        return connection.getInputStream();
     }
 
     private static InputStream resource(String name) {
