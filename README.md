@@ -8,20 +8,10 @@ Native loader and availability checks are aligned with REST 4.8.0. Telemetry rem
 
 [Usage guide](docs/functional-operations.md) · [Release notes](docs/releases/0.7.1.md)
 
-
 Plain Java integration: [Explicit, bounded operations](docs/functional-operations.md). Prepared for 0.7.1.
-
-Native package compatibility: [Native availability and startup compatibility](docs/native-availability.md).
-This qualification is separate from the historical published-release claims below.
 
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
-
-**Release `0.7.1` is a native-loader compatibility patch.** The [0.7.0 performance evidence](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/runs/39381789571) remains historical; it is not an exact-commit performance result for 0.7.1. Telemetry hot-path Java code is unchanged. Current native loading and functional checks are recorded separately in the release evidence.
-Its matching embedded REST runtime is `4.8.0`; Spring uses the standalone native file inside the agent package.
-Use a version listed in [stable releases](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases).
-The [release notes](docs/releases/0.7.1.md) distinguish earlier failed tests from the final reports
-attached to a published release. Memory, RPS and p99 limits are not relaxed for publication.
 
 Spring prepares the Java facade first. Native activation runs after ordinary singleton construction,
 before normal web/scheduler lifecycle startup and application readiness. It is not deferred until the
@@ -88,7 +78,6 @@ not weave bytecode and does not install Byte Buddy, ASM, Java gRPC, Netty, or a 
 - [Tuning Recipes](#tuning-recipes)
 - [Failure Behavior](#failure-behavior)
 - [Diagnostics](#diagnostics)
-- [Performance Contract](#performance-contract)
 - [Compatibility](#compatibility)
 - [Build](#build)
 
@@ -720,14 +709,6 @@ The first two commands must show the `0.7.1` starter, runtime, and Jetty adapter
 line appears only after Java has loaded the native library. A custom dependency image or shared PVC
 must therefore be rebuilt or updated from the same Maven dependency layer as the application.
 
-The repository also provides a fail-fast final-image check:
-
-```bash
-scripts/verify-container-runtime.sh \
-  /u01/applications/nmc-store-common 0.7.1 jetty \
-  /u01/applications/nmc-store-common/glowroot/librust_glowroot_agent.so
-```
-
 At application startup, look for both lines:
 
 ```text
@@ -830,7 +811,7 @@ only detailed trace selection; it does not reduce counts, throughput, or percent
 | Thread dump, heap histogram/dump, Force GC, MBeans, and system properties | `diagnostic` only |
 
 For a non-web application, the **Web Transactions** view remains empty. Process gauges and selected
-JVM/SQL evidence are still exported. Request/response bodies, headers, query values, and Dubbo
+JVM and SQL metrics are still sent. Request/response bodies, headers, query values, and Dubbo
 payloads are never collected by any profile.
 
 `reactor.glowroot.trace.capacity` and `reactor.glowroot.http.sample-rate` are startup settings. A
@@ -1050,74 +1031,6 @@ field. Put a non-secret deployment label in a JVM property such as
 `-Ddeployment.environment=test` when it must be visible under **System properties**. Do not mirror
 passwords or tokens into JVM properties.
 
-## Performance Contract
-
-The `micro` configuration enforces a deterministic `1 MiB` ceiling for agent-attributed state and
-native feature pages. Both Rust-Java REST and Spring use one isolated current-thread Tokio exporter
-with a `256 KiB` stack when telemetry is enabled. It does not share Hyper workers, application
-executors, or Spring request threads. Embedded REST also packs request capture into one 32-bit state
-value; route aggregates remain exact and the public sampling rate controls only optional traces.
-The strict Spring gate enables the starter through properties or environment variables. The optional
-`-javaagent` bootstrap is a deployment convenience and is validated separately because starting the
-JVM instrumentation subsystem adds OpenJ9-owned memory even though no transformer is installed.
-
-Release gates compare telemetry off/on in the same image with randomized paired runs. Every
-endpoint/concurrency cell must keep:
-
-- useful HTTP 200 RPS loss at or above `-2%`;
-- p99 regression at or below `+10%`;
-- non-2xx regression at `0` percentage points for every stable-release cell. Baseline and candidate
-  aggregate and peak error rates must remain at or below `0.05%`;
-- additional agent threads at most `1` for both embedded Rust-Java and standalone Spring.
-
-Package publication is fail-closed. The verified-distribution workflow binds the bundle to the
-release commit and checks its source checksums, unchanged ABI contracts and EmaTech correctness
-receipt. Version `0.7.1` reuses the explicitly identified `0.7.0` telemetry performance evidence:
-its Java telemetry hot path is unchanged. This does not constitute a new exact-commit A/B result.
-Each published Maven file is downloaded again and verified before the stable release is created.
-
-The stable release runs the same per-request telemetry matrix separately for Spring Boot and
-Rust-Java REST. Both cover small JSON and precomputed raw JSON at c64/c256. These paths maximize
-request rate and expose the agent's fixed cost more strongly than a serializer-bound route. Dynamic
-heavy JSON is still called by the functional route smoke. The optional `extended` workflow adds
-measured heavy JSON at c64/c128 and always runs all six pairs, but it is stress evidence rather than
-the stable publish gate. The release starts with three independent pairs. It stops only when a
-stricter early-pass envelope succeeds; otherwise it continues to six. RPS, p99, and startup use each
-pair's delta before the median is calculated. Non-2xx uses the
-paired median, request-weighted total, peak error envelope, and the absolute `0.05%` ceiling
-together. The normal release matrix uses the zero-delta rule for every cell. The bounded `0.02`
-percentage-point margin applies only when heavy JSON is tested manually at the saturated embedded
-REST c256+ range. One saturated-run delta remains visible without replacing the overall error decision. After both
-variants complete the full endpoint/concurrency workload, the memory phase requires
-paired-median process RSS and cgroup deltas at or below `+3 MiB` for `micro`. Sequential variants
-can require different adaptive warmup counts and process ages. These are not identical allocation
-histories; smaps, cgroup, warmup counts and JVM pools are retained for attribution. This is not a
-hard per-pod or per-sample ceiling. For example, the 0.6.0 Spring gate passed at a `+1.574 MiB`
-steady RSS median, while one steady pair reached `+4.500 MiB`. Full-GC/idle normalization does not
-bound transient memory during load. Do not size a pod with only 3 MiB of spare memory. Both runtimes may add
-one bounded exporter thread. `jvm`, `sql`, `full`, and `diagnostic` are separate temporary-profile
-gates because OpenJ9 management/error classes can create one-time JVM warm state. REST wire
-compatibility, collector-down fail-open, and
-the optional bootstrap are separate mandatory checks.
-
-See [Architecture And Production Boundary](docs/ARCHITECTURE.md). User-facing changes and
-compatibility details are in the [0.7.1 release notes](docs/releases/0.7.1.md). Reproducible
-release-gate source is version-controlled under `benchmark/`; generated results, host-specific
-runner state, and raw evidence remain excluded from the repository and from every Maven artifact.
-
-### What Belongs In This Repository
-
-| Path | Why it is kept |
-| --- | --- |
-| `agent-bootstrap/` and adapter modules | Source code used to build the published JARs. `agent-bootstrap` provides the optional `-javaagent` entry point. |
-| `docs/` | English/Turkish usage guides, architecture boundaries, and release notes. Internal working notes and raw evidence are excluded. |
-| `scripts/` | Only the five installation, native packaging, and release-verification tools are tracked. Local experiments are excluded. |
-| `benchmark/` | Only the allowlisted source needed to reproduce release gates is tracked. Generated results and build output are excluded. |
-
-Temporary allocation probes, their diagnostic workflow, logs, heap dumps, recordings, and scratch
-directories stay local. Ignoring those files does not disable the Production Gate. These maintenance
-directories do not become runtime dependencies merely because they are present in the source checkout.
-
 ## Compatibility
 
 The following versions describe the published `0.7.1` integration.
@@ -1161,8 +1074,3 @@ The Maven reactor builds:
 - `spring-native-dubbo-adapter/target/java-rust-glowroot-spring-native-dubbo-adapter-0.7.1.jar`
 - `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.7.1.jar`
 - `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.7.1.jar`
-
-The native DLL/SO are built only from the clean `rust-spring` commit recorded in
-`native-provenance.properties`. `scripts/sync-native-artifacts.ps1` is retained because it is part of
-the reproducible release build. Internal load generators, raw benchmark evidence, and local runner
-configuration stay outside the public repository.

@@ -8,20 +8,10 @@ Native yükleme ve uygunluk kontrolleri REST 4.8.0 ile hizalandı. Telemetri aç
 
 [Kullanım rehberi](docs/functional-operations.md) · [Sürüm notları](docs/releases/0.7.1.md)
 
-
 Plain Java kullanımı: [Açık ve sınırlı işlemler](docs/functional-operations.tr.md). 0.7.1 için hazırlandı.
-
-Paketlenen native dosyalar: [Native platformlar ve başlangıç uyumluluğu](docs/native-availability.tr.md).
-Bu doğrulama aşağıdaki eski yayımlanmış sürüm sonuçlarından ayrıdır.
 
 [![CI](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/workflows/ci.yml)
 [![Sürüm](https://img.shields.io/github/v/release/esasmer-dou/java-rust-glowroot-agent)](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases)
-
-**`0.7.1`, native yükleme uyumluluğu düzeltmesidir.** [0.7.0 performans kanıtı](https://github.com/esasmer-dou/java-rust-glowroot-agent/actions/runs/39381789571) önceki sürüme aittir; 0.7.1 commit'inin performans ölçümü değildir. Java telemetri hot path'i değişmedi. Güncel native yükleme ve fonksiyonel kontroller sürüm kanıtında ayrı belirtilir.
-Eşleşen embedded REST sürümü `4.8.0` olur. Spring, agent paketinin içindeki ayrı native dosyayı kullanır.
-[Stable yayınlarda](https://github.com/esasmer-dou/java-rust-glowroot-agent/releases) bulunan bir sürümü kullanın.
-[Sürüm notları](docs/releases/0.7.1.tr.md), önceki başarısız testleri yayına eklenen son raporlardan ayırır.
-Yayın için bellek, RPS veya p99 sınırları gevşetilmez.
 
 Spring önce Java erişim nesnesini hazırlar. Native motor, normal singleton nesneleri kurulduktan
 sonra başlar. Web/scheduler yaşam döngüsünden ve uygulamanın hazır olmasından önce etkinleşir.
@@ -90,7 +80,6 @@ yapmaz. Byte Buddy, ASM, Java gRPC, Netty veya Java executor eklemez.
 - [Ayar Reçeteleri](#ayar-reçeteleri)
 - [Hata Davranışı](#hata-davranışı)
 - [Tanılama](#tanılama)
-- [Performans Sözleşmesi](#performans-sözleşmesi)
 - [Uyumluluk](#uyumluluk)
 - [Build](#build)
 
@@ -728,14 +717,6 @@ grep -F 'librust_glowroot_agent.so' /proc/1/maps
 Java native kütüphaneyi yükledikten sonra görünür. Bu nedenle özel dependency image'ını veya ortak
 PVC'yi uygulamanın Maven dependency katmanıyla aynı anda güncelleyin.
 
-Repo, son image için hata durumunda build'i durduran bir kontrol de sunar:
-
-```bash
-scripts/verify-container-runtime.sh \
-  /u01/applications/nmc-store-common 0.7.1 jetty \
-  /u01/applications/nmc-store-common/glowroot/librust_glowroot_agent.so
-```
-
 Uygulama açılırken iki satırı da arayın:
 
 ```text
@@ -1062,76 +1043,6 @@ Secret değerleri burada bulunabilir ve upstream Glowroot Environment mesajında
 anahtar/değer alanı yoktur. Gizli olmayan ortam adını göstermek istiyorsanız uygulamayı
 `-Ddeployment.environment=test` ile başlatın. Bu değer **System properties** altında görünür.
 
-## Performans Sözleşmesi
-
-`micro` ayarı, agent'a ait state ve native özellik sayfaları için deterministik `1 MiB` sınırı
-uygular. Rust-Java REST ve Spring, telemetri açıkken `256 KiB` stack kullanan tek ve izole
-current-thread Tokio exporter çalıştırır. Hyper worker'larını, uygulama executor'larını veya Spring
-request thread'lerini kullanmaz. Embedded REST ayrıca request capture durumunu tek bir 32-bit
-değerde tutar. Endpoint toplamları tam kalır; kullanıcının ayarladığı sampling oranı yalnız isteğe
-bağlı trace ayrıntısını kontrol eder.
-Strict Spring gate, starter'ı property veya ortam değişkeniyle açar. İsteğe bağlı `-javaagent`
-bootstrap yalnız kurulum kolaylığı sağlar ve ayrı doğrulanır. Transformer kurulmasa bile JVM
-instrumentation sistemini başlatmak OpenJ9'a ait ek bellek oluşturur.
-
-Release gate aynı image içinde telemetri kapalı/açık eşlenmiş ve sırası değiştirilmiş koşular yapar.
-Her endpoint ve concurrency hücresi şu sınırları geçmelidir:
-
-- başarılı HTTP 200 RPS kaybı en fazla `%2`;
-- p99 artışı en fazla `%10`;
-- stable release hücrelerinin tamamında non-2xx artışı `0` yüzde puanı olmalıdır. Baseline ve
-  candidate toplam ve en yüksek hata oranları `%0,05` altında kalmalıdır;
-- İki çalışma şeklinde de agent'a ait ek thread sayısı en fazla `1`.
-
-Package yayını doğrulama başarısızsa durur. Dağıtım workflow'u paketi release commit'i ile
-eşleştirir. Kaynak hash'lerini, değişmeyen ABI sözleşmelerini ve EmaTech doğruluk kaydını kontrol eder.
-`0.7.1`, açıkça belirtilen `0.7.0` telemetri performans kanıtını kullanır; Java telemetri hot path'i
-değişmedi. Bu, yeni commit için A/B ölçümü yapıldığı anlamına gelmez. Stable release oluşturulmadan
-önce her Maven dosyası yeniden indirilir ve hash'i doğrulanır.
-
-Stable release aynı request başına telemetri matrisini Spring Boot ve Rust-Java REST için ayrı
-çalıştırır. İki matris de küçük JSON ve önceden hazırlanmış raw JSON endpoint'lerini c64/c256
-seviyesinde ölçer. Bu yollar yüksek istek hızına ulaştığı için agent'ın sabit maliyetini serializer
-ağırlıklı bir endpoint'ten daha net gösterir. Dynamic heavy JSON functional route smoke içinde yine
-çağrılır. İsteğe bağlı `extended` workflow'u heavy JSON c64/c128 ölçümünü ekler ve altı çiftin
-tamamını çalıştırır. Bu sonuç stress kanıtıdır; stable package yayınını onaylayan gate değildir.
-Release üç bağımsız çiftle başlar. Daha sıkı erken PASS sınırı sağlanmazsa otomatik olarak altı
-çifte devam eder. RPS, p99 ve startup için önce her çiftin farkı bulunur, sonra medyan hesaplanır.
-Non-2xx kararı eşleştirilmiş medyanı, istek sayısıyla ağırlıklandırılmış toplamı, en
-yüksek hata oranını ve mutlak `%0,05` sınırını birlikte kullanır. Normal release matrisindeki bütün
-hücrelerde sıfır artış kuralı uygulanır. `0,02` yüzde puanlık sınırlı marj yalnız heavy JSON manuel
-olarak embedded REST c256+ doygunluk bölgesinde ölçülürse geçerlidir. Doygun bir koşudaki tek fark raporda görünür; genel hata
-kararının yerine geçmez. Tam endpoint ve concurrency yükünden sonra RSS ve cgroup medyan
-farkları `micro` için en fazla `+3 MiB` olabilir. Sırayla çalışan süreçlerin warmup tur sayısı
-ve yaşı farklı olabilir. Tahsis geçmişleri bire bir aynı değildir. Smaps, cgroup, warmup ve
-JVM pool verileri bu farkı incelemek için saklanır. Bu kural her pod veya her ölçüm için
-kesin üst sınır değildir. Örneğin 0.6.0 Spring kontrolünde RSS medyan farkı `+1,574 MiB`
-oldu. Tek bir çiftte `+4,500 MiB` görüldü. GC ve idle sonrası ölçüm, yük sırasındaki geçici
-belleği sınırlandırmaz. Pod belleğinde yalnız 3 MiB boşluk bırakmayın.
-İki runtime da yalnız tek sınırlı exporter thread'i ekleyebilir.
-`jvm`, `sql`, `full` ve `diagnostic` profilleri ayrı ve geçici profil gate'leriyle ölçülür. OpenJ9
-yönetim ve hata sınıfları tek seferlik JVM ısınma state'i oluşturabilir. REST wire uyumu, collector
-kapalıyken fail-open ve opsiyonel bootstrap ayrıca zorunlu
-olarak test edilir.
-
-[Mimari ve Production Sınırı](docs/ARCHITECTURE.tr.md) belgesine bakın. Kullanıcıya açık değişiklikler
-ve uyumluluk ayrıntıları için [0.7.1 sürüm notlarını](docs/releases/0.7.1.tr.md) okuyun. Tekrar
-üretilebilen release gate kaynakları `benchmark/` altında version control içinde tutulur. Üretilen
-sonuçlar, makineye özel runner durumu ve ham kanıtlar repoya veya Maven artifact'lerine eklenmez.
-
-### Repoda Hangi Dosyalar Bulunur?
-
-| Dizin | Neden tutulur? |
-| --- | --- |
-| `agent-bootstrap/` ve adaptör modülleri | Yayımlanan JAR dosyalarının kaynak kodudur. `agent-bootstrap`, isteğe bağlı `-javaagent` girişini sağlar. |
-| `docs/` | Türkçe/İngilizce kullanım kılavuzları, mimari sınırlar ve sürüm notlarıdır. İç çalışma notları ve ham ölçümler eklenmez. |
-| `scripts/` | Yalnız kurulum, native paketleme ve yayın doğrulaması için gereken beş araç takip edilir. Yerel denemeler eklenmez. |
-| `benchmark/` | Yalnız yayın kontrollerini yeniden çalıştırmak için gereken izinli kaynaklar takip edilir. Üretilen sonuçlar ve derleme çıktıları eklenmez. |
-
-Geçici bellek tanılama kodları, bunların özel workflow'u, loglar, heap dump dosyaları, kayıtlar ve
-geçici dizinler yerelde kalır. Bunları hariç tutmak Production Gate kontrolünü kapatmaz. Kaynak repoda
-bu bakım dizinlerinin bulunması, uygulamanıza runtime bağımlılığı eklendiği anlamına gelmez.
-
 ## Uyumluluk
 
 Aşağıdaki sürümler yayımlanan `0.7.1` entegrasyonunu anlatır.
@@ -1175,8 +1086,3 @@ Maven reactor şu dosyaları üretir:
 - `spring-native-dubbo-adapter/target/java-rust-glowroot-spring-native-dubbo-adapter-0.7.1.jar`
 - `spring-boot-starter/target/java-rust-glowroot-spring-boot-starter-0.7.1.jar`
 - `spring-webflux-adapter/target/java-rust-glowroot-spring-webflux-adapter-0.7.1.jar`
-
-Native DLL/SO yalnız `native-provenance.properties` içinde yazan temiz `rust-spring` commit'inden
-üretilir. `scripts/sync-native-artifacts.ps1`, tekrarlanabilir release build'inin parçası olduğu için
-repoda kalır. İç yük üreticileri, ham benchmark kanıtları ve lokal runner ayarları public repo dışında
-tutulur.
